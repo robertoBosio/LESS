@@ -5,5 +5,8 @@
 /* Definition regarding query grap */
 #define MAX_QUERY_VERTICES	2^4
 #define MAX_QUERY_EDGES		2^5
-#define MAX_LABELS		2^4
-#define MAX_TABLES 		(MAX_LABELS*(MAX_LABELS-1))
+#define MAX_LABELS		    2^4
+#define MAX_TABLES 		    (MAX_LABELS*(MAX_LABELS-1))
+
+#define VERTEX_WIDTH        64
+#define LABEL_WIDTH         8
