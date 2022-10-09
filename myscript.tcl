@@ -1,11 +1,13 @@
-
-
 open_project -reset subgraphiso
 
 add_files Parameters.hpp
 add_files Trie.hpp
 add_files queryVertex.hpp
 add_files subgraphIsomorphism.hpp
+
+add_files types.hpp
+add_files utils.hpp
+add_files hash_lookup3.hpp
 
 add_files -tb "subiso-test.cpp data" -cflags "-Wno-unknown-pragmas" -csimflags "-Wno-unknown-pragmas"
 
