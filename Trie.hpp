@@ -20,6 +20,16 @@ class Trie{
 class TrieDescriptor{
     
     public:
+        /* True: src -> dst, False: dst <- src */
         bool dir;
         ap_uint<LABEL_WIDTH> src_label, dst_label;
+};
+
+class SetDescriptor{
+    public:
+        uint8_t tIndex;
+        uint32_t sSize;
+        uint32_t sStart;
+        bool indexed;
+
 };

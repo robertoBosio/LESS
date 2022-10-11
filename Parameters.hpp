@@ -14,3 +14,4 @@
 #define COUNTER_WIDTH       18
 #define HASH_WIDTH          16
 
+#define HASH_SET_VERSION 1
