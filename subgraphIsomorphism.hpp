@@ -6,6 +6,8 @@
 #include "Trie.hpp"
 #include "hash_lookup3.hpp"
 
+#include <unordered_map>
+
 #define DEBUG 1
 
 template <uint8_t V_ID_W, uint8_t V_L_W>
@@ -416,74 +418,6 @@ void mwj_propose(
             stream_end_out);
 }
 
-template <uint8_t V_ID_W>
-void mwj_extract(
-        hls::stream<ap_uint<V_ID_W>> &buffer_res,
-        int debug_counter)
-{
-    switch(debug_counter){
-        case 0:
-            {
-                buffer_res.write(ap_uint<V_ID_W>(1));
-                buffer_res.write(ap_uint<V_ID_W>(2));
-                buffer_res.write(ap_uint<V_ID_W>(1));
-                buffer_res.write(ap_uint<V_ID_W>(6));
-                break;
-            }
-        case 1:
-            {
-                buffer_res.write(ap_uint<V_ID_W>(2));
-                buffer_res.write(ap_uint<V_ID_W>(2));
-                buffer_res.write(ap_uint<V_ID_W>(8));
-                break;
-            }
-        case 2:
-            {
-                buffer_res.write(ap_uint<V_ID_W>(2));
-                buffer_res.write(ap_uint<V_ID_W>(6));
-                buffer_res.write(ap_uint<V_ID_W>(5));
-                break;
-            }
-        case 3:
-            {
-                buffer_res.write(ap_uint<V_ID_W>(3));
-                buffer_res.write(ap_uint<V_ID_W>(2));
-                buffer_res.write(ap_uint<V_ID_W>(8));
-                buffer_res.write(ap_uint<V_ID_W>(0));
-                break;
-            }
-        case 4:
-            {
-                buffer_res.write(ap_uint<V_ID_W>(3));
-                buffer_res.write(ap_uint<V_ID_W>(6));
-                buffer_res.write(ap_uint<V_ID_W>(5));
-                buffer_res.write(ap_uint<V_ID_W>(7));
-                break;
-            }
-        case 5:
-            {
-                buffer_res.write(ap_uint<V_ID_W>(4));
-                buffer_res.write(ap_uint<V_ID_W>(2));
-                buffer_res.write(ap_uint<V_ID_W>(8));
-                buffer_res.write(ap_uint<V_ID_W>(0));
-                buffer_res.write(ap_uint<V_ID_W>(3));
-                break;
-            }
-        case 6:
-            {
-                buffer_res.write(ap_uint<V_ID_W>(4));
-                buffer_res.write(ap_uint<V_ID_W>(6));
-                buffer_res.write(ap_uint<V_ID_W>(5));
-                buffer_res.write(ap_uint<V_ID_W>(7));
-                buffer_res.write(ap_uint<V_ID_W>(3));
-                break;
-            }
-        default:
-            {
-                std::cout << "Error: " << debug_counter << std::endl;
-            }
-    }   
-}
 
 template<uint8_t V_ID_W, uint8_t H_W>
 void mwj_intersect(
@@ -493,21 +427,79 @@ void mwj_intersect(
     hls::stream<ap_uint<V_ID_W>> &stream_sets_in,
 #endif
     hls::stream<bool> &stream_set_ends_in,
-    hls::stream<bool> &stream_end_in)
+    hls::stream<bool> &stream_end_in,
+    
+#if HASH_SET_VERSION
+    hls::stream<ap_uint<H_W>> &stream_intersection_out,
+#else
+    hls::stream<ap_uint<V_ID_W>> &stream_intersection_out,
+#endif
+    hls::stream<bool> &stream_end_out)
 {
+    bool first = true;
+    std::unordered_map<int, bool> hashT;
     bool last = stream_end_in.read();
     while(!last){
-        std::cout << "{ ";
+        
         bool last_s = stream_set_ends_in.read();
         while(!last_s){
-            std::cout << stream_sets_in.read() << " ";
+
+#if HASH_SET_VERSION
+            ap_uint<H_W> v = stream_sets_in.read();
+#else
+            ap_uint<V_ID_W> v = stream_sets_in.read();
+#endif
+            auto check = hashT.find(v.to_int());
+            if (first){
+                if (check == hashT.end())
+                    hashT.insert(std::make_pair(v.to_int(), false));
+            } else {
+                if (check != hashT.end())
+                    hashT[v.to_int()] = false;
+            }
             last_s = stream_set_ends_in.read();
         }
-        std::cout << "}" << std::endl;
+        
+        for(auto iter = hashT.begin(); iter != hashT.end();){
+            if (iter->second == true){
+                iter = hashT.erase(iter);
+            } else {
+                iter->second = true;
+                ++iter;
+            }
+        }
+
+        first = false;
         last = stream_end_in.read();
     }
-    char c;
-    std::cin >> c;
+
+    for(auto iter = hashT.begin(); iter != hashT.end(); iter++){
+        stream_intersection_out.write(iter->first);
+        stream_end_out.write(false);       
+    }
+    stream_end_out.write(true);
+}
+
+template <uint8_t V_ID_W>
+void mwj_extract(
+        int debug_counter,
+        ap_uint<8> nCurEmb,
+        ap_uint<V_ID_W> *curEmb,
+        hls::stream<ap_uint<V_ID_W>> &stream_intersection_in,
+        hls::stream<bool> &stream_end_in,
+
+        hls::stream<ap_uint<V_ID_W>> &buffer_res)
+{
+
+    bool last = stream_end_in.read();
+    while(!last){
+        buffer_res.write(ap_uint<V_ID_W>(nCurEmb+1));
+        for (int g = 0; g < nCurEmb; g++){
+            buffer_res.write(curEmb[g]);
+        }
+        buffer_res.write(stream_intersection_in.read());
+        last = stream_end_in.read();
+    }
 }
 
 template <uint8_t V_ID_W, uint8_t MAX_QV, uint8_t H_W, uint8_t C_W>
@@ -526,7 +518,7 @@ void multiwayJoin(
      * buffer  <---- 2, v0, v3, 3, v2, v3, v4 ---- */ 
     hls::stream<ap_uint<V_ID_W>> buffer("buffer stream");
 
-    /* Propose data */
+    /* Propose data out*/
 #if HASH_SET_VERSION
     hls::stream<ap_uint<H_W>> p_stream_sets("Sets propose");
 #else
@@ -534,7 +526,15 @@ void multiwayJoin(
 #endif
     hls::stream<bool> p_stream_set_ends("Set delimeter propose");
     hls::stream<bool> p_stream_end("End stream propose");
-    
+
+    /* Intersect data out */    
+#if HASH_SET_VERSION
+    hls::stream<ap_uint<H_W>> i_stream_set;
+#else
+    hls::stream<ap_uint<V_ID_W>> i_stream_set;
+#endif
+    hls::stream<bool> i_stream_end;
+
     ap_uint<V_ID_W> current_embedding_v[MAX_QV];
     ap_uint<8> current_embedding_c = 0;
     ap_uint<V_ID_W> current_qv = 0;
@@ -560,21 +560,30 @@ void multiwayJoin(
                     p_stream_set_ends,
                     p_stream_end);
 
-
             mwj_intersect<V_ID_W, H_W>(
                     p_stream_sets,
                     p_stream_set_ends,
-                    p_stream_end);
+                    p_stream_end,
+                    i_stream_set,
+                    i_stream_end);
 
-            mwj_extract<V_ID_W>(buffer, debug_counter);
-            debug_counter++;
+            mwj_extract<V_ID_W>(
+                    debug_counter,
+                    counter,
+                    current_embedding_v,
+                    i_stream_set,
+                    i_stream_end,
+                    buffer);
 
             /* Check if other embedding exist */
             if(!buffer.empty()){    
                 current_embedding_c = buffer.read();
+                std::cout << "{ ";
                 for (int g=0; g < current_embedding_c; g++){
                     current_embedding_v[g] = buffer.read();
+                    std::cout << current_embedding_v[g] << " ";
                 }
+                std::cout << "}" << std::endl;;
             } else {
                 no_sol = true;
             }
