@@ -15,8 +15,8 @@ void buildTableDescriptors(
         hls::stream<ap_uint<V_L_W>> &stream_src_l,
         hls::stream<ap_uint<V_L_W>> &stream_dst_l,
         hls::stream<bool> &stream_end,
-        queryVertex &qVertices,
-        TrieDescriptor &tDescriptors,
+        queryVertex *qVertices,
+        TrieDescriptor *tDescriptors,
         ap_uint<8> &numTables,
         
         hls::stream<ap_uint<V_ID_W>> &stream_ord,
@@ -67,7 +67,7 @@ void buildTableDescriptors(
             tDescriptors[g].src_label = labelsrc;
             tDescriptors[g].dst_label = labeldst;
             tDescriptors[g].dir = dirEdge;
-            (*numTables)++;
+            numTables++;
         }
 
 #if DEBUG
@@ -100,8 +100,8 @@ void fillTables(
         hls::stream<ap_uint<V_L_W>> &stream_src_l,
         hls::stream<ap_uint<V_L_W>> &stream_dst_l,
         hls::stream<bool> &stream_end,
-        Trie &hTables,
-        TrieDescriptor &tDescriptors,
+        Trie *hTables,
+        TrieDescriptor *tDescriptors,
         ap_uint<8> numTables)
 {
     hls::stream<ap_uint<V_ID_W>> stream_hash_in;
@@ -199,11 +199,10 @@ void fillTables(
 
 template <uint8_t V_ID_W, uint8_t H_W, uint8_t C_W>
 void mwj_propose_addrgen(
-        Trie &hTables,
-        TrieDescriptor &tDescriptors,
-        queryVertex &qVertices,
+        Trie *hTables,
+        queryVertex *qVertices,
         ap_uint<V_ID_W> current_qv,
-        ap_uint<V_ID_W> &current_em,
+        ap_uint<V_ID_W> *current_em,
 
         hls::stream<SetDescriptor> &stream_set_desc_out,
         hls::stream<bool> &stream_end
@@ -256,15 +255,13 @@ void mwj_propose_addrgen(
     stream_end.write(true);
 }
 
-template <uint8_t V_ID_W, uint8_t H_W, uint8_t C_W>
 void mwj_propose_findmin(
         hls::stream<SetDescriptor> &stream_set_desc_in,
         hls::stream<bool> &stream_end_in,
 
         hls::stream<SetDescriptor> &stream_set_desc_out,
         hls::stream<bool> &stream_end_out,
-        SetDescriptor &min_set_desc,
-        )
+        SetDescriptor &min_set_desc)
 {
 
     SetDescriptor curSet;
@@ -288,24 +285,26 @@ void mwj_propose_findmin(
 
         stream_set_desc_out.write(curSet);
         stream_end_out.write(false); 
+        last = stream_end_in.read();
     }
     stream_end_out.write(true);
 }
 
-template<uint8_t V_ID_W, uint8_t C_W, uint8_t H_W>
-void mvj_propose_readmem(
-        hls::stream<SetDescriptor> &stream_set_desc;
+template<uint8_t V_ID_W, uint8_t H_W>
+void mwj_propose_readmem(
+        hls::stream<SetDescriptor> &stream_set_desc,
         hls::stream<bool> &stream_end_in,
-        SetDescriptor &min_set_desc;
+        SetDescriptor &min_set_desc,
+        Trie *hTables,
+        TrieDescriptor *tDescriptors,
 
 #if HASH_SET_VERSION
-        hls::stream<ap_uint<H_W>> stream_sets_out,
+        hls::stream<ap_uint<H_W>> &stream_sets_out,
 #else
-        hls::stream<ap_uint<V_ID_W>> stream_sets_out,
+        hls::stream<ap_uint<V_ID_W>> &stream_sets_out,
 #endif
-        hls::stream<bool> stream_set_ends_out,
-        hls::stream<bool> stream_end_out
-        )
+        hls::stream<bool> &stream_set_ends_out,
+        hls::stream<bool> &stream_end_out)
 {
 
     SetDescriptor curr_desc = min_set_desc;
@@ -314,41 +313,35 @@ void mvj_propose_readmem(
     ap_uint<V_ID_W> vertex;
  
 #if HASH_SET_VERSION
-    ap_uint<H_W> vertex_hash; 
+    ap_uint<H_W> vertex_hash;
+    hls::stream<ap_uint<V_ID_W>> stream_hash_in; 
+    hls::stream<ap_uint<64>> stream_hash_out; 
+#endif
+
     while(!last){
      
         /* Read one set at a time, starting from the smallest */
         for(int i = curr_desc.sStart; i < (curr_desc.sStart + curr_desc.sSize); i++){
+     
+#if HASH_SET_VERSION
+            
             if (curr_desc.indexed){
                 edge = hTables[curr_desc.tIndex].edges[i];
                 if (tDescriptors[curr_desc.tIndex].dir){
-                    vertex = edge.range(2*V_ID_W-1, V_ID_W);
-                } else {
                     vertex = edge.range(V_ID_W-1, 0);
+                } else {
+                    vertex = edge.range(2*V_ID_W-1, V_ID_W);
                 }
-                //manca hashing
+                stream_hash_in.write(vertex);
+                xf::database::hashLookup3<V_ID_W>(stream_hash_in, stream_hash_out);
+                vertex_hash = stream_hash_out.read().range(H_W - 1, 0);
             } else {
                 vertex_hash = hTables[curr_desc.tIndex].source[i];
             }
             stream_sets_out.write(vertex_hash);
-            stream_set_ends_out.write(false);
-        }
-        stream_set_ends_out.write(true);
-        stream_end_out.write(false);
 
-        /* Read next set descriptor */
-        last = stream_end_in.read();
-        if(!last){
-            curr_desc = stream_set_desc.read();
-        }
-    }
-    stream_end_out.write(true);
 #else
 
-    while(!last){
-     
-        /* Read one set at a time, starting from the smallest */
-        for(int i = curr_desc.sStart; i < (curr_desc.sStart + curr_desc.sSize); i++){
             edge = hTables[curr_desc.tIndex].edges[i];
             if (tDescriptors[curr_desc.tIndex].dir ^ curr_desc.indexed){
                 vertex = edge.range(2*V_ID_W-1, V_ID_W);
@@ -356,6 +349,9 @@ void mvj_propose_readmem(
                 vertex = edge.range(V_ID_W-1, 0);
             }
             stream_sets_out.write(vertex);
+
+#endif
+
             stream_set_ends_out.write(false);
         }
         stream_set_ends_out.write(true);
@@ -368,10 +364,56 @@ void mvj_propose_readmem(
         }
     }
     stream_end_out.write(true);
-#endif
 }
 
-mwj_propose(){
+template <uint8_t V_ID_W, uint8_t H_W, uint8_t C_W>
+void mwj_propose(
+        Trie *hTables,
+        queryVertex *qVertices,
+        TrieDescriptor *tDescriptors,
+        ap_uint<V_ID_W> curQV,
+        ap_uint<V_ID_W> *curEmb,
+#if HASH_SET_VERSION
+        hls::stream<ap_uint<H_W>> &stream_sets_out,
+#else
+        hls::stream<ap_uint<V_ID_W>> &stream_sets_out,
+#endif
+        hls::stream<bool> &stream_set_ends_out,
+        hls::stream<bool> &stream_end_out)
+{
+
+    hls::stream<SetDescriptor> stream_addrGen("Set descriptors with min");
+    hls::stream<bool> stream_addrGen_end("Set descriptors delimiter for addrGen");
+
+    hls::stream<SetDescriptor> stream_findMin("Set descriptors without min");
+    hls::stream<bool> stream_findMin_end("Set descriptors delimiter for findMin");
+    SetDescriptor minSet;
+
+
+    mwj_propose_addrgen<V_ID_W, H_W, C_W>(
+            hTables,
+            qVertices,
+            curQV,
+            curEmb,
+            stream_addrGen,
+            stream_addrGen_end);
+
+    mwj_propose_findmin(
+            stream_addrGen,
+            stream_addrGen_end,
+            stream_findMin,
+            stream_findMin_end,
+            minSet);
+
+    mwj_propose_readmem<V_ID_W, H_W>(
+            stream_findMin,
+            stream_findMin_end,
+            minSet,
+            hTables,
+            tDescriptors,
+            stream_sets_out,
+            stream_set_ends_out,
+            stream_end_out);
 }
 
 template <uint8_t V_ID_W>
@@ -443,18 +485,56 @@ void mwj_extract(
     }   
 }
 
-template <uint8_t V_ID_W, uint8_t MAX_QV>
+template<uint8_t V_ID_W, uint8_t H_W>
+void mwj_intersect(
+#if HASH_SET_VERSION
+    hls::stream<ap_uint<H_W>> &stream_sets_in,
+#else
+    hls::stream<ap_uint<V_ID_W>> &stream_sets_in,
+#endif
+    hls::stream<bool> &stream_set_ends_in,
+    hls::stream<bool> &stream_end_in)
+{
+    bool last = stream_end_in.read();
+    while(!last){
+        std::cout << "{ ";
+        bool last_s = stream_set_ends_in.read();
+        while(!last_s){
+            std::cout << stream_sets_in.read() << " ";
+            last_s = stream_set_ends_in.read();
+        }
+        std::cout << "}" << std::endl;
+        last = stream_end_in.read();
+    }
+    char c;
+    std::cin >> c;
+}
+
+template <uint8_t V_ID_W, uint8_t MAX_QV, uint8_t H_W, uint8_t C_W>
 void multiwayJoin(
         hls::stream<ap_uint<V_ID_W>> &stream_ord,
         hls::stream<bool> &stream_end,
         ap_uint<8> numTables,
-        
-        hls::stream<ap_uint<V_ID_W>> &out_embeddings){
+        Trie *hTables,
+        TrieDescriptor *tDescriptors,
+        queryVertex *qVertices,
+
+        hls::stream<ap_uint<V_ID_W>> &out_embeddings)
+{
 
     /* Embeddings stored in the buffer in sequential way
      * buffer  <---- 2, v0, v3, 3, v2, v3, v4 ---- */ 
     hls::stream<ap_uint<V_ID_W>> buffer("buffer stream");
 
+    /* Propose data */
+#if HASH_SET_VERSION
+    hls::stream<ap_uint<H_W>> p_stream_sets("Sets propose");
+#else
+    hls::stream<ap_uint<V_ID_W>> p_stream_sets("Sets propose");
+#endif
+    hls::stream<bool> p_stream_set_ends("Set delimeter propose");
+    hls::stream<bool> p_stream_end("End stream propose");
+    
     ap_uint<V_ID_W> current_embedding_v[MAX_QV];
     ap_uint<8> current_embedding_c = 0;
     ap_uint<V_ID_W> current_qv = 0;
@@ -470,8 +550,22 @@ void multiwayJoin(
         /* Compute until buffer of result is empty or
          * new query vertex is needed */
         while(current_embedding_c == counter && !no_sol){
-            //propose
-            //intersect
+            mwj_propose<V_ID_W, H_W, C_W>(
+                    hTables,
+                    qVertices,
+                    tDescriptors,
+                    current_qv,
+                    current_embedding_v,
+                    p_stream_sets,
+                    p_stream_set_ends,
+                    p_stream_end);
+
+
+            mwj_intersect<V_ID_W, H_W>(
+                    p_stream_sets,
+                    p_stream_set_ends,
+                    p_stream_end);
+
             mwj_extract<V_ID_W>(buffer, debug_counter);
             debug_counter++;
 
@@ -538,7 +632,7 @@ void subgraphIsomorphism(
             stream_end,
             qVertices,
             tDescriptors,
-            &numTables,
+            numTables,
             stream_ord,
             stream_ord_end);
 
@@ -576,9 +670,12 @@ void subgraphIsomorphism(
     }
 #endif
 
-    multiwayJoin<V_ID_W, MAX_QV>(
+    multiwayJoin<V_ID_W, MAX_QV, H_W, C_W>(
             stream_ord,
             stream_ord_end,
             numTables,
+            hTables,
+            tDescriptors,
+            qVertices,
             stream_out);
 }
