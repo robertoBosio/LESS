@@ -154,6 +154,38 @@ void stream_datagraph(
     fDataEdges.close();
 }
 
+unsigned int subgraphIsomorphism_sw(){
+    
+    std::ifstream fGolden("data/golden.txt");
+    unsigned int nEmbedd = 0;
+    std::string fLine{};
+    std::getline(fGolden, fLine);
+    sscanf(fLine.c_str(), "%u", &nEmbedd);
+    fGolden.close();
+    return nEmbedd;
+}
+
+unsigned int countSol(
+    hls::stream<ap_uint<VERTEX_WIDTH>> &stream_in,
+    hls::stream<bool> &stream_set_end,
+    hls::stream<bool> &stream_end)
+{
+    bool last = stream_end.read();
+    unsigned int nEmbedd = 0;
+    ap_uint<VERTEX_WIDTH> temp;
+    while(!last){
+        bool last_set = stream_set_end.read();
+        while(!last_set){
+            temp = stream_in.read();
+            last_set = stream_set_end.read();
+        }
+        nEmbedd++;
+        last = stream_end.read();
+    }  
+
+    return nEmbedd;	
+}
+
 int main()
 {
     std::cout << "Start" << std::endl;
@@ -163,7 +195,9 @@ int main()
     hls::stream<ap_uint<VERTEX_WIDTH>> stream_out("result");
     hls::stream<ap_uint<LABEL_WIDTH>> stream_src_l("src labels");
     hls::stream<ap_uint<LABEL_WIDTH>> stream_dst_l("dst labels");
-    hls::stream<bool> stream_end("bool ends");
+    hls::stream<bool> stream_end_in("bool ends");
+    hls::stream<bool> stream_set_end_out("end set solution");
+    hls::stream<bool> stream_end_out("end solutions");
 
     stream_query
         <VERTEX_WIDTH, 
@@ -172,7 +206,7 @@ int main()
              stream_dst,
              stream_src_l,
              stream_dst_l,
-             stream_end);
+             stream_end_in);
 
     stream_datagraph
         <VERTEX_WIDTH, 
@@ -181,7 +215,7 @@ int main()
              stream_dst,
              stream_src_l,
              stream_dst_l,
-             stream_end);
+             stream_end_in);
     
     subgraphIsomorphism
         <VERTEX_WIDTH, 
@@ -194,22 +228,20 @@ int main()
              stream_dst,
              stream_src_l,
              stream_dst_l,
-             stream_end,
-             stream_out);
+             stream_end_in,
+             stream_out,
+             stream_set_end_out,
+             stream_end_out);
 
-    int counter = 0;
-    while(!stream_out.empty()){
-        if (counter == 0){
-            std::cout << "{ ";
-        }
-        std::cout << (int)stream_out.read() << " ";
-        counter++;
-        if (counter == 4){
-            counter = 0;
-            std::cout << "}" << std::endl;
-        }
-    }
+    unsigned int res_actual = countSol(
+            stream_out,
+            stream_set_end_out,
+            stream_end_out);
 
-    std::cout << "End" << std::endl;
-    return 0;	
+    unsigned int res_expected = subgraphIsomorphism_sw();
+
+    std::cout << "Expected: " << res_expected << ", Actual: " <<
+        res_actual << std::endl;
+
+    return (res_actual != res_expected);
 }

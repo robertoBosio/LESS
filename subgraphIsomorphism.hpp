@@ -514,7 +514,9 @@ void multiwayJoin(
         TrieDescriptor *tDescriptors,
         queryVertex *qVertices,
 
-        hls::stream<ap_uint<V_ID_W>> &out_embeddings)
+        hls::stream<ap_uint<V_ID_W>> &out_embeddings,
+        hls::stream<bool> &stream_set_end_out,
+        hls::stream<bool> &stream_end_out)
 {
 
     /* Embeddings stored in the buffer in sequential way
@@ -586,7 +588,7 @@ void multiwayJoin(
                     current_embedding_v[g] = buffer.read();
                     std::cout << current_embedding_v[g] << " ";
                 }
-                std::cout << "}" << std::endl;;
+                std::cout << "}" << std::endl;
             } else {
                 no_sol = true;
             }
@@ -602,13 +604,21 @@ void multiwayJoin(
 
     for(int g=0; g < counter; g++){
         out_embeddings.write(current_embedding_v[g]);
+        stream_set_end_out.write(false);
     }
+    stream_set_end_out.write(true);
+    stream_end_out.write(false);
+
     while(!buffer.empty()){
         buffer.read();
         for(int g=0; g < counter; g++){
             out_embeddings.write(buffer.read());
+            stream_set_end_out.write(false);
         }
+        stream_set_end_out.write(true);
+        stream_end_out.write(false);
     }
+    stream_end_out.write(true);
 }
 
 template <uint8_t V_ID_W, uint8_t V_L_W, uint8_t MAX_QV, uint64_t MAX_TB, uint8_t H_W, uint8_t C_W>
@@ -619,8 +629,9 @@ void subgraphIsomorphism(
         hls::stream<ap_uint<V_L_W>> &stream_dst_l,
         hls::stream<bool> &stream_end,
 
-        hls::stream<ap_uint<V_ID_W>> &stream_out
-        )
+        hls::stream<ap_uint<V_ID_W>> &stream_out,
+        hls::stream<bool> &stream_set_end_out,
+        hls::stream<bool> &stream_end_out)
 {
 
     hls::stream<ap_uint<V_ID_W>> stream_ord("stream order");
@@ -689,5 +700,7 @@ void subgraphIsomorphism(
             hTables,
             tDescriptors,
             qVertices,
-            stream_out);
+            stream_out,
+            stream_set_end_out,
+            stream_end_out);
 }
