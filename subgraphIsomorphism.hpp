@@ -345,6 +345,9 @@ void mwj_propose_readmem(
 #else
 
             edge = hTables[curr_desc.tIndex].edges[i];
+            // NEED TO COMPARE FOR COLLISION
+            /* Could implement cache for remove already read vertex
+             * since in some case we are not reading sets but arrays */
             if (tDescriptors[curr_desc.tIndex].dir ^ curr_desc.indexed){
                 vertex = edge.range(2*V_ID_W-1, V_ID_W);
             } else {
