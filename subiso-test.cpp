@@ -222,8 +222,11 @@ int main()
         LABEL_WIDTH,
         MAX_QUERY_VERTICES,
         MAX_TABLES,
-        HASH_WIDTH,
-        COUNTER_WIDTH>
+        HASH_WIDTH_FIRST,
+        HASH_WIDTH_SECOND,
+        COUNTER_WIDTH,
+        MAX_QUERY_DEGREE,
+        MAX_COLLISIONS>
             (stream_src,
              stream_dst,
              stream_src_l,

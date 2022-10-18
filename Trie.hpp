@@ -1,20 +1,14 @@
 #include <ap_int.h>
 #include "Parameters.hpp"
 
-class Trie{
+struct hashTable{
+    ap_uint<COUNTER_WIDTH> offset[1UL << HASH_WIDTH_SECOND];
 
-    public:
-        ap_uint<COUNTER_WIDTH> offset[1UL << HASH_WIDTH];
-        ap_uint<2*VERTEX_WIDTH> edges[MAX_DATA_EDGES];
+};
 
-#if HASH_SET_VERSION
-        ap_uint<HASH_WIDTH> source[1UL << HASH_WIDTH];
-        ap_uint<HASH_WIDTH> sCounter;
-        void addSourceVertex(ap_uint<HASH_WIDTH> hash){
-            source[sCounter++] = hash;
-        }
-#endif
-
+struct Trie{
+    hashTable adjHashTable[1UL << HASH_WIDTH_FIRST];
+    ap_uint<2*VERTEX_WIDTH> edges[MAX_DATA_EDGES];
 };
 
 class TrieDescriptor{
@@ -29,7 +23,6 @@ class SetDescriptor{
     public:
         uint8_t tIndex;
         uint32_t sSize;
-        uint32_t sStart;
         bool indexed;
-
+        ap_uint<VERTEX_WIDTH> vertexIndexing;
 };
