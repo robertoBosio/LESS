@@ -3,7 +3,6 @@
 
 struct hashTable{
     ap_uint<COUNTER_WIDTH> offset[1UL << HASH_WIDTH_SECOND];
-
 };
 
 struct Trie{

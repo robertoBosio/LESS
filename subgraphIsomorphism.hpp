@@ -10,6 +10,8 @@
 
 #define DEBUG 1
 
+bool deb = false;
+
 template <uint8_t V_ID_W, uint8_t V_L_W>
 void buildTableDescriptors(
         hls::stream<ap_uint<V_ID_W>> &stream_src,
@@ -109,6 +111,8 @@ void fillTables(
     hls::stream<ap_uint<V_ID_W>> stream_hash_in;
     hls::stream<ap_uint<64>> stream_hash_out;
 
+    int max_coll = 0;
+
     /* Reset memory */
     for (int c1 = 0; c1 < numTables; c1++){
         for(int c2 = 0; c2 < (1UL << H_W_1); c2++){
@@ -132,38 +136,54 @@ void fillTables(
             if (tDescriptors[g].src_label == labelsrc &&
                     tDescriptors[g].dst_label == labeldst){
                 
+                ap_uint<V_ID_W> vertexIndexing, vertexIndexed;               
                 if(tDescriptors[g].dir){
-                    stream_hash_in.write(nodesrc);
-                    stream_hash_in.write(nodedst);
+                    vertexIndexing = nodesrc;
+                    vertexIndexed = nodedst;
                 } else {
-                    stream_hash_in.write(nodedst);
-                    stream_hash_in.write(nodesrc);
+                    vertexIndexing = nodedst;
+                    vertexIndexed = nodesrc;
                 }
-
+                
                 /* Compute index in hash table */
-                xf::database::hashLookup3<V_ID_W>(stream_hash_in, stream_hash_out);
-                ap_uint<H_W_1> indexAdj = stream_hash_out.read().range(H_W_1 - 1, 0); 
-                xf::database::hashLookup3<V_ID_W>(stream_hash_in, stream_hash_out);
-                ap_uint<H_W_2> indexEdge = stream_hash_out.read().range(H_W_2 - 1, 0); 
-#if DEBUG
+                stream_hash_in.write(vertexIndexing);
+                xf::database::hashLookup3<V_ID_W>(
+                        stream_hash_in,
+                        stream_hash_out);
+
+                ap_uint<H_W_1> indexAdj = 
+                    stream_hash_out.read().range(H_W_1 - 1, 0); 
+
+                stream_hash_in.write(vertexIndexed);
+                xf::database::hashLookup3<V_ID_W>(
+                        stream_hash_in, 
+                        stream_hash_out);
+
+                ap_uint<H_W_2> indexEdge = 
+                    stream_hash_out.read().range(H_W_2 - 1, 0); 
+
+#if DEBUG_HASH
                 std::cout << (int)((tDescriptors[g].dir)?nodesrc:nodedst) << ": " << indexAdj << std::endl;
 #endif
 
                 hTables[g].adjHashTable[indexAdj].offset[indexEdge]++;
+                if (hTables[g].adjHashTable[indexAdj].offset[indexEdge] > max_coll){
+                    max_coll = hTables[g].adjHashTable[indexAdj].offset[indexEdge];
+                }
             }
         }
-
+        
         last = stream_end.read();
     }
-
+    
     for (uint8_t iTab = 0; iTab < numTables; iTab++){
         ap_uint<C_W> base_address = 0;
         ap_uint<C_W> step = 0;
-        for(int iAdj = 0; iAdj < (1UL << H_W_1); iAdj++){
-            for (int iEdge = 0; iEdge < (1UL << H_W_2); iEdge++){
+        for(unsigned int iAdj = 0; iAdj < (1UL << H_W_1); iAdj++){
+            for (unsigned int iEdge = 0; iEdge < (1UL << H_W_2); iEdge++){
                 step = hTables[iTab].adjHashTable[iAdj].offset[iEdge];
                 hTables[iTab].adjHashTable[iAdj].offset[iEdge] = base_address;
-                base_address += step;   
+                base_address += step;
             }
         }
     }
@@ -181,7 +201,7 @@ void fillTables(
         for (; g < numTables; g++){
             if (tDescriptors[g].src_label == labelsrc &&
                     tDescriptors[g].dst_label == labeldst){
- 
+                
                 ap_uint<V_ID_W> vertexIndexing, vertexIndexed;               
                 if(tDescriptors[g].dir){
                     vertexIndexing = nodesrc;
@@ -213,14 +233,14 @@ void fillTables(
                     adjHashTable[indexAdj].
                     offset[indexEdge];
 
-                hTables[g].edges[off].write(vertexIndexing.concat(vertexIndexed));
-                hTables[g].adjHashTable[indexAdj].offset[indexEdge]++;
+                hTables[g].edges[off] = vertexIndexing.concat(vertexIndexed);
+                hTables[g].adjHashTable[(int)indexAdj].offset[(int)indexEdge]++;
+
             }
         }
 
         last = stream_end.read();
     }
-
 }
 
 template <uint8_t V_ID_W, uint8_t H_W_1, uint8_t H_W_2, uint8_t C_W>
@@ -314,7 +334,7 @@ void mwj_intersect_streammin(
         counter++;
         last = stream_end_in.read();
     }
-   
+  
     /* Read the smallest set */
     if (setDesc[0].indexed){
         
@@ -355,11 +375,11 @@ void mwj_intersect_streammin(
     } else {
      
         /* Read set of source hashes */
-        for(uint8_t i = 0; i < (1UL << H_W_1); i++){
+        for(uint32_t i = 0; i < (1UL << H_W_1); i++){
             end_off = hTables[setDesc[0].tIndex].
                 adjHashTable[(ap_uint<H_W_1>)i].
                 offset[(1UL << H_W_2)-1];
-
+            
             if (end_off > start_off){
                 stream_min_out.write((ap_uint<H_W_1>)i);
                 stream_end_out.write(false);
@@ -387,11 +407,9 @@ void mwj_intersect_probe(
     bool last = stream_end_in.read();
     ap_uint<H_W_1> candidate;
 
-    std::cout << "Candidates: " << std::endl;
     while(!last){
         candidate = stream_min_in.read();
         bool inter = true;
-        std::cout << "\t" << (int)candidate << std::endl;
         for (int i = 1; i < counter && inter == true; i++){
             ap_uint<C_W> start_off = 0;
             ap_uint<C_W> end_off = 0;
@@ -400,9 +418,15 @@ void mwj_intersect_probe(
 
                 /* Retriving hash for vertex indexing the table */
                 stream_hash_in.write(setDesc[i].vertexIndexing);
-                xf::database::hashLookup3<V_ID_W>(stream_hash_in, stream_hash_out);
-                ap_uint<H_W_1> index1 = stream_hash_out.read().range(H_W_1 - 1, 0);
+                xf::database::hashLookup3<V_ID_W>(
+                        stream_hash_in, 
+                        stream_hash_out);
+
+                ap_uint<H_W_1> index1 = 
+                    stream_hash_out.read().range(H_W_1 - 1, 0);
+                
                 ap_uint<H_W_2> index2 = candidate.range(H_W_2-1, 0);
+
                 /* Handling corner cases */
                 if (index2 != 0){
                     start_off = hTables[setDesc[i].tIndex].
@@ -441,8 +465,6 @@ void mwj_intersect_probe(
                 inter = false;
             }
 
-            std::cout << "\t\ttab: " << setDesc[i].tIndex 
-                << (int)start_off << " - " << (int)end_off << std::endl;
         }
 
         if (inter){
@@ -489,7 +511,7 @@ void mwj_intersect(
             hTables,
             stream_inter_out,
             stream_end_out);
-
+    
     minSet = setDescs[0];
 }
 
@@ -511,11 +533,17 @@ void mwj_extract_hashtovid(
     bool last = stream_end_in.read();
     ap_uint<H_W_1> hashinter;
     ap_uint<V_ID_W> vertex;
-   
-    std::cout << "Passed { ";
+
+    /* filter to remove hash collission when passing from H_W_1 to H_W_2 */
+    ap_uint<16> filter[(1UL << (H_W_2 - 4))];
+    for (int g = 0; g < (1UL << (H_W_2 - 4)); filter[g++] = 0);
+
     while(!last){
         hashinter = stream_inter_in.read();
-        std::cout << hashinter  << " "; 
+        if (deb) {
+            std::cout << hashinter << std::endl;
+        }
+        
         ap_uint<C_W> start_off = 0;
         ap_uint<C_W> end_off = 0;
         if (minSet.indexed) {
@@ -524,8 +552,8 @@ void mwj_extract_hashtovid(
             stream_hash_in.write(minSet.vertexIndexing);
             xf::database::hashLookup3<V_ID_W>(stream_hash_in, stream_hash_out);
             ap_uint<H_W_1> index1 = stream_hash_out.read().range(H_W_1 - 1, 0);
-            ap_uint<H_W_2> index2 = hashinter.range(H_W_2-1,0);
-
+            ap_uint<H_W_2> index2 = hashinter.range(H_W_2 - 1, 0);
+            
             /* Handling corner cases */
             if (index2 != 0){
                 start_off = hTables[minSet.tIndex].
@@ -544,6 +572,17 @@ void mwj_extract_hashtovid(
             end_off = hTables[minSet.tIndex].
                 adjHashTable[index1].
                 offset[index2];
+            
+            /* If hash bit already present do no stream anything */
+            ap_uint<4> bitindex = index2.range(3, 0);
+            ap_uint<H_W_2 - 4> arrayindex = index2.range(H_W_2-1, 4);
+            ap_uint<16> filterword = filter[arrayindex];
+            if (filterword[bitindex] == 1){
+                end_off = start_off;
+            } else {
+                filterword[bitindex] = 1;
+                filter[arrayindex] = filterword;
+            }
 
         } else {
 
@@ -557,7 +596,7 @@ void mwj_extract_hashtovid(
                 adjHashTable[hashinter].
                 offset[(1UL << H_W_2)-1];
         }
-    
+
         for (; start_off < end_off; start_off++){
             edge = hTables[minSet.tIndex].edges[start_off];
             if (minSet.indexed){
@@ -572,7 +611,6 @@ void mwj_extract_hashtovid(
         stream_end_out.write(false);
         last = stream_end_in.read();
     }
-    std::cout << "}" << std::endl;
     stream_end_out.write(true);
 }
 
@@ -589,14 +627,14 @@ void mwj_extract_bagtoset(
     ap_uint<V_ID_W> set[MAX_CL];
     uint8_t counter = 0;
     bool last = stream_end_in.read();
-    std::cout << "ToID { ";
     while(!last){
         bool lastSet = stream_set_end_in.read();
         counter = 0;
-        std::cout << "{ ";
         while(!lastSet){
             ap_uint<V_ID_W> vertex = stream_inter_in.read();
-            std::cout << (int)vertex << " ";
+            if (deb) {
+                std::cout << vertex << std::endl;
+            }
             uint8_t nSet = 0;
             for(; nSet < counter; nSet++){
                 if (vertex == set[nSet]){
@@ -610,10 +648,14 @@ void mwj_extract_bagtoset(
             }
             lastSet = stream_set_end_in.read();    
         }
-        std::cout << "} ";
+        if (deb) {
+            std::cout << std::endl;
+        }
         last = stream_end_in.read();
     }
-    std::cout << "} " << std::endl;
+    if (deb) {
+        std::cout << std::endl;
+    }
     stream_end_out.write(true);
 }
 
@@ -630,22 +672,22 @@ void mwj_extract_product(
 {
     ap_uint<V_ID_W> vertex;
     bool last = stream_end_in.read();
-    std::cout << "Toset { ";
     while(!last){
         for (int g = 0; g < nCurEmb; g++){
             stream_embed_out.write(curEmb[g]);
             stream_embed_end_out.write(false);
         }
         vertex = stream_intersection_in.read();
-        std::cout << (int)vertex << " ";
         stream_embed_out.write(vertex);
+        if (deb) {
+            std::cout << vertex << std::endl;
+        }
         stream_embed_end_out.write(false);
         stream_embed_end_out.write(true);
         stream_end_out.write(false);
         last = stream_end_in.read();
     }
     stream_end_out.write(true);
-    std::cout << "}" << std::endl;
 }
 
 template <uint8_t V_ID_W, uint8_t H_W_1, uint8_t H_W_2, uint8_t C_W, uint8_t MAX_CL>
@@ -715,22 +757,17 @@ void mwj_verify(
         int counter = 0;
         bool checked = true;
 
-        std::cout << "Testing solution { ";
         bool lastEmb = stream_embed_end_in.read();
         while(!lastEmb){    
             curEmb[counter++] = stream_embed_in.read();
-            std::cout << curEmb[counter-1] << " ";
             lastEmb = stream_embed_end_in.read();
         }
-        std::cout << "} -> " << std::endl;
 
         for(int g = 0; g < qVertices[curQV].numTablesIndexed && checked; g++){
             checked = false;
             uint8_t tableIndex = qVertices[curQV].tables_indexed[g];
             uint8_t indexingVertex = qVertices[curQV].vertex_indexing[g];
             uint8_t ivPos = qVertices[indexingVertex].pos;
-            std::cout << "\tChecking " << (int)curEmb[ivPos] <<
-                " -> " << (int)curEmb[counter-1] << std::endl;
             stream_hash_in.write(curEmb[ivPos]);
             xf::database::hashLookup3<V_ID_W>(stream_hash_in, stream_hash_out);
             ap_uint<H_W_1> index1 = stream_hash_out.read().range(H_W_1 - 1, 0);
@@ -760,14 +797,23 @@ void mwj_verify(
                 adjHashTable[index1].
                 offset[index2];
 
+            if (deb){
+                std::cout << "Table " << (int)tableIndex << ": searching for " <<
+                    curEmb[ivPos] << " (" << index1 << ") -> " <<
+                    curEmb[counter -1] << "(" << index2 << ")" << 
+                    "starting from " << start_off << " to " <<
+                    end_off << std::endl;
+            }
             for(; start_off < end_off; start_off++){
                 ap_uint<2*V_ID_W> edge =
                     hTables[tableIndex].edges[start_off];
                 ap_uint<V_ID_W> vertexIndexed, vertexIndexing;
                 vertexIndexed = edge.range(V_ID_W-1, 0);
                 vertexIndexing = edge.range(2*V_ID_W-1, V_ID_W);
-                std::cout << "\t\t" << (int)vertexIndexing << " -> " <<
-                    (int)vertexIndexed << std::endl;
+                if (deb){
+                    std::cout << "\t" << vertexIndexing << " -> " <<
+                        vertexIndexed << std::endl;
+                }
                 if (vertexIndexing == curEmb[ivPos] &&
                         vertexIndexed == curEmb[counter-1]){
                     checked = true;
@@ -781,12 +827,16 @@ void mwj_verify(
                 stream_embed_out.write(curEmb[g]);
                 stream_embed_end_out.write(false);
             }
+            if (deb) {
+                std::cout << curEmb[counter-1] << ": OK" << std::endl; 
+            }
             stream_embed_end_out.write(true);
-            std::cout << "OK" << std::endl;
         } else {
-            std::cout << "NO" << std::endl;
+            if (deb) {
+                std::cout << curEmb[counter-1] << ": NO" << std::endl; 
+            }
+        
         }
-
         last = stream_end_in.read();
     }
 }
@@ -830,8 +880,6 @@ void multiwayJoin(
     bool no_sol = false;
 
     int debug_counter = 0;
-    
-    std::cout << "Start" << std::endl;
     bool last_qv = stream_end.read();
     while(!last_qv && !no_sol){
         current_qv = stream_ord.read();
@@ -879,29 +927,27 @@ void multiwayJoin(
                     current_embedding_v,
                     stream_embed,
                     stream_embed_end);
-
+            
+           
             /* Check if other embedding exist */
             if(!stream_embed_end.empty()){    
                 current_embedding_c = 0;
-                std::cout << std::endl;
-                std::cout << "sol: { ";
                 bool last = stream_embed_end.read();
                 while(!last){
-                    current_embedding_v[current_embedding_c++] = stream_embed.read();
-                    std::cout << current_embedding_v[current_embedding_c-1] 
-                        << " ";
+                    current_embedding_v[current_embedding_c++] = 
+                        stream_embed.read();
                     last = stream_embed_end.read();
                 }
-                std::cout << "}" << std::endl;
             } else {
                 no_sol = true;
             }
+            debug_counter++;
         }
-
+        std::cout << "counter :" << counter << std::endl;
         counter++;
         last_qv = stream_end.read();
     }
-     
+    
 #if DEBUG
     std::cout << "count: " << counter << std::endl;
 #endif
@@ -943,10 +989,15 @@ void subgraphIsomorphism(
     hls::stream<bool> stream_ord_end("stream order end");
 
     queryVertex qVertices[MAX_QV];
-    Trie hTables[MAX_TB];
     TrieDescriptor tDescriptors[MAX_TB];
     ap_uint<8> numTables = 0;
 
+#ifndef __SYNTHESIS__ 
+    Trie *hTables;
+    hTables = (Trie*)malloc(sizeof(Trie)*MAX_TB);
+#else
+    Trie hTables[MAX_TB];
+#endif
 
 #if DEBUG
     std::cout << "Allocating " << sizeof(Trie)*MAX_TB << " bytes." << std::endl;
@@ -975,7 +1026,7 @@ void subgraphIsomorphism(
             tDescriptors,
             numTables);
 
-#ifdef DEBUG
+#ifdef DEBUG_TAB
     for(int g = 0; g < numTables; g++){
         if (tDescriptors[g].dir){
             std::cout << "Table " << (int)g << ": " << (char)tDescriptors[g].src_label << 
@@ -1000,7 +1051,7 @@ void subgraphIsomorphism(
     }
 #endif
 
-   multiwayJoin<V_ID_W, MAX_QV, H_W_1, H_W_2, C_W, MAX_QD, MAX_CL>(
+    multiwayJoin<V_ID_W, MAX_QV, H_W_1, H_W_2, C_W, MAX_QD, MAX_CL>(
             stream_ord,
             stream_ord_end,
             numTables,
@@ -1011,4 +1062,7 @@ void subgraphIsomorphism(
             stream_set_end_out,
             stream_end_out);
 
+#ifndef __SYNTHESIS__ 
+    free(hTables);
+#endif
 }

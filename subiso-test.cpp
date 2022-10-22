@@ -173,16 +173,19 @@ unsigned int countSol(
     bool last = stream_end.read();
     unsigned int nEmbedd = 0;
     ap_uint<VERTEX_WIDTH> temp;
+    std::ofstream fres("data/resultkern.txt");
     while(!last){
         bool last_set = stream_set_end.read();
         while(!last_set){
             temp = stream_in.read();
+            fres << (int)temp << " ";   
             last_set = stream_set_end.read();
         }
+        fres << std::endl;
         nEmbedd++;
         last = stream_end.read();
     }  
-
+    fres.close();
     return nEmbedd;	
 }
 
