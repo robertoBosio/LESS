@@ -31,11 +31,11 @@
 
 /* bitwidth of the hash to index source vertices, 1st level.
  * Must be greater or equal to HASH_WIDTH_SECOND. */
-#define HASH_WIDTH_FIRST    12
+#define HASH_WIDTH_FIRST    5
 
 /* bitwidth of the hash to index a specific edge, 2nd level.
  * Must be greater or equal to 5 due to the filter in
  * hashtovid function. */
-#define HASH_WIDTH_SECOND   6
+#define HASH_WIDTH_SECOND   5
 
 #define MAX_COLLISIONS      (1UL << 4)

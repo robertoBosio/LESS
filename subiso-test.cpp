@@ -200,7 +200,8 @@ int main()
     hls::stream<bool> stream_end_out("end solutions");
     int nQV = 0;
 
-    ap_uint<512> *htb_buf = (ap_uint<512>*)malloc(6000000);
+    ap_uint<512> *htb_buf = (ap_uint<512>*)malloc(110);
+    //ap_uint<512> htb_buf[110];
     if (!htb_buf){
         std::cout << "Allocation failed." << std::endl;
         return -1;
@@ -219,7 +220,7 @@ int main()
             stream_src_l,
             stream_dst_l,
             stream_end_in);
-    
+
     subisoWrap(
             stream_src,
             stream_dst,
@@ -227,8 +228,14 @@ int main()
             stream_dst_l,
             stream_end_in,
             htb_buf,
+			//htb_buf,
+			//htb_buf,
+			//htb_buf,
+			//htb_buf,
             stream_out,
             stream_end_out);
+
+    std::cout << "end" << std::endl << std::flush;
 
     unsigned int res_actual = countSol(
             nQV,

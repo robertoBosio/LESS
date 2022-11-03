@@ -3,8 +3,8 @@
 #include "types.hpp"
 
 struct AdjHT{
-    ap_uint<64> start_offset;
-    ap_uint<64> start_edges;
+    ap_uint<32> start_offset;
+    ap_uint<32> start_edges;
     ap_uint<32> n_edges;
     ap_uint<32> hash_set;
 };
