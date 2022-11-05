@@ -489,12 +489,12 @@ void fillTables(
      * for each table, then it should be divided by the number
      * of counters stored in each row which is 1 << (9 - C_W)*/
     ap_uint<64> end_addr = numTables * HTB_SIZE;
-
+/*
 RESET_HASHTABLES_LOOP:
     for (ap_uint<64> addr = 0; addr < end_addr; addr++){
         htb_buf[addr] = 0;
     }
-
+*/
     ap_uint<64> start_addr = 0;
 STORE_HASHTABLES_POINTER_LOOP:
     for (ap_uint<8> ntb = 0; ntb < numTables; ntb++){
@@ -555,7 +555,7 @@ STORE_EDGES_POINTER_LOOP:
    // std::ofstream f("CHECK.txt");
    // for(ap_uint<8> tab = 0; tab < numTables; tab++){
    //     f << "Table " << tab << std::endl;
-   //     ap_uint<64> start = hTables[tab].start_offset;
+   //     ap_uint<64> start = hTables0[tab].start_offset;
    //     ap_uint<H_W_1> counter = 0;
    //     for(ap_uint<64> addr = 0; 
    //             addr < HTB_SIZE; 
@@ -577,9 +577,9 @@ STORE_EDGES_POINTER_LOOP:
    // f << std::endl;
    // for(ap_uint<8> tab = 0; tab < numTables; tab++){
    //     f << "Table " << tab << std::endl;
-   //     ap_uint<64> start = hTables[tab].start_edges;
+   //     ap_uint<64> start = hTables0[tab].start_edges;
    //     for(ap_uint<64> addr = 0; 
-   //             addr <= (hTables[tab].n_edges >> (9-E_W)); 
+   //             addr <= (hTables0[tab].n_edges >> (9-E_W)); 
    //             addr++){
    //         ap_uint<512> row = htb_buf[start + addr];
    //         for(int g = 0; g < EDGE_ROW; g++){
@@ -590,6 +590,47 @@ STORE_EDGES_POINTER_LOOP:
    //     }
    // } 
    // f.close();
+}
+
+template <uint8_t W_1,
+        uint8_t W_2,
+        uint8_t SHF,
+        uint8_t T>
+ap_uint<(1UL << T)> read_table(
+        ap_uint<W_1> index1,
+        ap_uint<W_2> index2,
+        ap_uint<512> *htb_buf,
+        ap_uint<32> start_addr)
+{
+#pragma HLS INLINE OFF
+    static ap_uint<512> ram_row;
+    /* Impossible that the first word read is the all 1s
+     * since before edges are read offsets which are on 
+     * the lower address space of the memory */
+    static ap_uint<32> prev_addr_row = ~((ap_uint<32>)0);
+    ap_uint<32> addr_row;
+    ap_uint<32> addr_inrow;
+    ap_uint<32> addr_counter;
+
+    addr_counter = index1;
+    addr_counter <<= SHF;
+    addr_counter += index2;
+
+    /* Compute address of row storing the counter */
+    addr_row = start_addr + (addr_counter >> (9 - T));
+
+    /* Compute address of data inside the row */
+    addr_inrow = addr_counter.range((9 - T) - 1, 0);
+
+    /* Read the data */
+    if (prev_addr_row != addr_row){
+        ram_row = htb_buf[addr_row];
+        prev_addr_row = addr_row;
+    }
+
+    return ram_row.range(((addr_inrow + 1) << T) - 1,
+            addr_inrow << T);
+
 }
 
 /* Multiway join propose: retrieves the tables in which
@@ -660,12 +701,8 @@ PROPOSE_TBINDEXING_LOOP:
      * is indexed by an other query vertex */
 PROPOSE_TBINDEXED_LOOP:
     for(int g = 0; g < qVertices[curQV].numTablesIndexed; g++){
-        ap_uint<512> ram_row;
-        ap_uint<64> addr_outrow;
-        ap_uint<64> addr_inrow;
-        ap_uint<64> addr_counter;
-        ap_uint<(1UL << C_W) - 1> start_off = 0;
-        ap_uint<(1UL << C_W) - 1> end_off;
+        ap_uint<(1UL << C_W)> start_off = 0;
+        ap_uint<(1UL << C_W)> end_off;
         tableIndex = qVertices[curQV].tables_indexed[g];
         uint8_t ivPos = qVertices[curQV].vertex_indexing[g];
 
@@ -674,41 +711,23 @@ PROPOSE_TBINDEXED_LOOP:
         ap_uint<H_W_1> index = stream_hash_out.read().range(H_W_1 - 1, 0);
 
         if (index != 0){ 
-            addr_counter = index - 1;
-            addr_counter <<= H_W_2;
-            addr_counter += (1UL << H_W_2) - 1;
-
-            /* Compute address of row storing the counter */
-            addr_outrow = hTables[tableIndex].start_offset + 
-                (addr_counter >> (9 - C_W));
-
-            /* Compute address of counter inside the row */
-            addr_inrow = addr_counter.range((9 - C_W) - 1, 0);
-
-            /* Read, modify and write the counter */
-            ram_row = htb_buf[addr_outrow];
-            start_off = ram_row.range(((addr_inrow + 1) << C_W) - 2,
-                    addr_inrow << C_W);
+            start_off = read_table<H_W_1, H_W_2, H_W_2, C_W>(
+                    index - 1,
+                    (1UL << H_W_2) - 1,
+                    htb_buf,
+                    hTables[tableIndex].start_offset);
+            start_off = start_off.range((1UL << C_W) - 2, 0);
         }
 
-        addr_counter = index;
-        addr_counter <<= H_W_2;
-        addr_counter += (1UL << H_W_2) - 1;
+        end_off = read_table<H_W_1, H_W_2, H_W_2, C_W>(
+                index,
+                (1UL << H_W_2) - 1,
+                htb_buf,
+                hTables[tableIndex].start_offset);
+        end_off = end_off.range((1UL << C_W) - 2, 0);
 
-        /* Compute address of row storing the counter */
-        addr_outrow = hTables[tableIndex].start_offset + 
-            (addr_counter >> (9 - C_W));
-
-        /* Compute address of counter inside the row */
-        addr_inrow = addr_counter.range((9 - C_W) - 1, 0);
-
-        /* Read, modify and write the counter */
-        ram_row = htb_buf[addr_outrow];
-        end_off = ram_row.range(((addr_inrow + 1) << C_W) - 2,
-                addr_inrow << C_W);
-
-        //std::cout << "\tEvaluating " << tableIndex << " : size " <<
-        //   end_off - start_off << std::endl; 
+       // std::cout << "\tEvaluating " << tableIndex << " : size " <<
+       //    end_off << " - " << start_off << std::endl; 
         if ((end_off - start_off) < minSize) {
             minSize = end_off - start_off;
             minStart = hTables[tableIndex].start_edges
@@ -739,16 +758,6 @@ void mwj_propose_readmin(
         hls::stream<bool> &stream_end_out,
         hls::stream<ap_uint<64>> &stream_min_set)
 {
-    hls::stream<ap_uint<V_ID_W>> stream_hash_in;
-    hls::stream<ap_uint<64>> stream_hash_out;
-    ap_uint<512> ram_row;
-    ap_uint<64> addr_outrow, addr_outrow_last;
-    ap_uint<64> addr_inrow;
-    ap_uint<64> addr_counter = (1UL << H_W_2) - 1;
-    ap_uint<(1UL << C_W) - 1> start_off = 0;
-    ap_uint<(1UL << C_W) - 1> end_off;
-    ap_uint<V_ID_W*2> edge;
-    ap_uint<V_ID_W> vertex, vertexCheck;
 
     ap_uint<64> minStart = stream_min_in.read();
     ap_uint<64> minEnd = stream_min_in.read();
@@ -756,11 +765,16 @@ void mwj_propose_readmin(
     stream_min_set.write(minData);
 
     //std::cout << "\tMinimum set is " << minData.range(7, 0) << std::endl;
+    //std::cout << "\tReading from " << minStart << " to " << minEnd << std::endl;
     if (minData.test(8)){
-        //std::cout << "\tReading from " << minStart << " to " << minEnd << std::endl;
+        hls::stream<ap_uint<V_ID_W>> stream_hash_in;
+        hls::stream<ap_uint<64>> stream_hash_out;
+        ap_uint<V_ID_W*2> edge;
+        ap_uint<V_ID_W> vertex, vertexCheck;
+
 PROPOSE_READ_MIN_INDEXED_LOOP:
         for (ap_uint<32> i = minStart; i <= minEnd; i++){
-            ram_row = htb_buf[i];
+            ap_uint<512> ram_row = htb_buf[i];
 
             /* Read the complete line, even if some edge is 
              * not inside the min set it will be filtered. */
@@ -768,9 +782,7 @@ PROPOSE_READ_MIN_INDEXED_LOOP:
                 edge = ram_row.range(((g + 1) << E_W) - 1, g << E_W);
                 vertexCheck = edge.range(2*V_ID_W - 1, V_ID_W);
                 vertex = edge.range(V_ID_W - 1, 0);
-//                std::cout << "\t" << vertexCheck << " (" << 
-//                    minData.range(V_ID_W + 8, 9) << ") -> " << vertex
-//                    << std::endl;
+                
                 if (minData.range(V_ID_W + 8, 9) == vertexCheck &&
                         vertexCheck.and_reduce() != 1){
                     stream_hash_in.write(vertex);
@@ -785,23 +797,18 @@ PROPOSE_READ_MIN_INDEXED_LOOP:
             }
         }
     } else {
+        ap_uint<(1UL << C_W)> start_off = 0;
+        ap_uint<(1UL << C_W)> end_off;
 
 PROPOSE_READ_MIN_INDEXING_LOOP:
         for (int i = 0; i < (1UL << H_W_1); i++){
-
-            /* Compute address of row storing the counter */
-            addr_outrow = minStart + (addr_counter >> (9 - C_W));
-
-            /* Compute address of counter inside the row */
-            addr_inrow = addr_counter.range((9 - C_W) - 1, 0);
-
-            /* Read from memory only if row is changed */
-            if (addr_outrow != addr_outrow_last){
-                ram_row = htb_buf[addr_outrow];
-            }
-            end_off = ram_row.range(((addr_inrow + 1) << C_W) - 2,
-                    addr_inrow << C_W);
-
+            end_off = read_table<H_W_1, H_W_2, H_W_2, C_W>(
+                    i,
+                    (1UL << H_W_2) - 1,
+                    htb_buf,
+                    minStart);
+            end_off = end_off.range((1UL << C_W) - 2, 0);
+            
             /* Compare offsets and stream if they are different, 
              * in other words if some stored edge has that hash */
             if (end_off > start_off){
@@ -809,8 +816,6 @@ PROPOSE_READ_MIN_INDEXING_LOOP:
                 stream_end_out.write(false);
                 start_off = end_off;
             }
-            addr_counter += (1UL << H_W_2);
-            addr_outrow_last = addr_outrow;
         }
     }
     stream_end_out.write(true);
@@ -827,8 +832,7 @@ void mwj_propose(
         QueryVertex *qVertices,
         hls::stream<ap_uint<V_ID_W>> &stream_embed_in,
         hls::stream<bool> &stream_end_embed_in,
-        ap_uint<512> *htb_buf0,
-        ap_uint<512> *htb_buf1,
+        ap_uint<512> *htb_buf,
         
         hls::stream<ap_uint<V_ID_W>> &stream_embed_out,
         hls::stream<bool> &stream_end_embed_out,
@@ -847,14 +851,14 @@ void mwj_propose(
             stream_end_embed_in,
             hTables,
             qVertices,
-            htb_buf0,
+            htb_buf,
             stream_min,
             stream_embed_out,
             stream_end_embed_out);
 
     mwj_propose_readmin<V_ID_W, H_W_1, H_W_2, C_W, E_W>(
             stream_min,
-            htb_buf1,
+            htb_buf,
             stream_min_out,
             stream_end_min_out,
             stream_min_set);
@@ -883,10 +887,6 @@ void mwj_intersect(
     hls::stream<ap_uint<V_ID_W>> stream_hash_in;
     hls::stream<ap_uint<64>> stream_hash_out;
     ap_uint<H_W_1> candidate;
-    ap_uint<512> ram_row;
-    ap_uint<64> addr_outrow;
-    ap_uint<64> addr_inrow;
-    ap_uint<64> addr_counter;
     ap_uint<8> tableIndex, curQV;
     ap_uint<V_ID_W> curEmb[MAX_QV];
     curQV = 0;
@@ -907,12 +907,14 @@ INTERSECT_COPYING_EMBEDDING_LOOP:
 INTERSECT_LOOP:
     while(!last){
         candidate = stream_min_in.read();
+        //std::cout << "\t" << candidate << std::endl;
         bool inter = true;
 INTERSECT_TBINDEXED_LOOP:
         for(int g = 0; 
                 g < qVertices[curQV].numTablesIndexed && inter;
                 g++)
         {
+            ap_uint<(1UL << C_W)> offset;
             tableIndex = qVertices[curQV].tables_indexed[g];
             uint8_t ivPos = qVertices[curQV].vertex_indexing[g];
 
@@ -921,20 +923,12 @@ INTERSECT_TBINDEXED_LOOP:
             ap_uint<H_W_1> index1 = stream_hash_out.read().range(H_W_1 - 1, 0);
             ap_uint<H_W_2> index2 = candidate.range(H_W_2 - 1, 0);
             
-            addr_counter = index1;
-            addr_counter <<= H_W_2;
-            addr_counter += index2;
-
-            /* Compute address of row storing the offset */
-            addr_outrow = hTables[tableIndex].start_offset + 
-                (addr_counter >> (9 - C_W));
-
-            /* Compute address of offset inside the row */
-            addr_inrow = addr_counter.range((9 - C_W) - 1, 0);
-
-            /* Read, modify and write the counter */
-            ram_row = htb_buf[addr_outrow];
-            inter = ram_row.test(((addr_inrow + 1) << C_W) - 1);
+            offset = read_table<H_W_1, H_W_2, H_W_2, C_W>(
+                    index1,
+                    index2,
+                    htb_buf,
+                    hTables[tableIndex].start_offset);
+            inter = offset.test((1UL << C_W) - 1);
         }
 
 INTERSECT_TBINDEXING_LOOP:
@@ -942,43 +936,26 @@ INTERSECT_TBINDEXING_LOOP:
                 g < qVertices[curQV].numTablesIndexing && inter; 
                 g++)
         {
-            ap_uint<(1UL << C_W) - 1> start_off, end_off;
+            ap_uint<(1UL << C_W)> start_off, end_off;
             tableIndex = qVertices[curQV].tables_indexing[g];
+            
             if (candidate != 0){ 
-                addr_counter = candidate - 1;
-                addr_counter <<= H_W_2;
-                addr_counter += (1UL << H_W_2) - 1;
-
-                /* Compute address of row storing the counter */
-                addr_outrow = hTables[tableIndex].start_offset + 
-                    (addr_counter >> (9 - C_W));
-
-                /* Compute address of counter inside the row */
-                addr_inrow = addr_counter.range((9 - C_W) - 1, 0);
-
-                /* Read, modify and write the counter */
-                ram_row = htb_buf[addr_outrow];
-                start_off = ram_row.range(((addr_inrow + 1) << C_W) - 2,
-                        addr_inrow << C_W);
+                start_off = read_table<H_W_1, H_W_2, H_W_2, C_W>(
+                        candidate - 1,
+                        (1UL << H_W_2) - 1,
+                        htb_buf,
+                        hTables[tableIndex].start_offset);
+                start_off = start_off.range((1UL << C_W) - 2, 0);
             } else {
                 start_off = 0;
             }
 
-            addr_counter = candidate;
-            addr_counter <<= H_W_2;
-            addr_counter += (1UL << H_W_2) - 1;
-
-            /* Compute address of row storing the counter */
-            addr_outrow = hTables[tableIndex].start_offset + 
-                (addr_counter >> (9 - C_W));
-
-            /* Compute address of counter inside the row */
-            addr_inrow = addr_counter.range((9 - C_W) - 1, 0);
-
-            /* Read, modify and write the counter */
-            ram_row = htb_buf[addr_outrow];
-            end_off = ram_row.range(((addr_inrow + 1) << C_W) - 2,
-                    addr_inrow << C_W);
+            end_off = read_table<H_W_1, H_W_2, H_W_2, C_W>(
+                    candidate,
+                    (1UL << H_W_2) - 1,
+                    htb_buf,
+                    hTables[tableIndex].start_offset);
+            end_off = end_off.range((1UL << C_W) - 2, 0);
             inter = (end_off > start_off);
         }
 
@@ -1016,10 +993,6 @@ void mwj_extract_hashtovid(
     ap_uint<H_W_1> hashinter;
     ap_uint<V_ID_W> vertex;
     ap_uint<V_ID_W*2> edge;
-    ap_uint<512> ram_row;
-    ap_uint<64> addr_outrow;
-    ap_uint<64> addr_inrow;
-    ap_uint<64> addr_counter;
 
     /* filter to remove hash collisions when passing from H_W_1 to H_W_2 */
     ap_uint<16> filter[(1UL << (H_W_2 - 4))];
@@ -1030,10 +1003,10 @@ EXTRACT_RESET_FILTER_LOOP:
 EXTRACT_HASHTOVID_LOOP:
     while(!last){
         hashinter = stream_inter_in.read();
-        ap_uint<(1UL << C_W) - 1> start_off = 0;
-        ap_uint<(1UL << C_W) - 1> end_off = 0;
-        ap_uint<H_W_1> index1;
-        ap_uint<H_W_2> index2;
+        ap_uint<(1UL << C_W)> start_off = 0;
+        ap_uint<(1UL << C_W)> end_off = 0;
+        ap_uint<H_W_1> index1, index1_f;
+        ap_uint<H_W_2> index2, index2_f;
 
         if (minData.test(8)) {
 
@@ -1048,48 +1021,32 @@ EXTRACT_HASHTOVID_LOOP:
         }
 
         if (index2 != 0){ 
-            addr_counter = index1;
-            addr_counter <<= H_W_2;
-            addr_counter += index2 - 1;
+            index1_f = index1;
+            index2_f = index2 - 1;
         } else if (index2 == 0 && index1 != 0){
-            addr_counter = index1 - 1;
-            addr_counter <<= H_W_2;
-            addr_counter += (1UL << H_W_2)-1;
+            index1_f = index1 - 1;
+            index2_f = (1UL << H_W_2) - 1;
         }
 
         if (!(index2 == 0 && index1 == 0)){
-            /* Compute address of row storing the counter */
-            addr_outrow = hTables[minData.range(7,0)].start_offset + 
-                (addr_counter >> (9 - C_W));
-
-            /* Compute address of counter inside the row */
-            addr_inrow = addr_counter.range((9 - C_W) - 1, 0);
-
-            /* Read, modify and write the counter */
-            ram_row = htb_buf[addr_outrow];
-            start_off = ram_row.range(((addr_inrow + 1) << C_W) - 2,
-                    addr_inrow << C_W);
+            start_off = read_table<H_W_1, H_W_2, H_W_2, C_W>(
+                    index1_f,
+                    index2_f,
+                    htb_buf,
+                    hTables[minData.range(7,0)].start_offset);
+            start_off = start_off.range((1UL << C_W) - 2, 0);
         }
 
         if (!minData.test(8)){
-            index2 = (1UL << H_W_2)-1;
+            index2 = (1UL << H_W_2) - 1;
         }
 
-        addr_counter = index1;
-        addr_counter <<= H_W_2;
-        addr_counter += index2;
-
-        /* Compute address of row storing the counter */
-        addr_outrow = hTables[minData.range(7,0)].start_offset + 
-            (addr_counter >> (9 - C_W));
-
-        /* Compute address of counter inside the row */
-        addr_inrow = addr_counter.range((9 - C_W) - 1, 0);
-
-        /* Read, modify and write the counter */
-        ram_row = htb_buf[addr_outrow];
-        end_off = ram_row.range(((addr_inrow + 1) << C_W) - 2,
-                addr_inrow << C_W);
+        end_off = read_table<H_W_1, H_W_2, H_W_2, C_W>(
+                index1,
+                index2,
+                htb_buf,
+                hTables[minData.range(7,0)].start_offset);
+        end_off = end_off.range((1UL << C_W) - 2, 0);
 
         /* If hash bit already present do no stream anything */
         if (minData.test(8)){
@@ -1109,30 +1066,20 @@ EXTRACT_HASHTOVID_LOOP:
         //    "from tab " << minData.range(7,0) <<
         //    "which starts at " << hTables[minData.range(7,0)].start_offset <<
         //    std::endl;
-        ap_uint<64> prev_addr_outrow = 0;
 EXTRACT_HASHTOVID_READ_LOOP:
         for (; start_off < end_off; start_off++){
 
-            /* Compute address of row that will store the edge */
-            addr_outrow = hTables[minData.range(7, 0)].start_edges 
-                + (start_off >> (9 - E_W));
-
-            /* Compute address of the edge inside the row */
-            addr_inrow = start_off.range((9 - E_W) - 1, 0);
-
-            if (prev_addr_outrow != addr_outrow){
-                ram_row = htb_buf[addr_outrow];
-            }
-
-            edge = ram_row.range(((addr_inrow + 1) << E_W) - 1,
-                    addr_inrow << E_W);
-
+            edge = read_table<32, 1, 0, E_W>(
+                    start_off,
+                    0,
+                    htb_buf,
+                    hTables[minData.range(7, 0)].start_edges);
+            
             if (minData.test(8)){
-                vertex = edge.range(V_ID_W-1, 0);
+                vertex = edge.range(V_ID_W - 1, 0);
             } else {
-                vertex = edge.range(2*V_ID_W-1, V_ID_W);
+                vertex = edge.range(2*V_ID_W - 1, V_ID_W);
             }
-            prev_addr_outrow = addr_outrow;
 
             //std::cout << "\t\t" << vertex << std::endl;
             stream_inter_out.write(vertex);
@@ -1259,10 +1206,6 @@ void mwj_verify(
 {
     hls::stream<ap_uint<V_ID_W>> stream_hash_in;
     hls::stream<ap_uint<64>> stream_hash_out;
-    ap_uint<512> ram_row;
-    ap_uint<64> addr_outrow;
-    ap_uint<64> addr_inrow;
-    ap_uint<64> addr_counter;
     ap_uint<8> curQV = 0;
     ap_uint<V_ID_W> curEmb[MAX_QV];
     static unsigned long nPartialSol = 1;
@@ -1286,107 +1229,73 @@ VERIFY_CHECK_LOOP:
 VERIFY_CHECK_EDGE_LOOP:
         for(int g = 0; g < qVertices[curQV].numTablesIndexed && checked; g++){
             checked = false;
+            ap_uint<H_W_1> index1, index1_f;
+            ap_uint<H_W_2> index2, index2_f;
             uint8_t tableIndex = qVertices[curQV].tables_indexed[g];
             uint8_t ivPos = qVertices[curQV].vertex_indexing[g];
             stream_hash_in.write(curEmb[ivPos]);
             stream_hash_in.write(vToVerify);
             xf::database::hashLookup3<V_ID_W>(stream_hash_in, stream_hash_out);
-            ap_uint<H_W_1> index1 = stream_hash_out.read().range(H_W_1 - 1, 0);
+            index1 = stream_hash_out.read().range(H_W_1 - 1, 0);
             xf::database::hashLookup3<V_ID_W>(stream_hash_in, stream_hash_out);
-            ap_uint<H_W_2> index2 = stream_hash_out.read().range(H_W_2 - 1, 0);
+            index2 = stream_hash_out.read().range(H_W_2 - 1, 0);
 
-            ap_uint<(1UL << C_W) - 1> start_off = 0;
-            ap_uint<(1UL << C_W) - 1> end_off = 0;
+            ap_uint<(1UL << C_W)> start_off = 0;
+            ap_uint<(1UL << C_W)> end_off = 0;
 
-            if (index2 != 0){ 
-                addr_counter = index1;
-                addr_counter <<= H_W_2;
-                addr_counter += index2 - 1;
+            if (index2 != 0){
+                index1_f = index1;
+                index2_f = index2 - 1;
             } else if (index2 == 0 && index1 != 0){
-                addr_counter = index1 - 1;
-                addr_counter <<= H_W_2;
-                addr_counter += (1UL << H_W_2)-1;
+                index1_f = index1 - 1;
+                index2_f = (1UL << H_W_2)-1;
             }
 
             if (!(index2 == 0 && index1 == 0)){
-                /* Compute address of row storing the counter */
-                addr_outrow = hTables[tableIndex].start_offset + 
-                    (addr_counter >> (9 - C_W));
-
-                /* Compute address of counter inside the row */
-                addr_inrow = addr_counter.range((9 - C_W) - 1, 0);
-
-                /* Read, modify and write the counter */
-                ram_row = htb_buf[addr_outrow];
-                start_off = ram_row.range(((addr_inrow + 1) << C_W) - 2,
-                        addr_inrow << C_W);
+                start_off = read_table<H_W_1, H_W_2, H_W_2, C_W>(
+                        index1_f,
+                        index2_f,
+                        htb_buf,
+                        hTables[tableIndex].start_offset);
+                start_off = start_off.range((1UL << C_W) - 2, 0);
             }
 
-            addr_counter = index1;
-            addr_counter <<= H_W_2;
-            addr_counter += index2;
+            end_off = read_table<H_W_1, H_W_2, H_W_2, C_W>(
+                    index1,
+                    index2,
+                    htb_buf,
+                    hTables[tableIndex].start_offset);
+            end_off = end_off.range((1UL << C_W) - 2, 0);
 
-            /* Compute address of row storing the counter */
-            addr_outrow = hTables[tableIndex].start_offset + 
-                (addr_counter >> (9 - C_W));
-
-            /* Compute address of counter inside the row */
-            addr_inrow = addr_counter.range((9 - C_W) - 1, 0);
-
-            /* Read, modify and write the counter */
-            ram_row = htb_buf[addr_outrow];
-            end_off = ram_row.range(((addr_inrow + 1) << C_W) - 2,
-                    addr_inrow << C_W);
-
-            ap_uint<64> prev_addr_outrow = 0;
 VERIFY_READ_MEMORY_LOOP:
-            for (; start_off < end_off; start_off++){
-
-                /* Compute address of row that will store the edge */
-                addr_outrow = hTables[tableIndex].start_edges 
-                    + (start_off >> (9 - E_W));
-
-                /* Compute address of the edge inside the row */
-                addr_inrow = start_off.range((9 - E_W) - 1, 0);
-
-                if (prev_addr_outrow != addr_outrow){
-                    ram_row = htb_buf[addr_outrow];
-                }
-
-                ap_uint<2 * V_ID_W> edge = ram_row.range(
-                        ((addr_inrow + 1) << E_W) - 1,
-                        addr_inrow << E_W);
+            for (; start_off < end_off && checked == false; start_off++){
+                ap_uint<2 * V_ID_W> edge = read_table<32, 1, 0, E_W>(
+                        start_off,
+                        0,
+                        htb_buf,
+                        hTables[tableIndex].start_edges);
 
                 ap_uint<V_ID_W> vertexIndexed, vertexIndexing;
-                vertexIndexed = edge.range(V_ID_W-1, 0);
-                vertexIndexing = edge.range(2*V_ID_W-1, V_ID_W);
+                vertexIndexed = edge.range(V_ID_W - 1, 0);
+                vertexIndexing = edge.range(2*V_ID_W - 1, V_ID_W);
                 if (vertexIndexing == curEmb[ivPos] &&
                         vertexIndexed == vToVerify){
                     checked = true;
-                    break;
                 }
-                prev_addr_outrow = addr_outrow;
             }
         }
 
         if (checked){
             /* Write in the correct stream */
             if (curQV == nQueryVer){
-#if DEBUG
-                std::cout << "\tfinal {";
-#endif
+               // std::cout << "\tfinal {";
                 stream_final_end_out.write(false);
 VERIFY_WRITE_PARTIAL_LOOP:
                 for (int g = 0; g < curQV; g++){
-#if DEBUG
-                    std::cout << curEmb[g] << " ";
-#endif
-
+                    //std::cout << curEmb[g] << " ";
                     stream_final_out.write(curEmb[g]);
                 }
-#if DEBUG
-                std::cout << vToVerify << "}" << std::endl;
-#endif
+                //std::cout << vToVerify << "}" << std::endl;
                 stream_final_out.write(vToVerify);
             } else {
                 //std::cout << "\tpartial {";
@@ -1416,9 +1325,6 @@ VERIFY_WRITE_FINAL_LOOP:
         stream_stop.write(false);
     }
 
-#if DEBUG
-    std::cout << "\tPartial results: " << nPartialSol << std::endl;
-#endif
 }
 
 template <uint8_t V_ID_W, 
@@ -1429,11 +1335,7 @@ template <uint8_t V_ID_W,
          uint8_t E_W,
          uint8_t MAX_CL>
 void multiwayJoin(
-        ap_uint<512> *htb_buf0,
-        ap_uint<512> *htb_buf1,
-        ap_uint<512> *htb_buf2,
-        ap_uint<512> *htb_buf3,
-        ap_uint<512> *htb_buf4,
+        ap_uint<512> *htb_buf,
         AdjHT *hTables0,
         AdjHT *hTables1,
         QueryVertex *qVertices0,
@@ -1444,12 +1346,13 @@ void multiwayJoin(
         hls::stream<bool> &stream_final_out_end,
         hls::stream<bool> &stream_stop)
 {
+#pragma HLS STABLE variable=htb_buf
+#pragma HLS STABLE variable=hTables0
+#pragma HLS STABLE variable=hTables1
+#pragma HLS STABLE variable=qVertices0
+#pragma HLS STABLE variable=qVertices1
+#pragma HLS STABLE variable=nQueryVer
 #pragma HLS DATAFLOW
-#pragma HLS STABLE variable=htb_buf0
-#pragma HLS STABLE variable=htb_buf1
-#pragma HLS STABLE variable=htb_buf2
-#pragma HLS STABLE variable=htb_buf3
-#pragma HLS STABLE variable=htb_buf4
 
     /* Propose data out*/
     hls::stream<ap_uint<V_ID_W>> p_stream_embed("Partial result propose");
@@ -1477,8 +1380,7 @@ void multiwayJoin(
             qVertices0,
             stream_embed,
             stream_embed_end,
-            htb_buf0,
-            htb_buf1,
+            htb_buf,
             p_stream_embed,
             p_stream_embed_end,
             p_stream_min,
@@ -1492,7 +1394,7 @@ void multiwayJoin(
             p_stream_embed_end,
             p_stream_min,
             p_stream_min_end,
-            htb_buf2,
+            htb_buf,
             i_stream_embed,
             i_stream_embed_end,
             i_stream_hash_set,
@@ -1503,7 +1405,7 @@ void multiwayJoin(
             i_stream_hash_set_end,
             p_stream_min_desc,
             hTables0,
-            htb_buf3,
+            htb_buf,
             e_stream_cand,
             e_stream_cand_end);
 
@@ -1514,7 +1416,7 @@ void multiwayJoin(
             e_stream_cand_end,
             hTables1,
             qVertices0,
-            htb_buf4,
+            htb_buf,
             nQueryVer,
             stream_embed,
             stream_embed_end,
@@ -1531,11 +1433,7 @@ template <uint8_t V_ID_W,
          uint8_t E_W,
          uint8_t MAX_CL>
 void multiwayJoinWrap(
-        ap_uint<512> *htb_buf0,
-        ap_uint<512> *htb_buf1,
-        ap_uint<512> *htb_buf2,
-        ap_uint<512> *htb_buf3,
-        ap_uint<512> *htb_buf4,
+        ap_uint<512> *htb_buf,
         AdjHT *hTables0,
         AdjHT *hTables1,
         QueryVertex *qVertices0,
@@ -1554,11 +1452,7 @@ MULTIWAYJOIN_LOOP:
 	do {
 
         multiwayJoin<V_ID_W, MAX_QV, H_W_1, H_W_2, C_W, E_W, MAX_CL>(
-                htb_buf0,
-                htb_buf1,
-                htb_buf2,
-                htb_buf3,
-                htb_buf4,
+                htb_buf,
                 hTables0,
                 hTables1,
                 qVertices0,
@@ -1569,17 +1463,7 @@ MULTIWAYJOIN_LOOP:
                 stream_stop);
 
         end = stream_stop.read();
-
-#if DEBUG
-        std::cout << "Giro" << std::endl;
-#endif 
-        //char temp;
-        //std::cin >> temp;
-
     } while(!end);
-#if DEBUG
-    std::cout << "-----------------" << std::endl << std::endl;
-#endif
 }
 
 template <uint8_t V_ID_W, 
@@ -1598,10 +1482,6 @@ void subgraphIsomorphism(
         hls::stream<ap_uint<V_L_W>> &stream_dst_l,
         hls::stream<bool> &stream_end,
         ap_uint<512> *htb_buf,
-        //ap_uint<512> *htb_buf1,
-        //ap_uint<512> *htb_buf2,
-        //ap_uint<512> *htb_buf3,
-        //ap_uint<512> *htb_buf4,
 
         hls::stream<ap_uint<V_ID_W>> &stream_out,
         hls::stream<bool> &stream_end_out)
@@ -1612,11 +1492,6 @@ void subgraphIsomorphism(
     AdjHT hTables0[MAX_TB], hTables1[MAX_TB];
     ap_uint<8> numTables = 0;
     ap_uint<8> numQueryVert = 0;
-    ap_uint<512> *htb_buf0 = htb_buf;
-    ap_uint<512> *htb_buf1 = htb_buf;
-    ap_uint<512> *htb_buf2 = htb_buf;
-    ap_uint<512> *htb_buf3 = htb_buf;
-    ap_uint<512> *htb_buf4 = htb_buf;
 
     buildTableDescriptors<V_ID_W, V_L_W, MAX_QV>(
             stream_src,
@@ -1638,7 +1513,7 @@ void subgraphIsomorphism(
             stream_end,
             hTables0,
             hTables1,
-            htb_buf0,
+            htb_buf,
             tDescriptors,
             numTables);
 
@@ -1669,11 +1544,7 @@ void subgraphIsomorphism(
 #endif
 
     multiwayJoinWrap<V_ID_W, MAX_QV, H_W_1, H_W_2, C_W, E_W, MAX_CL>(
-            htb_buf0,
-            htb_buf1,
-            htb_buf2,
-            htb_buf3,
-            htb_buf4,
+            htb_buf,
             hTables0,
             hTables1,
             qVertices0,

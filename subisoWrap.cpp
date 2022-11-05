@@ -7,17 +7,13 @@ void subisoWrap(
         hls::stream<ap_uint<LABEL_WIDTH>> &stream_src_l,
         hls::stream<ap_uint<LABEL_WIDTH>> &stream_dst_l,
         hls::stream<bool> &stream_end_in,
-        ap_uint<512> *htb_buf0,
-		//ap_uint<512> *htb_buf1,
-		//ap_uint<512> *htb_buf2,
-		//ap_uint<512> *htb_buf3,
-		//ap_uint<512> *htb_buf4,
+        ap_uint<512> htb_buf[DDR_WIDTH],
 
         hls::stream<ap_uint<VERTEX_WIDTH_BIT>> &stream_out,
         hls::stream<bool> &stream_end_out){
 
-//#pragma HLS INTERFACE m_axi port=htb_buf0 bundle=gmem0_0
-//#pragma HLS INTERFACE m_axi port=htb_buf1 bundle=gmem0_1
+#pragma HLS INTERFACE m_axi port=htb_buf bundle=gmem0
+//#pragma HLS INTERFACE m_axi port=htb_buf bundle=gmem1
 //#pragma HLS INTERFACE m_axi port=htb_buf2 bundle=gmem0_2
 //#pragma HLS INTERFACE m_axi port=htb_buf3 bundle=gmem0_3
 //#pragma HLS INTERFACE m_axi port=htb_buf4 bundle=gmem0_4
@@ -47,16 +43,9 @@ void subisoWrap(
              stream_src_l,
              stream_dst_l,
              stream_end_in,
-             htb_buf0,
-             //htb_buf1,
-             //htb_buf2,
-             //htb_buf3,
-             //htb_buf4,
+             htb_buf,
              stream_out,
              stream_end_out);
 
-#ifndef __SYNTHESIS__
-    std::cout << "END 1" << std::endl;
-#endif
 }
 

@@ -39,3 +39,6 @@
 #define HASH_WIDTH_SECOND   5
 
 #define MAX_COLLISIONS      (1UL << 4)
+
+
+#define DDR_WIDTH           100

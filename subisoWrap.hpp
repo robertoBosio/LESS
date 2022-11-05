@@ -11,11 +11,7 @@ void subisoWrap(
         hls::stream<ap_uint<LABEL_WIDTH>> &stream_src_l,
         hls::stream<ap_uint<LABEL_WIDTH>> &stream_dst_l,
         hls::stream<bool> &stream_end,
-		ap_uint<512> *htb_buf0,
-		//ap_uint<512> *htb_buf1,
-		//ap_uint<512> *htb_buf2,
-		//ap_uint<512> *htb_buf3,
-		//ap_uint<512> *htb_buf4,
+		ap_uint<512> htb_buf[DDR_WIDTH],
 
         hls::stream<ap_uint<VERTEX_WIDTH_BIT>> &stream_out,
         hls::stream<bool> &stream_end_out);
