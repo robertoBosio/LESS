@@ -533,7 +533,7 @@ STORE_EDGES_POINTER_LOOP:
         hTables1[ntb].start_edges = hTables0[ntb].start_edges;
         hTables1[ntb].n_edges = hTables0[ntb].n_edges;
         hTables1[ntb].hash_set = hTables0[ntb].hash_set;
-        htb_buf[start_addr - 1] = ~((ap_uint<512>)0);
+        //htb_buf[start_addr - 1] = ~((ap_uint<512>)0);
     }
 
     writeEdges<V_ID_W, V_L_W, H_W_1, H_W_2, C_W, E_W>(
@@ -549,7 +549,8 @@ STORE_EDGES_POINTER_LOOP:
 
 #if DEBUG
     end_addr = start_addr;
-    std::cout << "Occupied " << end_addr * 64 << " bytes" << std::endl;
+    std::cout << "Occupied " << end_addr * 64 << " bytes, " << end_addr <<
+        " words." << std::endl;
 #endif
 
    // std::ofstream f("CHECK.txt");
@@ -649,7 +650,8 @@ void mwj_propose_findmin(
         QueryVertex *qVertices,
         ap_uint<512> *htb_buf,
         
-        hls::stream<ap_uint<64>> &stream_min_out,
+        hls::stream<ap_uint<32>> &stream_minread_out,
+        hls::stream<ap_uint<V_ID_W + 1 + 8>> &stream_min_out,
         hls::stream<ap_uint<V_ID_W>> &stream_embed_out,
         hls::stream<bool> &stream_end_embed_out)
 {
@@ -658,7 +660,8 @@ void mwj_propose_findmin(
     ap_uint<8> tableIndex = 0;
     ap_uint<8> curQV = 0;
     ap_uint<32> minSize = (1UL << 32) - 1;
-    ap_uint<64> minStart, minEnd, minData;
+    ap_uint<32> minStart, minEnd, minOff;
+    ap_uint<8 + 1 + V_ID_W> minData;
     ap_uint<V_ID_W> curEmb[MAX_QV];
     static bool start = true;
     bool last;
@@ -689,8 +692,9 @@ PROPOSE_TBINDEXING_LOOP:
         //   hTables[tableIndex].hash_set << std::endl; 
         if (hTables[tableIndex].hash_set < minSize){
             minSize = hTables[tableIndex].hash_set;
-            minStart = hTables[tableIndex].start_offset;
-            minEnd = hTables[tableIndex].start_offset + HTB_SIZE;
+            minOff = hTables[tableIndex].start_offset;
+            minStart = 0;
+            minEnd = HTB_SIZE;
             minData.range(7, 0) = tableIndex;
             minData.clear(8);
             minData.range(V_ID_W + 8, 9) = 0;
@@ -730,17 +734,17 @@ PROPOSE_TBINDEXED_LOOP:
        //    end_off << " - " << start_off << std::endl; 
         if ((end_off - start_off) < minSize) {
             minSize = end_off - start_off;
-            minStart = hTables[tableIndex].start_edges
-                + (start_off >> (9 - E_W));
-            minEnd = hTables[tableIndex].start_edges
-                + (end_off >> (9 - E_W));
+            minOff = hTables[tableIndex].start_edges;
+            minStart = start_off;
+            minEnd = end_off;
             minData.range(7, 0) = tableIndex;
             minData.set(8);
             minData.range(V_ID_W + 8, 9) = curEmb[ivPos];
         }
     }
-    stream_min_out.write(minStart);
-    stream_min_out.write(minEnd);
+    stream_minread_out.write(minStart);
+    stream_minread_out.write(minEnd);
+    stream_minread_out.write(minOff);
     stream_min_out.write(minData);
 }
 
@@ -751,17 +755,19 @@ template<uint8_t V_ID_W,
     uint8_t C_W,
     uint8_t E_W>
 void mwj_propose_readmin(
-        hls::stream<ap_uint<64>> &stream_min_in,
+        hls::stream<ap_uint<32>> &stream_minread_in,
+        hls::stream<ap_uint<V_ID_W + 1 + 8>> &stream_min_in,
         ap_uint<512> *htb_buf,
 
         hls::stream<ap_uint<H_W_1>> &stream_min_out,
         hls::stream<bool> &stream_end_out,
-        hls::stream<ap_uint<64>> &stream_min_set)
+        hls::stream<ap_uint<V_ID_W + 1 + 8>> &stream_min_set)
 {
 
-    ap_uint<64> minStart = stream_min_in.read();
-    ap_uint<64> minEnd = stream_min_in.read();
-    ap_uint<64> minData = stream_min_in.read();
+    ap_uint<32> minStart = stream_minread_in.read();
+    ap_uint<32> minEnd = stream_minread_in.read();
+    ap_uint<32> minOff = stream_minread_in.read();
+    ap_uint<V_ID_W + 1 + 8> minData = stream_min_in.read();
     stream_min_set.write(minData);
 
     //std::cout << "\tMinimum set is " << minData.range(7, 0) << std::endl;
@@ -773,27 +779,25 @@ void mwj_propose_readmin(
         ap_uint<V_ID_W> vertex, vertexCheck;
 
 PROPOSE_READ_MIN_INDEXED_LOOP:
-        for (ap_uint<32> i = minStart; i <= minEnd; i++){
-            ap_uint<512> ram_row = htb_buf[i];
+        for (ap_uint<32> i = minStart; i < minEnd; i++){
+            edge = read_table<32, 1, 0, E_W>(
+                    i,
+                    0,
+                    htb_buf,
+                    minOff);
 
-            /* Read the complete line, even if some edge is 
-             * not inside the min set it will be filtered. */
-            for (int g = 0; g < EDGE_ROW; g++){
-                edge = ram_row.range(((g + 1) << E_W) - 1, g << E_W);
-                vertexCheck = edge.range(2*V_ID_W - 1, V_ID_W);
-                vertex = edge.range(V_ID_W - 1, 0);
-                
-                if (minData.range(V_ID_W + 8, 9) == vertexCheck &&
-                        vertexCheck.and_reduce() != 1){
-                    stream_hash_in.write(vertex);
-                    xf::database::hashLookup3<V_ID_W>(
-                            stream_hash_in, 
-                            stream_hash_out);
-                    ap_uint<H_W_1> vertexHash =
-                        stream_hash_out.read().range(H_W_1 - 1, 0);
-                    stream_min_out.write(vertexHash);
-                    stream_end_out.write(false);
-                }
+            vertexCheck = edge.range(2*V_ID_W - 1, V_ID_W);
+            vertex = edge.range(V_ID_W - 1, 0);
+
+            if (minData.range(V_ID_W + 8, 9) == vertexCheck){
+                stream_hash_in.write(vertex);
+                xf::database::hashLookup3<V_ID_W>(
+                        stream_hash_in, 
+                        stream_hash_out);
+                ap_uint<H_W_1> vertexHash =
+                    stream_hash_out.read().range(H_W_1 - 1, 0);
+                stream_min_out.write(vertexHash);
+                stream_end_out.write(false);
             }
         }
     } else {
@@ -806,7 +810,7 @@ PROPOSE_READ_MIN_INDEXING_LOOP:
                     i,
                     (1UL << H_W_2) - 1,
                     htb_buf,
-                    minStart);
+                    minOff);
             end_off = end_off.range((1UL << C_W) - 2, 0);
             
             /* Compare offsets and stream if they are different, 
@@ -832,33 +836,37 @@ void mwj_propose(
         QueryVertex *qVertices,
         hls::stream<ap_uint<V_ID_W>> &stream_embed_in,
         hls::stream<bool> &stream_end_embed_in,
-        ap_uint<512> *htb_buf,
+        ap_uint<512> *htb_buf0,
+        ap_uint<512> *htb_buf1,
         
         hls::stream<ap_uint<V_ID_W>> &stream_embed_out,
         hls::stream<bool> &stream_end_embed_out,
         hls::stream<ap_uint<H_W_1>> &stream_min_out,
         hls::stream<bool> &stream_end_min_out,
-        hls::stream<ap_uint<64>> &stream_min_set)
+        hls::stream<ap_uint<V_ID_W + 1 + 8>> &stream_min_set)
 {
 
 #pragma HLS DATAFLOW
 
     //std::cout << "Propose: " << std::endl;
-    hls::stream<ap_uint<64>> stream_min;
+    hls::stream<ap_uint<32>> stream_minread;
+    hls::stream<ap_uint<V_ID_W + 1 + 8>> stream_min;
     
     mwj_propose_findmin<V_ID_W, H_W_1, H_W_2, C_W, E_W, MAX_QV>(
             stream_embed_in,
             stream_end_embed_in,
             hTables,
             qVertices,
-            htb_buf,
+            htb_buf0,
+            stream_minread,
             stream_min,
             stream_embed_out,
             stream_end_embed_out);
 
     mwj_propose_readmin<V_ID_W, H_W_1, H_W_2, C_W, E_W>(
+            stream_minread,
             stream_min,
-            htb_buf,
+            htb_buf1,
             stream_min_out,
             stream_end_min_out,
             stream_min_set);
@@ -977,7 +985,7 @@ template <uint8_t V_ID_W,
 void mwj_extract_hashtovid(
         hls::stream<ap_uint<H_W_1>> &stream_inter_in,
         hls::stream<bool> &stream_end_in,
-        hls::stream<ap_uint<64>> &stream_min_set,
+        hls::stream<ap_uint<V_ID_W + 1 + 8>> &stream_min_set,
         AdjHT *hTables,
         ap_uint<512> *htb_buf,
 
@@ -988,7 +996,7 @@ void mwj_extract_hashtovid(
 
     hls::stream<ap_uint<V_ID_W>> stream_hash_in;
     hls::stream<ap_uint<64>> stream_hash_out;
-    ap_uint<64> minData = stream_min_set.read();
+    ap_uint<V_ID_W + 1 + 8> minData = stream_min_set.read();
     bool last = stream_end_in.read();
     ap_uint<H_W_1> hashinter;
     ap_uint<V_ID_W> vertex;
@@ -1149,7 +1157,7 @@ template <uint8_t V_ID_W,
 void mwj_extract(
         hls::stream<ap_uint<H_W_1>> &stream_inter_in,
         hls::stream<bool> &stream_end_inter_in,
-        hls::stream<ap_uint<64>> &stream_min_in,
+        hls::stream<ap_uint<V_ID_W + 1 + 8>> &stream_min_in,
         AdjHT *hTables,
         ap_uint<512> *htb_buf,
 
@@ -1335,7 +1343,11 @@ template <uint8_t V_ID_W,
          uint8_t E_W,
          uint8_t MAX_CL>
 void multiwayJoin(
-        ap_uint<512> *htb_buf,
+        ap_uint<512> *htb_buf0,
+        ap_uint<512> *htb_buf1,
+        ap_uint<512> *htb_buf2,
+        ap_uint<512> *htb_buf3,
+        ap_uint<512> *htb_buf4,
         AdjHT *hTables0,
         AdjHT *hTables1,
         QueryVertex *qVertices0,
@@ -1346,7 +1358,11 @@ void multiwayJoin(
         hls::stream<bool> &stream_final_out_end,
         hls::stream<bool> &stream_stop)
 {
-#pragma HLS STABLE variable=htb_buf
+#pragma HLS STABLE variable=htb_buf0
+#pragma HLS STABLE variable=htb_buf1
+#pragma HLS STABLE variable=htb_buf2
+#pragma HLS STABLE variable=htb_buf3
+#pragma HLS STABLE variable=htb_buf4
 #pragma HLS STABLE variable=hTables0
 #pragma HLS STABLE variable=hTables1
 #pragma HLS STABLE variable=qVertices0
@@ -1357,7 +1373,7 @@ void multiwayJoin(
     /* Propose data out*/
     hls::stream<ap_uint<V_ID_W>> p_stream_embed("Partial result propose");
     hls::stream<ap_uint<H_W_1>> p_stream_min("Min. set vertices propose");
-    hls::stream<ap_uint<64>> p_stream_min_desc("Min. set description propose");
+    hls::stream<ap_uint<V_ID_W + 1 + 8>> p_stream_min_desc("Min. set description propose");
     hls::stream<bool> p_stream_embed_end("Partial result del. propose");
     hls::stream<bool> p_stream_min_end("Min. set verices del. propose");
 
@@ -1380,7 +1396,8 @@ void multiwayJoin(
             qVertices0,
             stream_embed,
             stream_embed_end,
-            htb_buf,
+            htb_buf0,
+            htb_buf1,
             p_stream_embed,
             p_stream_embed_end,
             p_stream_min,
@@ -1394,7 +1411,7 @@ void multiwayJoin(
             p_stream_embed_end,
             p_stream_min,
             p_stream_min_end,
-            htb_buf,
+            htb_buf2,
             i_stream_embed,
             i_stream_embed_end,
             i_stream_hash_set,
@@ -1405,7 +1422,7 @@ void multiwayJoin(
             i_stream_hash_set_end,
             p_stream_min_desc,
             hTables0,
-            htb_buf,
+            htb_buf3,
             e_stream_cand,
             e_stream_cand_end);
 
@@ -1416,7 +1433,7 @@ void multiwayJoin(
             e_stream_cand_end,
             hTables1,
             qVertices0,
-            htb_buf,
+            htb_buf4,
             nQueryVer,
             stream_embed,
             stream_embed_end,
@@ -1433,7 +1450,11 @@ template <uint8_t V_ID_W,
          uint8_t E_W,
          uint8_t MAX_CL>
 void multiwayJoinWrap(
-        ap_uint<512> *htb_buf,
+        ap_uint<512> *htb_buf0,
+        ap_uint<512> *htb_buf1,
+        ap_uint<512> *htb_buf2,
+        ap_uint<512> *htb_buf3,
+        ap_uint<512> *htb_buf4,
         AdjHT *hTables0,
         AdjHT *hTables1,
         QueryVertex *qVertices0,
@@ -1452,7 +1473,11 @@ MULTIWAYJOIN_LOOP:
 	do {
 
         multiwayJoin<V_ID_W, MAX_QV, H_W_1, H_W_2, C_W, E_W, MAX_CL>(
-                htb_buf,
+                htb_buf0,
+                htb_buf1,
+                htb_buf2,
+                htb_buf3,
+                htb_buf4,
                 hTables0,
                 hTables1,
                 qVertices0,
@@ -1481,7 +1506,11 @@ void subgraphIsomorphism(
         hls::stream<ap_uint<V_L_W>> &stream_src_l,
         hls::stream<ap_uint<V_L_W>> &stream_dst_l,
         hls::stream<bool> &stream_end,
-        ap_uint<512> *htb_buf,
+        ap_uint<512> *htb_buf0,
+        ap_uint<512> *htb_buf1,
+        ap_uint<512> *htb_buf2,
+        ap_uint<512> *htb_buf3,
+        ap_uint<512> *htb_buf4,
 
         hls::stream<ap_uint<V_ID_W>> &stream_out,
         hls::stream<bool> &stream_end_out)
@@ -1513,7 +1542,7 @@ void subgraphIsomorphism(
             stream_end,
             hTables0,
             hTables1,
-            htb_buf,
+            htb_buf0,
             tDescriptors,
             numTables);
 
@@ -1544,7 +1573,11 @@ void subgraphIsomorphism(
 #endif
 
     multiwayJoinWrap<V_ID_W, MAX_QV, H_W_1, H_W_2, C_W, E_W, MAX_CL>(
-            htb_buf,
+            htb_buf0,
+            htb_buf1,
+            htb_buf2,
+            htb_buf3,
+            htb_buf4,
             hTables0,
             hTables1,
             qVertices0,

@@ -227,6 +227,10 @@ int main()
             stream_dst_l,
             stream_end_in,
             htb_buf,
+            htb_buf,
+            htb_buf,
+            htb_buf,
+            htb_buf,
             stream_out,
             stream_end_out);
 
