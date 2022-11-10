@@ -19,7 +19,7 @@
  * position for edges in tables */
 #define VERTEX_WIDTH        4
 #define VERTEX_WIDTH_BIT    (1UL << VERTEX_WIDTH)
-#define EDGE_WIDTH          VERTEX_WIDTH + 1
+#define EDGE_WIDTH          (VERTEX_WIDTH + 1)
 #define LABEL_WIDTH         8
 
 /* bitwidth of the counter inside the hash table,
@@ -41,4 +41,4 @@
 #define MAX_COLLISIONS      (1UL << 4)
 
 
-#define DDR_WIDTH           100
+#define DDR_WIDTH           150

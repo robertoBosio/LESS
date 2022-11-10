@@ -1,6 +1,7 @@
 #include <ap_int.h>
 #include <hls_stream.h>
 
+#include "hls_print.h"
 #include "Parameters.hpp"
 #include "QueryVertex.hpp"
 #include "Trie.hpp"
@@ -17,11 +18,18 @@
 #define CNT_ROW     (1UL << (9 - C_W))
 #define EDGE_ROW    (1UL << (9 - E_W))
 
+#define V_ID_W      VERTEX_WIDTH_BIT
+#define V_L_W       LABEL_WIDTH
+#define MAX_QV      MAX_QUERY_VERTICES
+#define MAX_CL      MAX_COLLISIONS
+#define MAX_TB      MAX_TABLES
+#define H_W_1       HASH_WIDTH_FIRST
+#define H_W_2       HASH_WIDTH_SECOND
+#define C_W         COUNTER_WIDTH
+#define E_W         EDGE_WIDTH
+
 /* Builds the table descriptors based on the information
  * from the query graph. */
-template <uint8_t V_ID_W, 
-        uint8_t V_L_W,
-        uint8_t MAX_QV>
 void buildTableDescriptors(
         hls::stream<ap_uint<V_ID_W>> &stream_src,
         hls::stream<ap_uint<V_ID_W>> &stream_dst,
@@ -118,10 +126,6 @@ FIND_CORRECT_TABLE_LOOP:
 /* Translating counter addresses to ram addresses and
  * increasing of one the counter specified.
  * The counter is on 16 bits, so shift by 4. */
-template <uint8_t H_W_1, 
-        uint8_t H_W_2,
-        uint8_t C_W,
-        uint8_t E_W>
 void increaseCounter(
         hls::stream<ap_uint<(1UL << E_W)>> &stream_edge,
         hls::stream<ap_uint<H_W_1>> &stream_index1,
@@ -173,9 +177,6 @@ INCREASE_COUNTER_DDR_LOOP:
 }
 
 /* Transform counters to offsets. */
-template <uint8_t H_W_1, 
-        uint8_t H_W_2,
-        uint8_t C_W>
 void counterToOffset(
         ap_uint<8> numTables,
         AdjHT *hTables,
@@ -218,10 +219,6 @@ COUNTER_TO_OFFSET_TABLE_LOOP:
 }
 
 /* Store edges based on offsets */
-template <uint8_t H_W_1, 
-        uint8_t H_W_2,
-        uint8_t C_W,
-        uint8_t E_W>
 void storeEdges(
         hls::stream<ap_uint<(1UL << E_W)>> &stream_edge,
         hls::stream<ap_uint<H_W_1>> &stream_index1,
@@ -284,11 +281,6 @@ INCREASE_COUNTER_DDR_LOOP:
     }
 }
 
-template <uint8_t V_ID_W,
-        uint8_t V_L_W,
-        uint8_t H_W_1, 
-        uint8_t H_W_2,
-        uint8_t E_W>
 void edgeToHash(
         hls::stream<ap_uint<V_ID_W>> &stream_src,
         hls::stream<ap_uint<V_ID_W>> &stream_dst,
@@ -360,12 +352,6 @@ COUNT_OCCURENCIES_LOOP:
     stream_end_out.write(true);
 }
 
-template <uint8_t V_ID_W,
-        uint8_t V_L_W,
-        uint8_t H_W_1, 
-        uint8_t H_W_2,
-        uint8_t C_W,
-        uint8_t E_W>
 void countEdges(
         hls::stream<ap_uint<V_ID_W>> &stream_src,
         hls::stream<ap_uint<V_ID_W>> &stream_dst,
@@ -387,7 +373,7 @@ void countEdges(
     hls::stream<bool> stream_end_count("Counters end");
 
     /* Count edges per vertex source */
-    edgeToHash<V_ID_W, V_L_W, H_W_1, H_W_2, E_W>(
+    edgeToHash(
             stream_src,
             stream_dst,
             stream_src_l,
@@ -402,7 +388,7 @@ void countEdges(
             stream_end_count);
 
     /* Update specific counter */
-    increaseCounter<H_W_1, H_W_2, C_W, E_W>(
+    increaseCounter(
             stream_edge,
             stream_c_index1,
             stream_c_index2,
@@ -413,12 +399,6 @@ void countEdges(
 
 }
 
-template <uint8_t V_ID_W,
-        uint8_t V_L_W,
-        uint8_t H_W_1, 
-        uint8_t H_W_2,
-        uint8_t C_W,
-        uint8_t E_W>
 void writeEdges(
         hls::stream<ap_uint<V_ID_W>> &stream_src,
         hls::stream<ap_uint<V_ID_W>> &stream_dst,
@@ -440,7 +420,7 @@ void writeEdges(
     hls::stream<bool> stream_end_offset("Offset end");
 
     /* Write edges based on precomputed offsets */
-    edgeToHash<V_ID_W, V_L_W, H_W_1, H_W_2, E_W>(
+    edgeToHash(
             stream_src,
             stream_dst,
             stream_src_l,
@@ -454,7 +434,7 @@ void writeEdges(
             stream_o_ntable,
             stream_end_offset);
 
-    storeEdges<H_W_1, H_W_2, C_W, E_W>(
+    storeEdges(
             stream_edge,
             stream_o_index1,
             stream_o_index2,
@@ -465,12 +445,6 @@ void writeEdges(
 }
 
 /* Reads two times the data graph and fills the data stuctures */
-template <uint8_t V_ID_W, 
-        uint8_t V_L_W, 
-        uint8_t H_W_1, 
-        uint8_t H_W_2, 
-        uint8_t C_W,
-        uint8_t E_W>
 void fillTables(
         hls::stream<ap_uint<V_ID_W>> &stream_src,
         hls::stream<ap_uint<V_ID_W>> &stream_dst,
@@ -503,7 +477,7 @@ STORE_HASHTABLES_POINTER_LOOP:
         start_addr += HTB_SIZE;
     }
 
-    countEdges<V_ID_W, V_L_W, H_W_1, H_W_2, C_W, E_W>(
+    countEdges(
             stream_src,
             stream_dst,
             stream_src_l,
@@ -515,7 +489,7 @@ STORE_HASHTABLES_POINTER_LOOP:
             numTables);
     
     /* From counts to offsets */
-    counterToOffset<H_W_1, H_W_2, C_W>(
+    counterToOffset(
             numTables,
             hTables0,
             htb_buf);
@@ -536,7 +510,7 @@ STORE_EDGES_POINTER_LOOP:
         //htb_buf[start_addr - 1] = ~((ap_uint<512>)0);
     }
 
-    writeEdges<V_ID_W, V_L_W, H_W_1, H_W_2, C_W, E_W>(
+    writeEdges(
             stream_src,
             stream_dst,
             stream_src_l,
@@ -603,12 +577,12 @@ ap_uint<(1UL << T)> read_table(
         ap_uint<512> *htb_buf,
         ap_uint<32> start_addr)
 {
-#pragma HLS INLINE OFF
-    static ap_uint<512> ram_row;
+    //static ap_uint<512> ram_row;
+    ap_uint<512> ram_row;
     /* Impossible that the first word read is the all 1s
      * since before edges are read offsets which are on 
      * the lower address space of the memory */
-    static ap_uint<32> prev_addr_row = ~((ap_uint<32>)0);
+    //static ap_uint<32> prev_addr_row = ~((ap_uint<32>)0);
     ap_uint<32> addr_row;
     ap_uint<32> addr_inrow;
     ap_uint<32> addr_counter;
@@ -624,10 +598,10 @@ ap_uint<(1UL << T)> read_table(
     addr_inrow = addr_counter.range((9 - T) - 1, 0);
 
     /* Read the data */
-    if (prev_addr_row != addr_row){
+    //if (prev_addr_row != addr_row){
         ram_row = htb_buf[addr_row];
-        prev_addr_row = addr_row;
-    }
+        //prev_addr_row = addr_row;
+    //}
 
     return ram_row.range(((addr_inrow + 1) << T) - 1,
             addr_inrow << T);
@@ -637,12 +611,6 @@ ap_uint<(1UL << T)> read_table(
 /* Multiway join propose: retrieves the tables in which
  * the current query vertex is involved, computes the sizes
  * and keep track of the smallest one */
-template <uint8_t V_ID_W,
-        uint8_t H_W_1,
-        uint8_t H_W_2,
-        uint8_t C_W,
-        uint8_t E_W,
-        uint8_t MAX_QV>
 void mwj_propose_findmin(
         hls::stream<ap_uint<V_ID_W>> &stream_embed_in,
         hls::stream<bool> &stream_end_embed_in,
@@ -683,6 +651,7 @@ PROPOSE_COPYING_EMBEDDING_LOOP:
     }
     stream_end_embed_out.write(true);
 
+    //hls::print("Proposing for %d\n", (int)curQV);
     /* Find sizes of sets indexed by the current query vertex */
 PROPOSE_TBINDEXING_LOOP:
     for(int g = 0; g < qVertices[curQV].numTablesIndexing; g++){
@@ -749,11 +718,6 @@ PROPOSE_TBINDEXED_LOOP:
 }
 
 /* Read the minimum set from memory */
-template<uint8_t V_ID_W, 
-    uint8_t H_W_1, 
-    uint8_t H_W_2, 
-    uint8_t C_W,
-    uint8_t E_W>
 void mwj_propose_readmin(
         hls::stream<ap_uint<32>> &stream_minread_in,
         hls::stream<ap_uint<V_ID_W + 1 + 8>> &stream_min_in,
@@ -825,12 +789,6 @@ PROPOSE_READ_MIN_INDEXING_LOOP:
     stream_end_out.write(true);
 }
 
-template <uint8_t V_ID_W,
-        uint8_t H_W_1,
-        uint8_t H_W_2,
-        uint8_t C_W,
-        uint8_t E_W, 
-        uint8_t MAX_QV>
 void mwj_propose(
         AdjHT *hTables,
         QueryVertex *qVertices,
@@ -849,10 +807,10 @@ void mwj_propose(
 #pragma HLS DATAFLOW
 
     //std::cout << "Propose: " << std::endl;
-    hls::stream<ap_uint<32>> stream_minread;
+    hls::stream<ap_uint<32>, 3> stream_minread;
     hls::stream<ap_uint<V_ID_W + 1 + 8>> stream_min;
     
-    mwj_propose_findmin<V_ID_W, H_W_1, H_W_2, C_W, E_W, MAX_QV>(
+    mwj_propose_findmin(
             stream_embed_in,
             stream_end_embed_in,
             hTables,
@@ -863,7 +821,7 @@ void mwj_propose(
             stream_embed_out,
             stream_end_embed_out);
 
-    mwj_propose_readmin<V_ID_W, H_W_1, H_W_2, C_W, E_W>(
+    mwj_propose_readmin(
             stream_minread,
             stream_min,
             htb_buf1,
@@ -873,11 +831,6 @@ void mwj_propose(
 
 }
 
-template <uint8_t V_ID_W,
-         uint8_t H_W_1,
-         uint8_t H_W_2,
-         uint8_t C_W,
-         uint8_t MAX_QV>
 void mwj_intersect(
         AdjHT *hTables,
         QueryVertex *qVertices,
@@ -977,11 +930,6 @@ INTERSECT_TBINDEXING_LOOP:
     stream_end_out.write(true);
 }
 
-template <uint8_t V_ID_W, 
-         uint8_t H_W_1, 
-         uint8_t H_W_2, 
-         uint8_t C_W,
-         uint8_t E_W>
 void mwj_extract_hashtovid(
         hls::stream<ap_uint<H_W_1>> &stream_inter_in,
         hls::stream<bool> &stream_end_in,
@@ -1101,11 +1049,6 @@ EXTRACT_HASHTOVID_READ_LOOP:
     stream_end_out.write(true);
 }
 
-template <uint8_t V_ID_W, 
-         uint8_t H_W_1, 
-         uint8_t H_W_2, 
-         uint8_t C_W, 
-         uint8_t MAX_CL>
 void mwj_extract_bagtoset(
         hls::stream<ap_uint<V_ID_W>> &stream_inter_in,
         hls::stream<bool> &stream_set_end_in,
@@ -1138,22 +1081,17 @@ EXTRACT_BAGTOSET_SETCHECKER_LOOP:
                 //std::cout << "\t\t" << vertex << std::endl;
                 stream_inter_out.write(vertex);
                 stream_end_out.write(false);
+                //hls::print("v: %d\n", (int)vertex);
             }
             lastSet = stream_set_end_in.read();    
         }
+        //hls::print("End set\n");
         //std::cout << std::endl;
         last = stream_end_in.read();
     }
     stream_end_out.write(true);
 }
 
-template <uint8_t V_ID_W, 
-         uint8_t H_W_1, 
-         uint8_t H_W_2, 
-         uint8_t C_W, 
-         uint8_t MAX_CL,
-         uint8_t MAX_QV,
-         uint8_t E_W>
 void mwj_extract(
         hls::stream<ap_uint<H_W_1>> &stream_inter_in,
         hls::stream<bool> &stream_end_inter_in,
@@ -1168,11 +1106,11 @@ void mwj_extract(
 #pragma HLS DATAFLOW
 
     //std::cout << "Extract: " << std::endl;
-    hls::stream<ap_uint<V_ID_W>> stream_htv_inter("Bags of vertices");
-    hls::stream<bool> stream_htv_bag_end("Bag delimeter");
+    hls::stream<ap_uint<V_ID_W>, 100> stream_htv_inter("Bags of vertices");
+    hls::stream<bool, 100> stream_htv_bag_end("Bag delimeter");
     hls::stream<bool> stream_htv_end("Bags delimeter");
 
-    mwj_extract_hashtovid<V_ID_W, H_W_1, H_W_2, C_W, E_W>(
+    mwj_extract_hashtovid(
             stream_inter_in,
             stream_end_inter_in,
             stream_min_in,
@@ -1182,7 +1120,7 @@ void mwj_extract(
             stream_htv_bag_end,
             stream_htv_end);
 
-    mwj_extract_bagtoset<V_ID_W, H_W_1, H_W_2, C_W, MAX_CL>(
+    mwj_extract_bagtoset(
             stream_htv_inter,
             stream_htv_bag_end,
             stream_htv_end,
@@ -1190,12 +1128,6 @@ void mwj_extract(
             stream_end_candidates_out);
 }
 
-template <uint8_t V_ID_W, 
-         uint8_t H_W_1, 
-         uint8_t H_W_2, 
-         uint8_t C_W, 
-         uint8_t E_W, 
-         uint8_t MAX_QV>
 void mwj_verify(
         hls::stream<ap_uint<V_ID_W>> &stream_embed_in,
         hls::stream<bool> &stream_end_embed_in,
@@ -1216,7 +1148,7 @@ void mwj_verify(
     hls::stream<ap_uint<64>> stream_hash_out;
     ap_uint<8> curQV = 0;
     ap_uint<V_ID_W> curEmb[MAX_QV];
-    static unsigned long nPartialSol = 1;
+    static long int nPartialSol = 1;
     //std::cout << "Verify: " << std::endl;
 
     bool last = stream_end_embed_in.read();
@@ -1231,8 +1163,8 @@ VERIFY_COPYING_EMBEDDING_LOOP:
 VERIFY_CHECK_LOOP:
     while(!last){
         ap_uint<V_ID_W> vToVerify = stream_inter_in.read();
-        int counter = 0;
         bool checked = true;
+        //hls::print("Ingresso: %d\n", (int)vToVerify);
 
 VERIFY_CHECK_EDGE_LOOP:
         for(int g = 0; g < qVertices[curQV].numTablesIndexed && checked; g++){
@@ -1295,6 +1227,7 @@ VERIFY_READ_MEMORY_LOOP:
 
         if (checked){
             /* Write in the correct stream */
+            //hls::print("Passed: %d\n", (int)vToVerify);
             if (curQV == nQueryVer){
                // std::cout << "\tfinal {";
                 stream_final_end_out.write(false);
@@ -1325,23 +1258,19 @@ VERIFY_WRITE_FINAL_LOOP:
     }
 
     nPartialSol--;
+    //hls::print("nPartialSol: %d\n", (int)nPartialSol);
     //std::cout << "\tPartial results: " << nPartialSol << std::endl;
-    if (nPartialSol == 0){
+    if (nPartialSol <= 0){
         stream_final_end_out.write(true);
         stream_stop.write(true);
+        //hls::print("Stopping");
     } else {
         stream_stop.write(false);
     }
 
+    //hls::print("Round\n");
 }
 
-template <uint8_t V_ID_W, 
-         uint8_t MAX_QV, 
-         uint8_t H_W_1, 
-         uint8_t H_W_2, 
-         uint8_t C_W,
-         uint8_t E_W,
-         uint8_t MAX_CL>
 void multiwayJoin(
         ap_uint<512> *htb_buf0,
         ap_uint<512> *htb_buf1,
@@ -1371,8 +1300,8 @@ void multiwayJoin(
 #pragma HLS DATAFLOW
 
     /* Propose data out*/
-    hls::stream<ap_uint<V_ID_W>> p_stream_embed("Partial result propose");
-    hls::stream<ap_uint<H_W_1>> p_stream_min("Min. set vertices propose");
+    hls::stream<ap_uint<V_ID_W>, MAX_QV> p_stream_embed("Partial result propose");
+    hls::stream<ap_uint<H_W_1>, MAX_QV> p_stream_min("Min. set vertices propose");
     hls::stream<ap_uint<V_ID_W + 1 + 8>> p_stream_min_desc("Min. set description propose");
     hls::stream<bool> p_stream_embed_end("Partial result del. propose");
     hls::stream<bool> p_stream_min_end("Min. set verices del. propose");
@@ -1380,18 +1309,18 @@ void multiwayJoin(
     /* Intersect data out */    
     hls::stream<ap_uint<H_W_1>> i_stream_hash_set("Set intersection hashes");
     hls::stream<bool> i_stream_hash_set_end("Set intersection hashes del.");
-    hls::stream<ap_uint<V_ID_W>> i_stream_embed("Partial result intersect.");
-    hls::stream<bool> i_stream_embed_end("Partial result del. intersect.");
+    hls::stream<ap_uint<V_ID_W>, MAX_QV> i_stream_embed("Partial result intersect.");
+    hls::stream<bool, MAX_QV> i_stream_embed_end("Partial result del. intersect.");
     
     /* Extract data out */
     hls::stream<ap_uint<V_ID_W>> e_stream_cand("Set candidates");
     hls::stream<bool> e_stream_cand_end("Set candidates delimeter");
 
     /* Verify data out */
-	static hls::stream<ap_uint<V_ID_W>> stream_embed("Partial result stream");
-	static hls::stream<bool> stream_embed_end("Partial result delimeter");
+	static hls::stream<ap_uint<V_ID_W>, 1000> stream_embed("Partial result stream");
+	static hls::stream<bool, 1000> stream_embed_end("Partial result delimeter");
 
-    mwj_propose<V_ID_W, H_W_1, H_W_2, C_W, E_W, MAX_QV>(
+    mwj_propose(
             hTables0,
             qVertices0,
             stream_embed,
@@ -1404,7 +1333,7 @@ void multiwayJoin(
             p_stream_min_end,
             p_stream_min_desc);
 
-    mwj_intersect<V_ID_W, H_W_1, H_W_2, C_W, MAX_QV>(
+    mwj_intersect(
             hTables1,
             qVertices1,
             p_stream_embed,
@@ -1417,7 +1346,7 @@ void multiwayJoin(
             i_stream_hash_set,
             i_stream_hash_set_end);
 
-    mwj_extract<V_ID_W, H_W_1, H_W_2, C_W, MAX_CL, MAX_QV, E_W>(
+    mwj_extract(
             i_stream_hash_set,
             i_stream_hash_set_end,
             p_stream_min_desc,
@@ -1426,7 +1355,7 @@ void multiwayJoin(
             e_stream_cand,
             e_stream_cand_end);
 
-    mwj_verify<V_ID_W, H_W_1, H_W_2, C_W, E_W, MAX_QV>(
+    mwj_verify(
             i_stream_embed,
             i_stream_embed_end,
             e_stream_cand,
@@ -1442,13 +1371,6 @@ void multiwayJoin(
             stream_stop);
 }
 
-template <uint8_t V_ID_W, 
-         uint8_t MAX_QV, 
-         uint8_t H_W_1, 
-         uint8_t H_W_2, 
-         uint8_t C_W,
-         uint8_t E_W,
-         uint8_t MAX_CL>
 void multiwayJoinWrap(
         ap_uint<512> *htb_buf0,
         ap_uint<512> *htb_buf1,
@@ -1472,7 +1394,7 @@ void multiwayJoinWrap(
 MULTIWAYJOIN_LOOP:
 	do {
 
-        multiwayJoin<V_ID_W, MAX_QV, H_W_1, H_W_2, C_W, E_W, MAX_CL>(
+        multiwayJoin(
                 htb_buf0,
                 htb_buf1,
                 htb_buf2,
@@ -1489,17 +1411,9 @@ MULTIWAYJOIN_LOOP:
 
         end = stream_stop.read();
     } while(!end);
+
 }
 
-template <uint8_t V_ID_W, 
-         uint8_t V_L_W, 
-         uint8_t MAX_QV, 
-         uint8_t MAX_TB, 
-         uint8_t H_W_1, 
-         uint8_t H_W_2, 
-         uint8_t C_W,
-         uint8_t E_W,
-         uint8_t MAX_CL>
 void subgraphIsomorphism(
         hls::stream<ap_uint<V_ID_W>> &stream_src,
         hls::stream<ap_uint<V_ID_W>> &stream_dst,
@@ -1522,7 +1436,7 @@ void subgraphIsomorphism(
     ap_uint<8> numTables = 0;
     ap_uint<8> numQueryVert = 0;
 
-    buildTableDescriptors<V_ID_W, V_L_W, MAX_QV>(
+    buildTableDescriptors(
             stream_src,
             stream_dst,
             stream_src_l,
@@ -1534,7 +1448,7 @@ void subgraphIsomorphism(
             numTables,
             numQueryVert);
 
-    fillTables<V_ID_W, V_L_W, H_W_1, H_W_2, C_W, E_W>(
+    fillTables(
             stream_src,
             stream_dst,
             stream_src_l,
@@ -1572,7 +1486,7 @@ void subgraphIsomorphism(
     }
 #endif
 
-    multiwayJoinWrap<V_ID_W, MAX_QV, H_W_1, H_W_2, C_W, E_W, MAX_CL>(
+    multiwayJoinWrap(
             htb_buf0,
             htb_buf1,
             htb_buf2,

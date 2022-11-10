@@ -34,15 +34,6 @@ void subisoWrap(
 */
 
     subgraphIsomorphism
-        <VERTEX_WIDTH_BIT, 
-        LABEL_WIDTH,
-        MAX_QUERY_VERTICES,
-        MAX_TABLES,
-        HASH_WIDTH_FIRST,
-        HASH_WIDTH_SECOND,
-        COUNTER_WIDTH,
-        EDGE_WIDTH,
-        MAX_COLLISIONS>
             (stream_src,
              stream_dst,
              stream_src_l,
