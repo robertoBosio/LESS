@@ -1,35 +1,17 @@
 #include <ap_int.h>
 #include "Parameters.hpp"
+#include "types.hpp"
 
-class Trie{
-
-    public:
-        ap_uint<COUNTER_WIDTH> offset[1UL << HASH_WIDTH];
-        ap_uint<2*VERTEX_WIDTH> edges[MAX_DATA_EDGES];
-
-#if HASH_SET_VERSION
-        ap_uint<HASH_WIDTH> source[1UL << HASH_WIDTH];
-        ap_uint<HASH_WIDTH> sCounter;
-        void addSourceVertex(ap_uint<HASH_WIDTH> hash){
-            source[sCounter++] = hash;
-        }
-#endif
-
+struct AdjHT{
+    ap_uint<32> start_offset;
+    ap_uint<32> start_edges;
+    ap_uint<32> n_edges;
+    ap_uint<32> hash_set;
 };
 
-class TrieDescriptor{
+struct TableDescriptor{
     
-    public:
-        /* True: src -> dst, False: dst <- src */
-        bool dir;
-        ap_uint<LABEL_WIDTH> src_label, dst_label;
-};
-
-class SetDescriptor{
-    public:
-        uint8_t tIndex;
-        uint32_t sSize;
-        uint32_t sStart;
-        bool indexed;
-
+    /* True: src -> dst, False: dst <- src */
+    bool dir;
+    ap_uint<LABEL_WIDTH> src_label, dst_label;
 };
