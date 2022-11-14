@@ -10,7 +10,7 @@
 #include <unordered_map>
 
 #ifndef __SYNTHESIS__
-#define DEBUG 1
+#include <cassert>
 #include <fstream>
 #endif
 
@@ -27,6 +27,18 @@
 #define H_W_2       HASH_WIDTH_SECOND
 #define C_W         COUNTER_WIDTH
 #define E_W         EDGE_WIDTH
+#define S_D         STREAM_DEPTH    
+#define S_D_RES     STREAM_DEPTH_RES    
+
+/* Partial solutions still to be checked.
+ * Set to 1 to start the process. */
+long int nPartialSol = 1;
+
+#ifndef __SYNTHESIS__
+/* statistic purpose */
+long int nStreamPar = 0;
+long int nStreamParMax = 0;
+#endif
 
 /* Builds the table descriptors based on the information
  * from the query graph. */
@@ -72,7 +84,7 @@ CREATE_TABDESC_LOOP:
         if (nodeSrcPos < nodeDstPos)
             dirEdge = true;
 
-#if DEBUG
+#ifndef __SYNTHESIS__
         std::cout << (unsigned int)nodesrc << "(" << (char)labelsrc << ")"
             << " -> " <<  (unsigned int)nodedst << "(" << (char)labeldst << ")" 
             << std::endl;
@@ -96,7 +108,7 @@ FIND_CORRECT_TABLE_LOOP:
             numTables++;
         }
 
-#if DEBUG
+#ifndef __SYNTHESIS__
         if (dirEdge){
         std::cout << "Table " << (int)g << ": " << (char)labelsrc << 
              " -> " << (char)labeldst << std::endl;
@@ -313,7 +325,7 @@ COUNT_OCCURENCIES_LOOP:
         for (; g < numTables; g++){
             if (tDescriptors[g].src_label == labelsrc &&
                     tDescriptors[g].dst_label == labeldst){
-                
+
                 ap_uint<V_ID_W> vertexIndexing, vertexIndexed;               
                 if(tDescriptors[g].dir){
                     vertexIndexing = nodesrc;
@@ -366,10 +378,10 @@ void countEdges(
 
 #pragma HLS DATAFLOW
 
-    hls::stream<ap_uint<2*V_ID_W>> stream_edge("Offset edge");
-    hls::stream<ap_uint<H_W_1>> stream_c_index1("Counters index 1");
-    hls::stream<ap_uint<H_W_2>> stream_c_index2("Counters index 2");
-    hls::stream<ap_uint<8>> stream_c_ntable("Counters table");
+    hls::stream<ap_uint<2*V_ID_W>, S_D> stream_edge("Offset edge");
+    hls::stream<ap_uint<H_W_1>, S_D> stream_c_index1("Counters index 1");
+    hls::stream<ap_uint<H_W_2>, S_D> stream_c_index2("Counters index 2");
+    hls::stream<ap_uint<8>, S_D> stream_c_ntable("Counters table");
     hls::stream<bool> stream_end_count("Counters end");
 
     /* Count edges per vertex source */
@@ -413,10 +425,10 @@ void writeEdges(
 
 #pragma HLS DATAFLOW
 
-    hls::stream<ap_uint<2*V_ID_W>> stream_edge("Offset edge");
-    hls::stream<ap_uint<H_W_1>> stream_o_index1("Offsets index 1");
-    hls::stream<ap_uint<H_W_2>> stream_o_index2("Offsets index 2");
-    hls::stream<ap_uint<8>> stream_o_ntable("Offset table");
+    hls::stream<ap_uint<2*V_ID_W>, S_D> stream_edge("Offset edge");
+    hls::stream<ap_uint<H_W_1>, S_D> stream_o_index1("Offsets index 1");
+    hls::stream<ap_uint<H_W_2>, S_D> stream_o_index2("Offsets index 2");
+    hls::stream<ap_uint<8>, S_D> stream_o_ntable("Offset table");
     hls::stream<bool> stream_end_offset("Offset end");
 
     /* Write edges based on precomputed offsets */
@@ -521,50 +533,50 @@ STORE_EDGES_POINTER_LOOP:
             htb_buf,
             numTables);
 
-#if DEBUG
+#ifndef __SYNTHESIS__
     end_addr = start_addr;
     std::cout << "Occupied " << end_addr * 64 << " bytes, " << end_addr <<
         " words." << std::endl;
 #endif
 
-   // std::ofstream f("CHECK.txt");
-   // for(ap_uint<8> tab = 0; tab < numTables; tab++){
-   //     f << "Table " << tab << std::endl;
-   //     ap_uint<64> start = hTables0[tab].start_offset;
-   //     ap_uint<H_W_1> counter = 0;
-   //     for(ap_uint<64> addr = 0; 
-   //             addr < HTB_SIZE; 
-   //             addr++){
-   //         ap_uint<512> row = htb_buf[start + addr];
-   //         for(int g = 0; g < CNT_ROW; g++){
-   //             if (((addr << (9 - C_W)) + g) % (1UL << H_W_2) == 0){
-   //                 f << counter << ": " << std::endl;
-   //                 counter++;
-   //             }
-
-   //             ap_uint<(1UL << C_W)> edge = row.range(((g+1)<<C_W)-1, g<<C_W);
-   //             f << "\t" << edge.range((1UL << C_W)-2, 0) << " -> "
-   //                << edge.test((1UL << C_W)-1) << std::endl;
-   //             
-   //         }
-   //     }
-   // } 
-   // f << std::endl;
-   // for(ap_uint<8> tab = 0; tab < numTables; tab++){
-   //     f << "Table " << tab << std::endl;
-   //     ap_uint<64> start = hTables0[tab].start_edges;
-   //     for(ap_uint<64> addr = 0; 
-   //             addr <= (hTables0[tab].n_edges >> (9-E_W)); 
-   //             addr++){
-   //         ap_uint<512> row = htb_buf[start + addr];
-   //         for(int g = 0; g < EDGE_ROW; g++){
-   //             ap_uint<(1UL << E_W)> edge = row.range(((g+1)<<E_W)-1, g<<E_W);
-   //             f << "\t" << edge.range(2*V_ID_W-1, V_ID_W) << " -> "
-   //                << edge.range(V_ID_W-1, 0) << std::endl;
-   //         }
-   //     }
-   // } 
-   // f.close();
+//   std::ofstream f("CHECK.txt");
+//   for(ap_uint<8> tab = 0; tab < numTables; tab++){
+//       f << "Table " << tab << std::endl;
+//       ap_uint<64> start = hTables0[tab].start_offset;
+//       ap_uint<H_W_1> counter = 0;
+//       for(ap_uint<64> addr = 0; 
+//               addr < HTB_SIZE; 
+//               addr++){
+//           ap_uint<512> row = htb_buf[start + addr];
+//           for(int g = 0; g < CNT_ROW; g++){
+//               if (((addr << (9 - C_W)) + g) % (1UL << H_W_2) == 0){
+//                   f << counter << ": " << std::endl;
+//                   counter++;
+//               }
+//
+//               ap_uint<(1UL << C_W)> edge = row.range(((g+1)<<C_W)-1, g<<C_W);
+//               f << "\t" << edge.range((1UL << C_W)-2, 0) << " -> "
+//                  << edge.test((1UL << C_W)-1) << std::endl;
+//               
+//           }
+//       }
+//   } 
+//   f << std::endl;
+//   for(ap_uint<8> tab = 0; tab < numTables; tab++){
+//       f << "Table " << tab << std::endl;
+//       ap_uint<64> start = hTables0[tab].start_edges;
+//       for(ap_uint<64> addr = 0; 
+//               addr <= (hTables0[tab].n_edges >> (9-E_W)); 
+//               addr++){
+//           ap_uint<512> row = htb_buf[start + addr];
+//           for(int g = 0; g < EDGE_ROW; g++){
+//               ap_uint<(1UL << E_W)> edge = row.range(((g+1)<<E_W)-1, g<<E_W);
+//               f << "\t" << edge.range(2*V_ID_W-1, V_ID_W) << " -> "
+//                  << edge.range(V_ID_W-1, 0) << std::endl;
+//           }
+//       }
+//   } 
+//   f.close();
 }
 
 template <uint8_t W_1,
@@ -735,7 +747,8 @@ void mwj_propose_readmin(
     stream_min_set.write(minData);
 
     //std::cout << "\tMinimum set is " << minData.range(7, 0) << std::endl;
-    //std::cout << "\tReading from " << minStart << " to " << minEnd << std::endl;
+    //std::cout << "\tReading from " << minStart << " to " << minEnd 
+    //    << " with offset " << minOff << std::endl;
     if (minData.test(8)){
         hls::stream<ap_uint<V_ID_W>> stream_hash_in;
         hls::stream<ap_uint<64>> stream_hash_out;
@@ -807,8 +820,8 @@ void mwj_propose(
 #pragma HLS DATAFLOW
 
     //std::cout << "Propose: " << std::endl;
-    hls::stream<ap_uint<32>, 3> stream_minread;
-    hls::stream<ap_uint<V_ID_W + 1 + 8>> stream_min;
+    hls::stream<ap_uint<32>, S_D> stream_minread;
+    hls::stream<ap_uint<V_ID_W + 1 + 8>, S_D> stream_min;
     
     mwj_propose_findmin(
             stream_embed_in,
@@ -838,12 +851,14 @@ void mwj_intersect(
         hls::stream<bool> &stream_end_embed_in,
         hls::stream<ap_uint<H_W_1>> &stream_min_in,
         hls::stream<bool> &stream_end_min_in,
+        hls::stream<ap_uint<V_ID_W + 1 + 8>> &stream_min_desc_in,
         ap_uint<512> *htb_buf,
 
         hls::stream<ap_uint<V_ID_W>> &stream_embed_out,
         hls::stream<bool> &stream_end_embed_out,
         hls::stream<ap_uint<H_W_1>> &stream_inter_out,
-        hls::stream<bool> &stream_end_out)
+        hls::stream<bool> &stream_end_out,
+        hls::stream<ap_uint<V_ID_W + 1 + 8>> &stream_min_desc_out)
 {
     hls::stream<ap_uint<V_ID_W>> stream_hash_in;
     hls::stream<ap_uint<64>> stream_hash_out;
@@ -862,6 +877,9 @@ INTERSECT_COPYING_EMBEDDING_LOOP:
         last = stream_end_embed_in.read();
     }
     stream_end_embed_out.write(true);
+
+    /* bypass data for extract phase */
+    stream_min_desc_out.write(stream_min_desc_in.read());
 
     //std::cout << "Intersection: probing" << std::endl;
     last = stream_end_min_in.read();
@@ -931,12 +949,16 @@ INTERSECT_TBINDEXING_LOOP:
 }
 
 void mwj_extract_hashtovid(
+        hls::stream<ap_uint<V_ID_W>> &stream_embed_in,
+        hls::stream<bool> &stream_end_embed_in,
         hls::stream<ap_uint<H_W_1>> &stream_inter_in,
         hls::stream<bool> &stream_end_in,
         hls::stream<ap_uint<V_ID_W + 1 + 8>> &stream_min_set,
         AdjHT *hTables,
         ap_uint<512> *htb_buf,
 
+        hls::stream<ap_uint<V_ID_W>> &stream_embed_out,
+        hls::stream<bool> &stream_end_embed_out,
         hls::stream<ap_uint<V_ID_W>> &stream_inter_out,
         hls::stream<bool> &stream_set_end_out,
         hls::stream<bool> &stream_end_out)
@@ -945,10 +967,19 @@ void mwj_extract_hashtovid(
     hls::stream<ap_uint<V_ID_W>> stream_hash_in;
     hls::stream<ap_uint<64>> stream_hash_out;
     ap_uint<V_ID_W + 1 + 8> minData = stream_min_set.read();
-    bool last = stream_end_in.read();
     ap_uint<H_W_1> hashinter;
     ap_uint<V_ID_W> vertex;
     ap_uint<V_ID_W*2> edge;
+    
+    /* Bypassing solution for verify */
+    bool last = stream_end_embed_in.read();
+EXTRACT_COPYING_EMBEDDING_LOOP:
+    while(!last){
+        stream_embed_out.write(stream_embed_in.read());
+        stream_end_embed_out.write(last);
+        last = stream_end_embed_in.read();
+    }
+    stream_end_embed_out.write(last);
 
     /* filter to remove hash collisions when passing from H_W_1 to H_W_2 */
     ap_uint<16> filter[(1UL << (H_W_2 - 4))];
@@ -956,8 +987,10 @@ EXTRACT_RESET_FILTER_LOOP:
     for (int g = 0; g < (1UL << (H_W_2 - 4)); filter[g++] = 0);
 
     //std::cout << "\tHash to vid: " << std::endl;
+    last = stream_end_in.read();
 EXTRACT_HASHTOVID_LOOP:
     while(!last){
+        stream_end_out.write(false);
         hashinter = stream_inter_in.read();
         ap_uint<(1UL << C_W)> start_off = 0;
         ap_uint<(1UL << C_W)> end_off = 0;
@@ -1043,7 +1076,6 @@ EXTRACT_HASHTOVID_READ_LOOP:
         }
 
         stream_set_end_out.write(true);
-        stream_end_out.write(false);
         last = stream_end_in.read();
     }
     stream_end_out.write(true);
@@ -1058,7 +1090,6 @@ void mwj_extract_bagtoset(
         hls::stream<bool> &stream_end_out)
 {
    
-    //std::cout << "\tBag to set: " << std::endl; 
     ap_uint<V_ID_W> set[MAX_CL];
     uint8_t counter = 0;
     bool last = stream_end_in.read();
@@ -1078,27 +1109,27 @@ EXTRACT_BAGTOSET_SETCHECKER_LOOP:
             }
             if (nSet == counter){
                 set[counter++] = vertex;
-                //std::cout << "\t\t" << vertex << std::endl;
                 stream_inter_out.write(vertex);
                 stream_end_out.write(false);
-                //hls::print("v: %d\n", (int)vertex);
             }
             lastSet = stream_set_end_in.read();    
         }
-        //hls::print("End set\n");
-        //std::cout << std::endl;
         last = stream_end_in.read();
     }
     stream_end_out.write(true);
 }
 
 void mwj_extract(
+        hls::stream<ap_uint<V_ID_W>> &stream_embed_in,
+        hls::stream<bool> &stream_end_embed_in,
         hls::stream<ap_uint<H_W_1>> &stream_inter_in,
         hls::stream<bool> &stream_end_inter_in,
         hls::stream<ap_uint<V_ID_W + 1 + 8>> &stream_min_in,
         AdjHT *hTables,
         ap_uint<512> *htb_buf,
 
+        hls::stream<ap_uint<V_ID_W>> &stream_embed_out,
+        hls::stream<bool> &stream_end_embed_out,
         hls::stream<ap_uint<V_ID_W>> &stream_candidates_out,
         hls::stream<bool> &stream_end_candidates_out)
 {
@@ -1106,16 +1137,20 @@ void mwj_extract(
 #pragma HLS DATAFLOW
 
     //std::cout << "Extract: " << std::endl;
-    hls::stream<ap_uint<V_ID_W>, 100> stream_htv_inter("Bags of vertices");
-    hls::stream<bool, 100> stream_htv_bag_end("Bag delimeter");
-    hls::stream<bool> stream_htv_end("Bags delimeter");
+    hls::stream<ap_uint<V_ID_W>, S_D> stream_htv_inter("Bags of vertices");
+    hls::stream<bool, S_D> stream_htv_bag_end("Bag delimeter");
+    hls::stream<bool, S_D> stream_htv_end("Bags delimeter");
 
     mwj_extract_hashtovid(
+            stream_embed_in,
+            stream_end_embed_in,
             stream_inter_in,
             stream_end_inter_in,
             stream_min_in,
             hTables,
             htb_buf,
+            stream_embed_out,
+            stream_end_embed_out,
             stream_htv_inter,
             stream_htv_bag_end,
             stream_htv_end);
@@ -1128,7 +1163,51 @@ void mwj_extract(
             stream_end_candidates_out);
 }
 
-void mwj_verify(
+void mwj_verify_nothomomorphism(
+        hls::stream<ap_uint<V_ID_W>> &stream_embed_in,
+        hls::stream<bool> &stream_end_embed_in,
+        hls::stream<ap_uint<V_ID_W>> &stream_inter_in,
+        hls::stream<bool> &stream_end_inter_in,
+        
+        hls::stream<ap_uint<V_ID_W>> &stream_embed_out,
+        hls::stream<bool> &stream_end_embed_out,
+        hls::stream<ap_uint<V_ID_W>> &stream_checked_out,
+        hls::stream<bool> &stream_checked_end_out)
+{
+    ap_uint<8> curQV = 0;
+    ap_uint<V_ID_W> curEmb[MAX_QV];
+
+    bool last = stream_end_embed_in.read();
+VERIFY_HOMOMO_COPYING_EMBEDDING_LOOP:
+    while(!last){
+        curEmb[curQV] = stream_embed_in.read();
+        stream_embed_out.write(curEmb[curQV]);
+        stream_end_embed_out.write(false);
+        curQV++;
+        last = stream_end_embed_in.read();
+    }
+    stream_end_embed_out.write(true);
+
+    last = stream_end_inter_in.read();
+VERIFY_CHECK_LOOP:
+    while(!last){
+        ap_uint<V_ID_W> vToVerify = stream_inter_in.read();
+        bool homomorphism = false;
+        for (int g = 0; g < curQV; g++){
+            if (vToVerify == curEmb[g])
+                homomorphism = true;
+        }
+        if (!homomorphism){
+            stream_checked_out.write(vToVerify);
+            stream_checked_end_out.write(false);
+        }
+
+        last = stream_end_inter_in.read();
+    }
+    stream_checked_end_out.write(true);
+}
+
+void mwj_verify_edge(
         hls::stream<ap_uint<V_ID_W>> &stream_embed_in,
         hls::stream<bool> &stream_end_embed_in,
         hls::stream<ap_uint<V_ID_W>> &stream_inter_in,
@@ -1136,29 +1215,29 @@ void mwj_verify(
         AdjHT *hTables,
         QueryVertex *qVertices,
         ap_uint<512> *htb_buf,
-        ap_uint<8> nQueryVer,
         
-        hls::stream<ap_uint<V_ID_W>> &stream_partial_out,
-        hls::stream<bool> &stream_partial_end_out,
-        hls::stream<ap_uint<V_ID_W>> &stream_final_out,
-        hls::stream<bool> &stream_final_end_out,
-        hls::stream<bool> &stream_stop)
+        hls::stream<ap_uint<V_ID_W>> &stream_embed_out,
+        hls::stream<bool> &stream_end_embed_out,
+        hls::stream<ap_uint<V_ID_W>> &stream_checked_out,
+        hls::stream<bool> &stream_checked_end_out)
 {
     hls::stream<ap_uint<V_ID_W>> stream_hash_in;
     hls::stream<ap_uint<64>> stream_hash_out;
     ap_uint<8> curQV = 0;
     ap_uint<V_ID_W> curEmb[MAX_QV];
-    static long int nPartialSol = 1;
     //std::cout << "Verify: " << std::endl;
 
     bool last = stream_end_embed_in.read();
-VERIFY_COPYING_EMBEDDING_LOOP:
+VERIFY_EDGE_COPYING_EMBEDDING_LOOP:
     while(!last){
         curEmb[curQV] = stream_embed_in.read();
+        stream_embed_out.write(curEmb[curQV]);
+        stream_end_embed_out.write(false);
         curQV++;
         last = stream_end_embed_in.read();
     }
-
+    stream_end_embed_out.write(true);
+    
     last = stream_end_inter_in.read();
 VERIFY_CHECK_LOOP:
     while(!last){
@@ -1226,49 +1305,277 @@ VERIFY_READ_MEMORY_LOOP:
         }
 
         if (checked){
-            /* Write in the correct stream */
-            //hls::print("Passed: %d\n", (int)vToVerify);
-            if (curQV == nQueryVer){
-               // std::cout << "\tfinal {";
-                stream_final_end_out.write(false);
-VERIFY_WRITE_PARTIAL_LOOP:
-                for (int g = 0; g < curQV; g++){
-                    //std::cout << curEmb[g] << " ";
-                    stream_final_out.write(curEmb[g]);
-                }
-                //std::cout << vToVerify << "}" << std::endl;
-                stream_final_out.write(vToVerify);
-            } else {
-                //std::cout << "\tpartial {";
+            stream_checked_out.write(vToVerify);
+            stream_checked_end_out.write(false);
+        }
+
+        last = stream_end_inter_in.read();
+    }
+    stream_checked_end_out.write(true);
+
+}
+
+void mwj_verify_add(
+        hls::stream<ap_uint<V_ID_W>> &stream_embed_in,
+        hls::stream<bool> &stream_end_embed_in,
+        hls::stream<ap_uint<V_ID_W>> &stream_inter_in,
+        hls::stream<bool> &stream_end_inter_in,
+        ap_uint<8> nQueryVer,
+        
+        hls::stream<ap_uint<V_ID_W>> &stream_partial_out,
+        hls::stream<bool> &stream_partial_end_out,
+        hls::stream<ap_uint<V_ID_W>> &stream_final_out,
+        hls::stream<bool> &stream_final_end_out)
+{
+    ap_uint<8> curQV = 0;
+    ap_uint<V_ID_W> curEmb[MAX_QV];
+    //std::cout << "Verify: " << std::endl;
+
+    bool last = stream_end_embed_in.read();
+VERIFY_ADD_COPYING_EMBEDDING_LOOP:
+    while(!last){
+        curEmb[curQV] = stream_embed_in.read();
+        curQV++;
+        last = stream_end_embed_in.read();
+    }
+
+    last = stream_end_inter_in.read();
+VERIFY_CHECK_LOOP:
+    while(!last){
+        ap_uint<V_ID_W> vToVerify = stream_inter_in.read();
+        
+        /* Write in the correct stream */
+        if (curQV == nQueryVer){
+            stream_final_end_out.write(false);
 VERIFY_WRITE_FINAL_LOOP:
-            	for (int g = 0; g < curQV; g++){
-                    //std::cout << curEmb[g] << " ";
-                    stream_partial_out.write(curEmb[g]);
-                    stream_partial_end_out.write(false);
-                }
-                //std::cout << vToVerify << "}" << std::endl;
-                stream_partial_out.write(vToVerify);
-                stream_partial_end_out.write(false);
-                stream_partial_end_out.write(true);
-                nPartialSol++;
+            for (int g = 0; g < curQV; g++){
+                stream_final_out.write(curEmb[g]);
             }
+            stream_final_out.write(vToVerify);
+        } else {
+VERIFY_WRITE_PARTIAL_LOOP:
+            for (int g = 0; g < curQV; g++){
+                stream_partial_out.write(curEmb[g]);
+                stream_partial_end_out.write(false);
+            }
+            stream_partial_out.write(vToVerify);
+            stream_partial_end_out.write(false);
+            stream_partial_end_out.write(true);
+            nPartialSol++;
+
+#ifndef __SYNTHESIS__
+            nStreamPar += (curQV + 1);
+            if (nStreamPar > nStreamParMax){
+                nStreamParMax = nStreamPar;
+            }
+#endif
         }
 
         last = stream_end_inter_in.read();
     }
 
     nPartialSol--;
-    //hls::print("nPartialSol: %d\n", (int)nPartialSol);
-    //std::cout << "\tPartial results: " << nPartialSol << std::endl;
+
+#ifndef __SYNTHESIS__
+    nStreamPar -= curQV;
+#endif
+
     if (nPartialSol <= 0){
         stream_final_end_out.write(true);
-        stream_stop.write(true);
-        //hls::print("Stopping");
-    } else {
-        stream_stop.write(false);
     }
+}
 
-    //hls::print("Round\n");
+void mwj_verify(
+        hls::stream<ap_uint<V_ID_W>> &stream_embed_in,
+        hls::stream<bool> &stream_end_embed_in,
+        hls::stream<ap_uint<V_ID_W>> &stream_inter_in,
+        hls::stream<bool> &stream_end_inter_in,
+        AdjHT *hTables,
+        QueryVertex *qVertices,
+        ap_uint<512> *htb_buf,
+        ap_uint<8> nQueryVer,
+        
+        hls::stream<ap_uint<V_ID_W>> &stream_partial_out,
+        hls::stream<bool> &stream_partial_end_out,
+        hls::stream<ap_uint<V_ID_W>> &stream_final_out,
+        hls::stream<bool> &stream_final_end_out)
+{
+#pragma HLS DATAFLOW
+
+        hls::stream<ap_uint<V_ID_W>, S_D> stream_checked1;
+        hls::stream<bool, S_D> stream_checked1_end;
+        hls::stream<ap_uint<V_ID_W>, MAX_QV> stream_embed1;
+        hls::stream<bool, MAX_QV> stream_embed1_end;
+        
+        hls::stream<ap_uint<V_ID_W>, S_D> stream_checked2;
+        hls::stream<bool, S_D> stream_checked2_end;
+        hls::stream<ap_uint<V_ID_W>, MAX_QV> stream_embed2;
+        hls::stream<bool, MAX_QV> stream_embed2_end;
+
+        mwj_verify_nothomomorphism(
+                stream_embed_in,
+                stream_end_embed_in,
+                stream_inter_in,
+                stream_end_inter_in,
+                stream_embed1,
+                stream_embed1_end,
+                stream_checked1,
+                stream_checked1_end);
+        
+        mwj_verify_edge(
+                stream_embed1,
+                stream_embed1_end,
+                stream_checked1,
+                stream_checked1_end,
+                hTables,
+                qVertices,
+                htb_buf,
+                stream_embed2,
+                stream_embed2_end,
+                stream_checked2,
+                stream_checked2_end);
+
+        mwj_verify_add(
+                stream_embed2,
+                stream_embed2_end,
+                stream_checked2,
+                stream_checked2_end,
+                nQueryVer,
+                stream_partial_out,
+                stream_partial_end_out,
+                stream_final_out,
+                stream_final_end_out);
+}
+
+void mwj_proposeWrap(
+        int nCycles,
+        AdjHT *hTables,
+        QueryVertex *qVertices,
+        hls::stream<ap_uint<V_ID_W>> &stream_embed_in,
+        hls::stream<bool> &stream_end_embed_in,
+        ap_uint<512> *htb_buf0,
+        ap_uint<512> *htb_buf1,
+        
+        hls::stream<ap_uint<V_ID_W>> &stream_embed_out,
+        hls::stream<bool> &stream_end_embed_out,
+        hls::stream<ap_uint<H_W_1>> &stream_min_out,
+        hls::stream<bool> &stream_end_min_out,
+        hls::stream<ap_uint<V_ID_W + 1 + 8>> &stream_min_set)
+{
+    for (int g=0; g < nCycles; g++){
+        mwj_propose(
+                hTables,
+                qVertices,
+                stream_embed_in,
+                stream_end_embed_in,
+                htb_buf0,
+                htb_buf1,
+                stream_embed_out,
+                stream_end_embed_out,
+                stream_min_out,
+                stream_end_min_out,
+                stream_min_set);
+    }
+}
+
+void mwj_intersectWrap(
+        int nCycles,
+        AdjHT *hTables,
+        QueryVertex *qVertices,
+        hls::stream<ap_uint<V_ID_W>> &stream_embed_in,
+        hls::stream<bool> &stream_end_embed_in,
+        hls::stream<ap_uint<H_W_1>> &stream_min_in,
+        hls::stream<bool> &stream_end_min_in,
+        hls::stream<ap_uint<V_ID_W + 1 + 8>> &stream_min_set_in,
+        ap_uint<512> *htb_buf,
+
+        hls::stream<ap_uint<V_ID_W>> &stream_embed_out,
+        hls::stream<bool> &stream_end_embed_out,
+        hls::stream<ap_uint<H_W_1>> &stream_inter_out,
+        hls::stream<bool> &stream_end_out,
+        hls::stream<ap_uint<V_ID_W + 1 + 8>> &stream_min_set_out)
+{
+    for (int g = 0; g < nCycles; g++){
+        mwj_intersect(
+                hTables,
+                qVertices,
+                stream_embed_in,
+                stream_end_embed_in,
+                stream_min_in,
+                stream_end_min_in,
+                stream_min_set_in,
+                htb_buf,
+                stream_embed_out,
+                stream_end_embed_out,
+                stream_inter_out,
+                stream_end_out,
+                stream_min_set_out);
+    }
+}
+
+void mwj_extractWrap(
+        int nCycles,
+        hls::stream<ap_uint<V_ID_W>> &stream_embed_in,
+        hls::stream<bool> &stream_end_embed_in,
+        hls::stream<ap_uint<H_W_1>> &stream_inter_in,
+        hls::stream<bool> &stream_end_inter_in,
+        hls::stream<ap_uint<V_ID_W + 1 + 8>> &stream_min_in,
+        AdjHT *hTables,
+        ap_uint<512> *htb_buf,
+
+        hls::stream<ap_uint<V_ID_W>> &stream_embed_out,
+        hls::stream<bool> &stream_end_embed_out,
+        hls::stream<ap_uint<V_ID_W>> &stream_candidates_out,
+        hls::stream<bool> &stream_end_candidates_out)
+{
+    
+    for (int g = 0; g < nCycles; g++){
+        mwj_extract(
+                stream_embed_in,
+                stream_end_embed_in,
+                stream_inter_in,
+                stream_end_inter_in,
+                stream_min_in,
+                hTables,
+                htb_buf,
+                stream_embed_out,
+                stream_end_embed_out,
+                stream_candidates_out,
+                stream_end_candidates_out);
+    }
+}
+
+void mwj_verifyWrap(
+        int nCycles,
+        hls::stream<ap_uint<V_ID_W>> &stream_embed_in,
+        hls::stream<bool> &stream_end_embed_in,
+        hls::stream<ap_uint<V_ID_W>> &stream_inter_in,
+        hls::stream<bool> &stream_end_inter_in,
+        AdjHT *hTables,
+        QueryVertex *qVertices,
+        ap_uint<512> *htb_buf,
+        ap_uint<8> nQueryVer,
+        
+        hls::stream<ap_uint<V_ID_W>> &stream_partial_out,
+        hls::stream<bool> &stream_partial_end_out,
+        hls::stream<ap_uint<V_ID_W>> &stream_final_out,
+        hls::stream<bool> &stream_final_end_out)
+{
+    for (int g = 0; g < nCycles; g++){
+        mwj_verify(
+                stream_embed_in,
+                stream_end_embed_in,
+                stream_inter_in,
+                stream_end_inter_in,
+                hTables,
+                qVertices,
+                htb_buf,
+                nQueryVer,
+                stream_partial_out,
+                stream_partial_end_out,
+                stream_final_out,
+                stream_final_end_out);
+    }
 }
 
 void multiwayJoin(
@@ -1282,10 +1589,10 @@ void multiwayJoin(
         QueryVertex *qVertices0,
         QueryVertex *qVertices1,
         ap_uint<8> nQueryVer,
+        int nPartEmbed,
 
         hls::stream<ap_uint<V_ID_W>> &stream_final_out,
-        hls::stream<bool> &stream_final_out_end,
-        hls::stream<bool> &stream_stop)
+        hls::stream<bool> &stream_final_out_end)
 {
 #pragma HLS STABLE variable=htb_buf0
 #pragma HLS STABLE variable=htb_buf1
@@ -1300,27 +1607,44 @@ void multiwayJoin(
 #pragma HLS DATAFLOW
 
     /* Propose data out*/
-    hls::stream<ap_uint<V_ID_W>, MAX_QV> p_stream_embed("Partial result propose");
-    hls::stream<ap_uint<H_W_1>, MAX_QV> p_stream_min("Min. set vertices propose");
-    hls::stream<ap_uint<V_ID_W + 1 + 8>> p_stream_min_desc("Min. set description propose");
-    hls::stream<bool> p_stream_embed_end("Partial result del. propose");
-    hls::stream<bool> p_stream_min_end("Min. set verices del. propose");
+    hls::stream<ap_uint<V_ID_W>, MAX_QV> p_stream_embed
+        ("Partial result propose");
+    hls::stream<bool, MAX_QV> p_stream_embed_end("Partial result del. propose");
+    
+    hls::stream<ap_uint<H_W_1>, S_D> p_stream_min
+        ("Min. set vertices propose");
+    hls::stream<bool, S_D> p_stream_min_end("Min. set verices del. propose");
+    
+    hls::stream<ap_uint<V_ID_W + 1 + 8>, S_D> p_stream_min_desc
+        ("Min. set description propose");
 
     /* Intersect data out */    
-    hls::stream<ap_uint<H_W_1>> i_stream_hash_set("Set intersection hashes");
-    hls::stream<bool> i_stream_hash_set_end("Set intersection hashes del.");
-    hls::stream<ap_uint<V_ID_W>, MAX_QV> i_stream_embed("Partial result intersect.");
-    hls::stream<bool, MAX_QV> i_stream_embed_end("Partial result del. intersect.");
+    hls::stream<ap_uint<H_W_1>, S_D> i_stream_hash_set("Set intersection hashes");
+    hls::stream<bool, S_D> i_stream_hash_set_end("Set intersection hashes del.");
+    hls::stream<ap_uint<V_ID_W>, MAX_QV> i_stream_embed
+        ("Partial result intersect.");
+    hls::stream<bool, MAX_QV> i_stream_embed_end
+        ("Partial result del. intersect.");
+    hls::stream<ap_uint<V_ID_W + 1 + 8>, S_D> i_stream_min_desc
+        ("Min. set description propose");
     
     /* Extract data out */
-    hls::stream<ap_uint<V_ID_W>> e_stream_cand("Set candidates");
-    hls::stream<bool> e_stream_cand_end("Set candidates delimeter");
+    hls::stream<ap_uint<V_ID_W>, MAX_QV> e_stream_embed
+        ("Partial result intersect.");
+    hls::stream<bool, MAX_QV> e_stream_embed_end
+        ("Partial result del. intersect.");
+    hls::stream<ap_uint<V_ID_W>, S_D> e_stream_cand("Set candidates");
+    hls::stream<bool, S_D> e_stream_cand_end("Set candidates delimeter");
 
     /* Verify data out */
-	static hls::stream<ap_uint<V_ID_W>, 1000> stream_embed("Partial result stream");
-	static hls::stream<bool, 1000> stream_embed_end("Partial result delimeter");
-
-    mwj_propose(
+	static hls::stream<ap_uint<V_ID_W>, S_D_RES> stream_embed
+        ("Partial result stream");
+	static hls::stream<bool, S_D_RES> stream_embed_end
+        ("Partial result delimeter");
+    
+        
+    mwj_proposeWrap(
+            nPartEmbed,
             hTables0,
             qVertices0,
             stream_embed,
@@ -1333,31 +1657,40 @@ void multiwayJoin(
             p_stream_min_end,
             p_stream_min_desc);
 
-    mwj_intersect(
+    mwj_intersectWrap(
+            nPartEmbed,
             hTables1,
             qVertices1,
             p_stream_embed,
             p_stream_embed_end,
             p_stream_min,
             p_stream_min_end,
+            p_stream_min_desc,
             htb_buf2,
             i_stream_embed,
             i_stream_embed_end,
             i_stream_hash_set,
-            i_stream_hash_set_end);
+            i_stream_hash_set_end,
+            i_stream_min_desc);
 
-    mwj_extract(
+    mwj_extractWrap(
+            nPartEmbed,
+            i_stream_embed,
+            i_stream_embed_end,
             i_stream_hash_set,
             i_stream_hash_set_end,
-            p_stream_min_desc,
+            i_stream_min_desc,
             hTables0,
             htb_buf3,
+            e_stream_embed,
+            e_stream_embed_end,
             e_stream_cand,
             e_stream_cand_end);
 
-    mwj_verify(
-            i_stream_embed,
-            i_stream_embed_end,
+    mwj_verifyWrap(
+            nPartEmbed,
+            e_stream_embed,
+            e_stream_embed_end,
             e_stream_cand,
             e_stream_cand_end,
             hTables1,
@@ -1367,8 +1700,8 @@ void multiwayJoin(
             stream_embed,
             stream_embed_end,
             stream_final_out,
-            stream_final_out_end,
-            stream_stop);
+            stream_final_out_end);
+
 }
 
 void multiwayJoinWrap(
@@ -1387,13 +1720,8 @@ void multiwayJoinWrap(
         hls::stream<bool> &stream_final_out_end)
 {
 
-
-    hls::stream<bool> stream_stop("Stop execution");
-    bool end;
-
 MULTIWAYJOIN_LOOP:
 	do {
-
         multiwayJoin(
                 htb_buf0,
                 htb_buf1,
@@ -1405,12 +1733,11 @@ MULTIWAYJOIN_LOOP:
                 qVertices0,
                 qVertices1,
                 nQueryVer,
+                nPartialSol,
                 stream_final_out,
-                stream_final_out_end,
-                stream_stop);
+                stream_final_out_end);
 
-        end = stream_stop.read();
-    } while(!end);
+    } while(nPartialSol);
 
 }
 
@@ -1460,32 +1787,6 @@ void subgraphIsomorphism(
             tDescriptors,
             numTables);
 
-    //std::cout << "Query vertices = " << numQueryVert << std::endl;
-#ifdef DEBUG_TAB
-    for(int g = 0; g < numTables; g++){
-        if (tDescriptors[g].dir){
-            std::cout << "Table " << (int)g << ": " << (char)tDescriptors[g].src_label << 
-                " -> " << (char)tDescriptors[g].dst_label << std::endl;
-        } else {
-            std::cout << "Table " << (int)g << ": " << (char)tDescriptors[g].dst_label << 
-                " <- " << (char)tDescriptors[g].src_label << std::endl;
-        }
-        int start = 0;
-        for (int s = 0; s < (1UL << H_W_1); s++){
-            std::cout << s << ": " << std::endl;
-            for (int ss = 0; ss < (1UL << H_W_2); ss++){
-                std::cout << "\t" << ss << ":" << std::endl;
-                for(; start < hTables[g].adjHashTable[s].offset[ss]; start++){
-                    std::cout << "\t\t" << 
-                        hTables[g].edges[start].range(2*V_ID_W-1, V_ID_W) <<
-                        hTables[g].edges[start].range(V_ID_W-1, 0) << std::endl;
-                }
-            }
-        }
-        std::cout << std::endl;
-    }
-#endif
-
     multiwayJoinWrap(
             htb_buf0,
             htb_buf1,
@@ -1500,4 +1801,8 @@ void subgraphIsomorphism(
             stream_out,
             stream_end_out);
 
+#ifndef __SYNTHESIS__
+    std::cout << "Max depth stream partial solutions: " << 
+        nStreamParMax << std::endl;
+#endif
 }

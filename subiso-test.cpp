@@ -177,7 +177,7 @@ unsigned int countSol(
     while(!last){
         for (int g = 0; g < nQV; g++){
             temp = stream_in.read();
-            fres << (int)temp << " "; 
+            fres << (int)temp << "\t"; 
         }  
         fres << std::endl;
         nEmbedd++;
