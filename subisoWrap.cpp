@@ -23,15 +23,13 @@ void subisoWrap(
 #pragma HLS INTERFACE m_axi port=htb_buf4 bundle=gmem4
 #pragma HLS alias ports=htb_buf0,htb_buf1,htb_buf2,htb_buf3,htb_buf4 distance=0
 
-/*
-#pragma HLS INTERFACE mode=ap_fifo depth=1 port=stream_src
-#pragma HLS INTERFACE mode=ap_fifo depth=1 port=stream_dst
-#pragma HLS INTERFACE mode=ap_fifo depth=1 port=stream_src_l
-#pragma HLS INTERFACE mode=ap_fifo depth=1 port=stream_dst_l
-#pragma HLS INTERFACE mode=ap_fifo depth=1 port=stream_end_in
-#pragma HLS INTERFACE mode=ap_fifo depth=1 port=stream_out
-#pragma HLS INTERFACE mode=ap_fifo depth=1 port=stream_end_out
-*/
+#pragma HLS INTERFACE mode=ap_fifo port=stream_src
+#pragma HLS INTERFACE mode=ap_fifo port=stream_dst
+#pragma HLS INTERFACE mode=ap_fifo port=stream_src_l
+#pragma HLS INTERFACE mode=ap_fifo port=stream_dst_l
+#pragma HLS INTERFACE mode=ap_fifo port=stream_end_in
+#pragma HLS INTERFACE mode=ap_fifo port=stream_out
+#pragma HLS INTERFACE mode=ap_fifo port=stream_end_out
 
     subgraphIsomorphism
             (stream_src,

@@ -8,11 +8,7 @@
 /* Cannot be bigger than 255 since in the code it is
  * always contained in 8 bits */
 #define MAX_QUERY_VERTICES	(1UL << 4)
-
-#define MAX_QUERY_EDGES		(1UL << 5)
-#define MAX_QUERY_DEGREE    (1UL << 3)
-#define MAX_LABELS		    (1UL << 2)
-#define MAX_TABLES 		    (MAX_LABELS*(MAX_LABELS-1))
+#define MAX_TABLES 		    10
 
 #define VERTEX_WIDTH        4
 #define VERTEX_WIDTH_BIT    (1UL << VERTEX_WIDTH)
@@ -37,5 +33,5 @@
 #define MAX_COLLISIONS      (1UL << 5)
 
 #define STREAM_DEPTH        3
-#define STREAM_DEPTH_RES    34000
+#define STREAM_DEPTH_RES    150000
 #define DDR_WIDTH           2500
