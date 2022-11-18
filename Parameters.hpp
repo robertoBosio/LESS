@@ -1,3 +1,5 @@
+#include <ap_axi_sdata.h>
+
 /* Definitions regarding data graph */
 #define MAX_DATA_VERTICES	(1UL << VERTEX_WIDTH)
 #define MAX_DATA_EDGES		(1UL << 12)
@@ -35,3 +37,6 @@
 #define STREAM_DEPTH        3
 #define STREAM_DEPTH_RES    150000
 #define DDR_WIDTH           2500
+
+typedef ap_axiu<VERTEX_WIDTH_BIT, 0, 0, 0> T_NODE;
+typedef ap_axiu<LABEL_WIDTH, 0, 0, 0> T_LABEL;

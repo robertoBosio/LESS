@@ -10,11 +10,10 @@
 #include "Parameters.hpp"
 
 int stream_query(
-        hls::stream<ap_uint<VERTEX_WIDTH_BIT>> &stream_src,
-        hls::stream<ap_uint<VERTEX_WIDTH_BIT>> &stream_dst,
-        hls::stream<ap_uint<LABEL_WIDTH>> &stream_src_l,
-        hls::stream<ap_uint<LABEL_WIDTH>> &stream_dst_l,
-        hls::stream<bool> &stream_end)
+		hls::stream<T_NODE> &stream_src,
+		hls::stream<T_NODE> &stream_dst,
+		hls::stream<T_LABEL> &stream_src_l,
+		hls::stream<T_LABEL> &stream_dst_l)
 {
 
     /* Query data structure */
@@ -46,10 +45,11 @@ int stream_query(
         sscanf(fLine.c_str(), "%lu", &node_t);
         ap_uint<VERTEX_WIDTH_BIT> node = node_t;
 
-        stream_src.write(node);
-        stream_end.write(false);
+		T_NODE nodesrcif;
+        nodesrcif.data = node;
+        nodesrcif.last = (count == (numQueryVertices - 1));
+        stream_src.write(nodesrcif);
     }
-    stream_end.write(true);
 
     /* Stream edges */
     std::getline(fQueryEdges, fLine);
@@ -63,13 +63,21 @@ int stream_query(
         ap_uint<LABEL_WIDTH> labelsrc = vToLabel.at(nodesrc_t);
         ap_uint<LABEL_WIDTH> labeldst = vToLabel.at(nodedst_t);
 
-        stream_src.write(nodesrc);
-        stream_src_l.write(labelsrc);
-        stream_dst.write(nodedst);
-        stream_dst_l.write(labeldst);
-        stream_end.write(false);
+        T_LABEL labeldstif;
+		T_LABEL labelsrcif;
+		T_NODE nodedstif;
+		T_NODE nodesrcif;
+		labeldstif.data = labeldst;
+		labelsrcif.data = labelsrc;
+		nodedstif.data = nodedst;
+		nodesrcif.data = nodesrc;
+		nodesrcif.last = (count == (numQueryEdges - 1));
+
+		stream_dst_l.write(labeldstif);
+		stream_src_l.write(labelsrcif);
+		stream_dst.write(nodedstif);
+		stream_src.write(nodesrcif);
     }
-    stream_end.write(true);
 
     fQueryLab.close();
     fQueryEdges.close();
@@ -78,11 +86,10 @@ int stream_query(
 }
 
 void stream_datagraph(
-        hls::stream<ap_uint<VERTEX_WIDTH_BIT>> &stream_src,
-        hls::stream<ap_uint<VERTEX_WIDTH_BIT>> &stream_dst,
-        hls::stream<ap_uint<LABEL_WIDTH>> &stream_src_l,
-        hls::stream<ap_uint<LABEL_WIDTH>> &stream_dst_l,
-        hls::stream<bool> &stream_end)
+		hls::stream<T_NODE> &stream_src,
+		hls::stream<T_NODE> &stream_dst,
+		hls::stream<T_LABEL> &stream_src_l,
+		hls::stream<T_LABEL> &stream_dst_l)
 {
 
 
@@ -118,13 +125,22 @@ void stream_datagraph(
         ap_uint<LABEL_WIDTH> labelsrc = vToLabel.at(nodesrc_t);
         ap_uint<LABEL_WIDTH> labeldst = vToLabel.at(nodedst_t);
 
-        stream_src.write(nodesrc);
-        stream_src_l.write(labelsrc);
-        stream_dst.write(nodedst);
-        stream_dst_l.write(labeldst);
-        stream_end.write(false);
+        T_LABEL labeldstif;
+		T_LABEL labelsrcif;
+		T_NODE nodedstif;
+		T_NODE nodesrcif;
+        labeldstif.data = labeldst;
+		labelsrcif.data = labelsrc;
+		nodedstif.data = nodedst;
+		nodesrcif.data = nodesrc;
+        nodesrcif.last = (count == (numDataEdges - 1));
+
+		stream_dst_l.write(labeldstif);
+		stream_src_l.write(labelsrcif);
+		stream_dst.write(nodedstif);
+		stream_src.write(nodesrcif);
+
     }
-    stream_end.write(true);
 
     /* Rewind the file for 2nd stream */
     fDataEdges.clear();
@@ -142,13 +158,21 @@ void stream_datagraph(
         ap_uint<LABEL_WIDTH> labelsrc = vToLabel.at(nodesrc_t);
         ap_uint<LABEL_WIDTH> labeldst = vToLabel.at(nodedst_t);
 
-        stream_src.write(nodesrc);
-        stream_src_l.write(labelsrc);
-        stream_dst.write(nodedst);
-        stream_dst_l.write(labeldst);
-        stream_end.write(false);
+        T_LABEL labeldstif;
+		T_LABEL labelsrcif;
+		T_NODE nodedstif;
+		T_NODE nodesrcif;
+		labeldstif.data = labeldst;
+		labelsrcif.data = labelsrc;
+		nodedstif.data = nodedst;
+		nodesrcif.data = nodesrc;
+		nodesrcif.last = (count == (numDataEdges - 1));
+
+		stream_dst_l.write(labeldstif);
+		stream_src_l.write(labelsrcif);
+		stream_dst.write(nodedstif);
+		stream_src.write(nodesrcif);
     }
-    stream_end.write(true);
 
     fDataLab.close();
     fDataEdges.close();
@@ -167,22 +191,22 @@ unsigned int subgraphIsomorphism_sw(){
 
 unsigned int countSol(
         int nQV,
-        hls::stream<ap_uint<VERTEX_WIDTH_BIT>> &stream_in,
-        hls::stream<bool> &stream_end)
+        hls::stream<T_NODE> &stream_in)
 {
-    bool last = stream_end.read();
     unsigned int nEmbedd = 0;
     ap_uint<VERTEX_WIDTH_BIT> temp;
     std::ofstream fres("data/resultkern.txt");
-    while(!last){
-        for (int g = 0; g < nQV; g++){
-            temp = stream_in.read();
-            fres << (int)temp << "\t"; 
-        }  
-        fres << std::endl;
-        nEmbedd++;
-        last = stream_end.read();
-    }  
+    T_NODE tempif = stream_in.read();
+
+    while(!tempif.last){
+		for (int g = 0; g < nQV; g++){
+			fres << (int)tempif.data << "\t";
+			tempif = stream_in.read();
+		}
+		fres << std::endl;
+		nEmbedd++;
+    };
+
     fres.close();
     return nEmbedd;	
 }
@@ -191,13 +215,12 @@ int main()
 {
     std::cout << "Start" << std::endl;
 
-    hls::stream<ap_uint<VERTEX_WIDTH_BIT>> stream_src("src nodes");
-    hls::stream<ap_uint<VERTEX_WIDTH_BIT>> stream_dst("dst nodes");
-    hls::stream<ap_uint<VERTEX_WIDTH_BIT>> stream_out("result");
-    hls::stream<ap_uint<LABEL_WIDTH>> stream_src_l("src labels");
-    hls::stream<ap_uint<LABEL_WIDTH>> stream_dst_l("dst labels");
-    hls::stream<bool> stream_end_in("bool ends");
-    hls::stream<bool> stream_end_out("end solutions");
+    hls::stream<T_NODE> stream_src("src nodes");
+    hls::stream<T_NODE> stream_dst("dst nodes");
+    hls::stream<T_NODE> stream_out("result");
+    hls::stream<T_LABEL> stream_src_l("src labels");
+    hls::stream<T_LABEL> stream_dst_l("dst labels");
+
     int nQV = 0;
 
     ap_uint<512> *htb_buf = (ap_uint<512>*)calloc(DDR_WIDTH, sizeof(ap_uint<512>));
@@ -210,34 +233,29 @@ int main()
             stream_src,
             stream_dst,
             stream_src_l,
-            stream_dst_l,
-            stream_end_in);
+            stream_dst_l);
 
     stream_datagraph(
             stream_src,
             stream_dst,
             stream_src_l,
-            stream_dst_l,
-            stream_end_in);
+            stream_dst_l);
 
     subisoWrap(
             stream_src,
             stream_dst,
             stream_src_l,
             stream_dst_l,
-            stream_end_in,
             htb_buf,
             htb_buf,
             htb_buf,
             htb_buf,
             htb_buf,
-            stream_out,
-            stream_end_out);
+            stream_out);
 
     unsigned int res_actual = countSol(
             nQV,
-            stream_out,
-            stream_end_out);
+            stream_out);
 
     unsigned int res_expected = subgraphIsomorphism_sw();
 

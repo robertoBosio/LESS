@@ -1,5 +1,6 @@
 #include <ap_int.h>
 #include <hls_stream.h>
+#include <ap_axi_sdata.h>
 
 #include "hls_print.h"
 #include "Parameters.hpp"
@@ -43,11 +44,10 @@ long int nStreamParMax = 0;
 /* Builds the table descriptors based on the information
  * from the query graph. */
 void buildTableDescriptors(
-        hls::stream<ap_uint<V_ID_W>> &stream_src,
-        hls::stream<ap_uint<V_ID_W>> &stream_dst,
-        hls::stream<ap_uint<V_L_W>> &stream_src_l,
-        hls::stream<ap_uint<V_L_W>> &stream_dst_l,
-        hls::stream<bool> &stream_end,
+        hls::stream<T_NODE> &stream_src,
+        hls::stream<T_NODE> &stream_dst,
+        hls::stream<T_LABEL> &stream_src_l,
+        hls::stream<T_LABEL> &stream_dst_l,
         QueryVertex *qVertices0,
         QueryVertex *qVertices1,
         TableDescriptor *tDescriptors,
@@ -59,28 +59,33 @@ void buildTableDescriptors(
 
     /* Filling information about query vertices and coping
      * the vertex order needed by multiway join */
-    bool last = stream_end.read();
+    bool last;
 FILL_ORDER_LOOP:
-    while(!last){
-        ap_uint<V_ID_W> node = stream_src.read();
+    do{
+        T_NODE nodeif = stream_src.read();
+        ap_uint<V_ID_W> node = nodeif.data;
 #ifndef __SYNTHESIS__
         assert(numQueryVert < (MAX_QV));
 #endif
         fromNumToPos[node] = numQueryVert;
         numQueryVert++;
-        last = stream_end.read();
-    }
+        last = nodeif.last;
+    } while(!last);
+
     numQueryVert--;
 
     /* Creating table descriptors */
-    last = stream_end.read();
 CREATE_TABDESC_LOOP:
-    while(!last){
+    do{
         bool dirEdge = false;
-        ap_uint<V_ID_W> nodesrc = stream_src.read();
-        ap_uint<V_ID_W> nodedst = stream_dst.read();
-        ap_uint<V_L_W> labelsrc = stream_src_l.read();
-        ap_uint<V_L_W> labeldst = stream_dst_l.read();
+        T_LABEL labeldstif = stream_dst_l.read();
+        T_LABEL labelsrcif = stream_src_l.read();
+        T_NODE nodedstif = stream_dst.read();
+        T_NODE nodesrcif = stream_src.read();
+        ap_uint<V_L_W> labeldst = labeldstif.data;
+		ap_uint<V_L_W> labelsrc = labelsrcif.data;
+		ap_uint<V_ID_W> nodedst = nodedstif.data;
+		ap_uint<V_ID_W> nodesrc = nodesrcif.data;
         ap_uint<8> nodeSrcPos = fromNumToPos[nodesrc];
         ap_uint<8> nodeDstPos = fromNumToPos[nodedst];
 
@@ -137,8 +142,8 @@ FIND_CORRECT_TABLE_LOOP:
             qVertices1[nodeDstPos].addTableIndexing(g);
         }
 
-        last = stream_end.read();
-    }
+        last = nodesrcif.last;
+    } while(!last);
 }
 
 /* Translating counter addresses to ram addresses and
@@ -303,11 +308,10 @@ INCREASE_COUNTER_DDR_LOOP:
 }
 
 void edgeToHash(
-        hls::stream<ap_uint<V_ID_W>> &stream_src,
-        hls::stream<ap_uint<V_ID_W>> &stream_dst,
-        hls::stream<ap_uint<V_L_W>> &stream_src_l,
-        hls::stream<ap_uint<V_L_W>> &stream_dst_l,
-        hls::stream<bool> &stream_end_in,
+        hls::stream<T_NODE> &stream_src,
+        hls::stream<T_NODE> &stream_dst,
+        hls::stream<T_LABEL> &stream_src_l,
+        hls::stream<T_LABEL> &stream_dst_l,
         TableDescriptor *tDescriptors,
         ap_uint<8> numTables,
 
@@ -321,14 +325,18 @@ void edgeToHash(
     hls::stream<ap_uint<V_ID_W>> stream_hash_in;
     hls::stream<ap_uint<64>> stream_hash_out;
     
-    bool last = stream_end_in.read();
+    bool last;
 COUNT_OCCURENCIES_LOOP:
-    while(!last){
-        ap_uint<V_ID_W> nodesrc = stream_src.read();
-        ap_uint<V_ID_W> nodedst = stream_dst.read();
-        ap_uint<V_L_W> labelsrc = stream_src_l.read();
-        ap_uint<V_L_W> labeldst = stream_dst_l.read();
-        
+    do {
+        T_LABEL labeldstif = stream_dst_l.read();
+        T_LABEL labelsrcif = stream_src_l.read();
+        T_NODE nodedstif = stream_dst.read();
+        T_NODE nodesrcif = stream_src.read();
+        ap_uint<V_L_W> labeldst = labeldstif.data;
+		ap_uint<V_L_W> labelsrc = labelsrcif.data;
+		ap_uint<V_ID_W> nodedst = nodedstif.data;
+		ap_uint<V_ID_W> nodesrc = nodesrcif.data;
+
         /* Finding correct table */
         ap_uint<8> g = 0;
         for (; g < numTables; g++){
@@ -368,17 +376,16 @@ COUNT_OCCURENCIES_LOOP:
                 stream_end_out.write(false);
             }
         }
-        last = stream_end_in.read();
-    }
+        last = nodesrcif.last;
+    } while(!last);
     stream_end_out.write(true);
 }
 
 void countEdges(
-        hls::stream<ap_uint<V_ID_W>> &stream_src,
-        hls::stream<ap_uint<V_ID_W>> &stream_dst,
-        hls::stream<ap_uint<V_L_W>> &stream_src_l,
-        hls::stream<ap_uint<V_L_W>> &stream_dst_l,
-        hls::stream<bool> &stream_end_in,
+        hls::stream<T_NODE> &stream_src,
+        hls::stream<T_NODE> &stream_dst,
+        hls::stream<T_LABEL> &stream_src_l,
+        hls::stream<T_LABEL> &stream_dst_l,
         TableDescriptor *tDescriptors,
         AdjHT *hTables,
         ap_uint<512> *htb_buf,
@@ -399,7 +406,6 @@ void countEdges(
             stream_dst,
             stream_src_l,
             stream_dst_l,
-            stream_end_in,
             tDescriptors,
             numTables,
             stream_edge,
@@ -421,11 +427,10 @@ void countEdges(
 }
 
 void writeEdges(
-        hls::stream<ap_uint<V_ID_W>> &stream_src,
-        hls::stream<ap_uint<V_ID_W>> &stream_dst,
-        hls::stream<ap_uint<V_L_W>> &stream_src_l,
-        hls::stream<ap_uint<V_L_W>> &stream_dst_l,
-        hls::stream<bool> &stream_end_in,
+        hls::stream<T_NODE> &stream_src,
+        hls::stream<T_NODE> &stream_dst,
+        hls::stream<T_LABEL> &stream_src_l,
+        hls::stream<T_LABEL> &stream_dst_l,
         TableDescriptor *tDescriptors,
         AdjHT *hTables,
         ap_uint<512> *htb_buf,
@@ -446,7 +451,6 @@ void writeEdges(
             stream_dst,
             stream_src_l,
             stream_dst_l,
-            stream_end_in,
             tDescriptors,
             numTables,
             stream_edge,
@@ -467,11 +471,10 @@ void writeEdges(
 
 /* Reads two times the data graph and fills the data stuctures */
 void fillTables(
-        hls::stream<ap_uint<V_ID_W>> &stream_src,
-        hls::stream<ap_uint<V_ID_W>> &stream_dst,
-        hls::stream<ap_uint<V_L_W>> &stream_src_l,
-        hls::stream<ap_uint<V_L_W>> &stream_dst_l,
-        hls::stream<bool> &stream_end,
+        hls::stream<T_NODE> &stream_src,
+        hls::stream<T_NODE> &stream_dst,
+        hls::stream<T_LABEL> &stream_src_l,
+        hls::stream<T_LABEL> &stream_dst_l,
         AdjHT *hTables0,
         AdjHT *hTables1,
         ap_uint<512> *htb_buf,
@@ -503,7 +506,6 @@ STORE_HASHTABLES_POINTER_LOOP:
             stream_dst,
             stream_src_l,
             stream_dst_l,
-            stream_end,
             tDescriptors,
             hTables0,
             htb_buf,
@@ -539,7 +541,6 @@ STORE_EDGES_POINTER_LOOP:
             stream_dst,
             stream_src_l,
             stream_dst_l,
-            stream_end,
             tDescriptors,
             hTables0,
             htb_buf,
@@ -1253,8 +1254,7 @@ void mwj_verify_add(
         
         hls::stream<ap_uint<V_ID_W>> &stream_partial_out,
         hls::stream<bool> &stream_partial_end_out,
-        hls::stream<ap_uint<V_ID_W>> &stream_final_out,
-        hls::stream<bool> &stream_final_end_out)
+        hls::stream<T_NODE> &stream_final_out)
 {
     ap_uint<8> curQV = 0;
     ap_uint<V_ID_W> curEmb[MAX_QV];
@@ -1271,16 +1271,19 @@ VERIFY_ADD_COPYING_EMBEDDING_LOOP:
     last = stream_end_inter_in.read();
 VERIFY_CHECK_LOOP:
     while(!last){
+    	T_NODE node;
         ap_uint<V_ID_W> vToVerify = stream_inter_in.read();
         
         /* Write in the correct stream */
         if (curQV == nQueryVer){
-            stream_final_end_out.write(false);
 VERIFY_WRITE_FINAL_LOOP:
             for (int g = 0; g < curQV; g++){
-                stream_final_out.write(curEmb[g]);
+            	node.data = curEmb[g];
+            	node.last = false;
+                stream_final_out.write(node);
             }
-            stream_final_out.write(vToVerify);
+            node.data = vToVerify;
+            stream_final_out.write(node);
         } else {
 VERIFY_WRITE_PARTIAL_LOOP:
             for (int g = 0; g < curQV; g++){
@@ -1311,7 +1314,9 @@ VERIFY_WRITE_PARTIAL_LOOP:
 #endif
 
     if (nPartialSol <= 0){
-        stream_final_end_out.write(true);
+    	T_NODE node;
+    	node.last = true;
+        stream_final_out.write(node);
     }
 }
 
@@ -1452,8 +1457,7 @@ void mwj_verifyWrap(
         
         hls::stream<ap_uint<V_ID_W>> &stream_partial_out,
         hls::stream<bool> &stream_partial_end_out,
-        hls::stream<ap_uint<V_ID_W>> &stream_final_out,
-        hls::stream<bool> &stream_final_end_out)
+        hls::stream<T_NODE> &stream_final_out)
 {
 
     for (int g = 0; g < nCycles; g++){
@@ -1499,8 +1503,7 @@ void mwj_verifyWrap(
                 nQueryVer,
                 stream_partial_out,
                 stream_partial_end_out,
-                stream_final_out,
-                stream_final_end_out);
+                stream_final_out);
     }
 }
 
@@ -1517,8 +1520,7 @@ void multiwayJoin(
         ap_uint<8> nQueryVer,
         int nPartEmbed,
 
-        hls::stream<ap_uint<V_ID_W>> &stream_final_out,
-        hls::stream<bool> &stream_final_out_end)
+        hls::stream<T_NODE> &stream_final_out)
 {
 #pragma HLS STABLE variable=htb_buf0
 #pragma HLS STABLE variable=htb_buf1
@@ -1625,8 +1627,7 @@ void multiwayJoin(
             nQueryVer,
             stream_embed,
             stream_embed_end,
-            stream_final_out,
-            stream_final_out_end);
+            stream_final_out);
 
 }
 
@@ -1642,8 +1643,7 @@ void multiwayJoinWrap(
         QueryVertex *qVertices1,
         ap_uint<8> nQueryVer,
 
-        hls::stream<ap_uint<V_ID_W>> &stream_final_out,
-        hls::stream<bool> &stream_final_out_end)
+        hls::stream<T_NODE> &stream_final_out)
 {
 
 MULTIWAYJOIN_LOOP:
@@ -1660,27 +1660,24 @@ MULTIWAYJOIN_LOOP:
                 qVertices1,
                 nQueryVer,
                 nPartialSol,
-                stream_final_out,
-                stream_final_out_end);
+                stream_final_out);
 
     } while(nPartialSol);
 
 }
 
 void subgraphIsomorphism(
-        hls::stream<ap_uint<V_ID_W>> &stream_src,
-        hls::stream<ap_uint<V_ID_W>> &stream_dst,
-        hls::stream<ap_uint<V_L_W>> &stream_src_l,
-        hls::stream<ap_uint<V_L_W>> &stream_dst_l,
-        hls::stream<bool> &stream_end,
+        hls::stream<T_NODE> &stream_src,
+        hls::stream<T_NODE> &stream_dst,
+        hls::stream<T_LABEL> &stream_src_l,
+        hls::stream<T_LABEL> &stream_dst_l,
         ap_uint<512> *htb_buf0,
         ap_uint<512> *htb_buf1,
         ap_uint<512> *htb_buf2,
         ap_uint<512> *htb_buf3,
         ap_uint<512> *htb_buf4,
 
-        hls::stream<ap_uint<V_ID_W>> &stream_out,
-        hls::stream<bool> &stream_end_out)
+        hls::stream<T_NODE> &stream_out)
 {
 
     QueryVertex qVertices0[MAX_QV], qVertices1[MAX_QV];
@@ -1694,7 +1691,6 @@ void subgraphIsomorphism(
             stream_dst,
             stream_src_l,
             stream_dst_l,
-            stream_end,
             qVertices0,
             qVertices1,
             tDescriptors,
@@ -1706,7 +1702,6 @@ void subgraphIsomorphism(
             stream_dst,
             stream_src_l,
             stream_dst_l,
-            stream_end,
             hTables0,
             hTables1,
             htb_buf0,
@@ -1724,8 +1719,7 @@ void subgraphIsomorphism(
             qVertices0,
             qVertices1,
             numQueryVert,
-            stream_out,
-            stream_end_out);
+            stream_out);
 
 #ifndef __SYNTHESIS__
     std::cout << "Max depth stream partial solutions: " << 
