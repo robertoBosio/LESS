@@ -109,36 +109,43 @@ ol.subisoWrap_0.write(0x00, 1)
 
 #First transaction query vertex order
 ol.axi_dma0.sendchannel.transfer(SRC_ORD)
+ol.axi_dma0.sendchannel.wait()
 
 #Second transaction query edges
 ol.axi_dma2.sendchannel.transfer(DST_EDG_Q_L)
 ol.axi_dma1.sendchannel.transfer(SRC_EDG_Q_L)
 ol.axi_dma3.sendchannel.transfer(DST_EDG_Q)
 ol.axi_dma0.sendchannel.transfer(SRC_EDG_Q)
+ol.axi_dma0.sendchannel.wait()
 
 #Third transaction data edges
 ol.axi_dma2.sendchannel.transfer(DST_EDG_D_L)
 ol.axi_dma1.sendchannel.transfer(SRC_EDG_D_L)
 ol.axi_dma3.sendchannel.transfer(DST_EDG_D)
 ol.axi_dma0.sendchannel.transfer(SRC_EDG_D)
+ol.axi_dma0.sendchannel.wait()
 
 #Fourth transaction data edges
 ol.axi_dma2.sendchannel.transfer(DST_EDG_D_L)
 ol.axi_dma1.sendchannel.transfer(SRC_EDG_D_L)
 ol.axi_dma3.sendchannel.transfer(DST_EDG_D)
 ol.axi_dma0.sendchannel.transfer(SRC_EDG_D)
+ol.axi_dma0.sendchannel.wait()
 
+ol.axi_dma0.readchannel.wait()
 ol.axi_dma0.readchannel.transfer(RES)
-while(not overlay.subisoWrap_0.read(0x00) & 0x2)
-    pass
 
 end = time.time()
 
 c = 0
+flag = True
 while (flag):
     if (RES[c] != 0 and RES[c+1] != 0 and RES[c+2] != and RED[c+3] != 0):
         counter_sol = counter_sol + 1
         c = c + 4
+        flag = True
+    else:
+        flag = False
 
 if counter_sol == counter_sol_VF:
     print("OK")
