@@ -16,10 +16,11 @@ add_files -tb "subiso-test.cpp data" -cflags "-Wno-unknown-pragmas" -csimflags "
 set_top subisoWrap
 
 open_solution "solution1" -flow_target vivado
-set_part {xcvu9p-flga2104-1-e}
-create_clock -period 10 -name default
+set_part {xczu3eg-sbva484-1-e}
+create_clock -period 5 -name default
 #source "./solution1/directives.tcl"
 #csim_design -clean
 #csynth_design
 #cosim_design
+#cosim_design -user_stall stall_file.json -disable_deadlock_detection
 #export_design -format ip_catalog

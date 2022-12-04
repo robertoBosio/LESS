@@ -34,7 +34,7 @@
 
 #define MAX_COLLISIONS      (1UL << 5)
 
-#define STREAM_DEPTH        3
+#define STREAM_DEPTH        100
 #define STREAM_DEPTH_RES    150000
 #define DDR_WIDTH           2500
 
