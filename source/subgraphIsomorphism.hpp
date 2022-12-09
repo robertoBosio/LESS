@@ -31,9 +31,6 @@
 #define S_D         STREAM_DEPTH    
 #define S_D_RES     STREAM_DEPTH_RES    
 
-/* Partial solutions still to be checked.
- * Set to 1 to start the process. */
-
 #ifndef __SYNTHESIS__
 /* statistic purpose */
 long int nStreamPar = 0;
@@ -397,7 +394,7 @@ void countEdges(
     hls::stream<ap_uint<H_W_1>, S_D> stream_c_index1("Counters index 1");
     hls::stream<ap_uint<H_W_2>, S_D> stream_c_index2("Counters index 2");
     hls::stream<ap_uint<8>, S_D> stream_c_ntable("Counters table");
-    hls::stream<bool, S_D> stream_end_count("Counters end");
+    hls::stream<bool> stream_end_count("Counters end");
 
     /* Count edges per vertex source */
     edgeToHash(
@@ -442,7 +439,7 @@ void writeEdges(
     hls::stream<ap_uint<H_W_1>, S_D> stream_o_index1("Offsets index 1");
     hls::stream<ap_uint<H_W_2>, S_D> stream_o_index2("Offsets index 2");
     hls::stream<ap_uint<8>, S_D> stream_o_ntable("Offset table");
-    hls::stream<bool, S_D> stream_end_offset("Offset end");
+    hls::stream<bool> stream_end_offset("Offset end");
 
     /* Write edges based on precomputed offsets */
     edgeToHash(
@@ -657,6 +654,8 @@ void mwj_propose_findmin(
     ap_uint<V_ID_W> curEmb[MAX_QV];
     static bool start = true;
     bool last;
+
+#pragma HLS RESET variable=start
 
     if (start){
     	start = false;
@@ -1245,20 +1244,21 @@ VERIFY_READ_MEMORY_LOOP:
 }
 
 void mwj_verify_add(
+		long int &nPartSol,
         hls::stream<ap_uint<V_ID_W>> &stream_embed_in,
         hls::stream<bool> &stream_end_embed_in,
         hls::stream<ap_uint<V_ID_W>> &stream_inter_in,
         hls::stream<bool> &stream_end_inter_in,
         ap_uint<8> nQueryVer,
-		long int &nPartialSol,
         
         hls::stream<ap_uint<V_ID_W>> &stream_partial_out,
         hls::stream<bool> &stream_partial_end_out,
-        hls::stream<T_NODE> &stream_final_out)
+		ap_uint<V_ID_W> *res_buf)
 {
     ap_uint<8> curQV = 0;
     ap_uint<V_ID_W> curEmb[MAX_QV];
-    //std::cout << "Verify: " << std::endl;
+    static unsigned long int resCount = 0;
+#pragma HLS RESET variable=resCount
 
     bool last = stream_end_embed_in.read();
 VERIFY_ADD_COPYING_EMBEDDING_LOOP:
@@ -1271,19 +1271,15 @@ VERIFY_ADD_COPYING_EMBEDDING_LOOP:
     last = stream_end_inter_in.read();
 VERIFY_CHECK_LOOP:
     while(!last){
-    	T_NODE node;
         ap_uint<V_ID_W> vToVerify = stream_inter_in.read();
         
         /* Write in the correct stream */
         if (curQV == nQueryVer){
 VERIFY_WRITE_FINAL_LOOP:
             for (int g = 0; g < curQV; g++){
-            	node.data = curEmb[g];
-            	node.last = false;
-                stream_final_out.write(node);
+            	res_buf[resCount++] = curEmb[g];
             }
-            node.data = vToVerify;
-            stream_final_out.write(node);
+            res_buf[resCount++] = vToVerify;
         } else {
 VERIFY_WRITE_PARTIAL_LOOP:
             for (int g = 0; g < curQV; g++){
@@ -1293,7 +1289,7 @@ VERIFY_WRITE_PARTIAL_LOOP:
             stream_partial_out.write(vToVerify);
             stream_partial_end_out.write(false);
             stream_partial_end_out.write(true);
-            nPartialSol++;
+            nPartSol++;
 
 #ifndef __SYNTHESIS__
             nStreamPar += (curQV + 1);
@@ -1307,17 +1303,11 @@ VERIFY_WRITE_PARTIAL_LOOP:
         last = stream_end_inter_in.read();
     }
 
-    nPartialSol--;
+    nPartSol--;
 
 #ifndef __SYNTHESIS__
     nStreamPar -= curQV;
 #endif
-
-    if (nPartialSol <= 0){
-    	T_NODE node;
-    	node.last = true;
-        stream_final_out.write(node);
-    }
 }
 
 void mwj_proposeWrap(
@@ -1446,7 +1436,7 @@ void mwj_extractWrap(
 
 void mwj_verifyWrap(
         long int nCycles,
-        long int &nPartialSol,
+		long int &nPartSol,
         hls::stream<ap_uint<V_ID_W>> &stream_embed_in,
         hls::stream<bool> &stream_end_embed_in,
         hls::stream<ap_uint<V_ID_W>> &stream_inter_in,
@@ -1458,7 +1448,7 @@ void mwj_verifyWrap(
         
         hls::stream<ap_uint<V_ID_W>> &stream_partial_out,
         hls::stream<bool> &stream_partial_end_out,
-        hls::stream<T_NODE> &stream_final_out)
+		ap_uint<V_ID_W> *res_buf)
 {
 
     for (int g = 0; g < nCycles; g++){
@@ -1497,17 +1487,16 @@ void mwj_verifyWrap(
                 stream_checked2_end);
 
         mwj_verify_add(
+        		nPartSol,
                 stream_embed2,
                 stream_embed2_end,
                 stream_checked2,
                 stream_checked2_end,
                 nQueryVer,
-				nPartialSol,
                 stream_partial_out,
                 stream_partial_end_out,
-                stream_final_out);
+                res_buf);
     }
-
 }
 
 void multiwayJoin(
@@ -1521,10 +1510,10 @@ void multiwayJoin(
         QueryVertex *qVertices0,
         QueryVertex *qVertices1,
         ap_uint<8> nQueryVer,
-		long int copyNPartialSol,
-        long int &nPartialSol,
+        long int nPartSolCopy,
+		long int &nPartSol,
 
-        hls::stream<T_NODE> &stream_final_out)
+		ap_uint<V_ID_W> *res_buf)
 {
 #pragma HLS STABLE variable=htb_buf0
 #pragma HLS STABLE variable=htb_buf1
@@ -1576,7 +1565,7 @@ void multiwayJoin(
     
         
     mwj_proposeWrap(
-            copyNPartialSol,
+    		nPartSolCopy,
             hTables0,
             qVertices0,
             stream_embed,
@@ -1590,7 +1579,7 @@ void multiwayJoin(
             p_stream_min_desc);
 
     mwj_intersectWrap(
-    		copyNPartialSol,
+    		nPartSolCopy,
             hTables1,
             qVertices1,
             p_stream_embed,
@@ -1606,7 +1595,7 @@ void multiwayJoin(
             i_stream_min_desc);
 
     mwj_extractWrap(
-    		copyNPartialSol,
+    		nPartSolCopy,
             i_stream_embed,
             i_stream_embed_end,
             i_stream_hash_set,
@@ -1620,8 +1609,8 @@ void multiwayJoin(
             e_stream_cand_end);
 
     mwj_verifyWrap(
-    		copyNPartialSol,
-            nPartialSol,
+    		nPartSolCopy,
+			nPartSol,
             e_stream_embed,
             e_stream_embed_end,
             e_stream_cand,
@@ -1632,7 +1621,7 @@ void multiwayJoin(
             nQueryVer,
             stream_embed,
             stream_embed_end,
-            stream_final_out);
+            res_buf);
 
 }
 
@@ -1648,10 +1637,10 @@ void multiwayJoinWrap(
         QueryVertex *qVertices1,
         ap_uint<8> nQueryVer,
 
-        hls::stream<T_NODE> &stream_final_out)
+		ap_uint<V_ID_W> *res_buf)
 {
 
-    long int nPartialSol = 1;
+	long int nPartialSol = 1;
 
 MULTIWAYJOIN_LOOP:
 	do {
@@ -1666,9 +1655,9 @@ MULTIWAYJOIN_LOOP:
                 qVertices0,
                 qVertices1,
                 nQueryVer,
-				nPartialSol,
                 nPartialSol,
-                stream_final_out);
+				nPartialSol,
+                res_buf);
 
     } while(nPartialSol);
 
@@ -1685,8 +1674,9 @@ void subgraphIsomorphism(
         ap_uint<512> *htb_buf3,
         ap_uint<512> *htb_buf4,
 
-        hls::stream<T_NODE> &stream_out)
+		ap_uint<V_ID_W> *res_buf)
 {
+
     QueryVertex qVertices0[MAX_QV], qVertices1[MAX_QV];
     TableDescriptor tDescriptors[MAX_TB];
     AdjHT hTables0[MAX_TB], hTables1[MAX_TB];
@@ -1726,7 +1716,7 @@ void subgraphIsomorphism(
             qVertices0,
             qVertices1,
             numQueryVert,
-            stream_out);
+            res_buf);
 
 #ifndef __SYNTHESIS__
     std::cout << "Max depth stream partial solutions: " << 

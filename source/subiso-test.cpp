@@ -191,23 +191,36 @@ unsigned int subgraphIsomorphism_sw(){
 
 unsigned int countSol(
         int nQV,
-        hls::stream<T_NODE> &stream_in)
+        ap_uint<VERTEX_WIDTH_BIT> res_buf[RES_WIDTH])
 {
     unsigned int nEmbedd = 0;
-    ap_uint<VERTEX_WIDTH_BIT> temp;
-    std::ofstream fres("data/resultkern.txt");
-    T_NODE tempif = stream_in.read();
+//    ap_uint<VERTEX_WIDTH_BIT> read;
+//    std::ofstream fres("data/resultkern.txt");
+    int counter = 0;
 
-    while(!tempif.last){
-		for (int g = 0; g < nQV; g++){
-			fres << (int)tempif.data << "\t";
-			tempif = stream_in.read();
-		}
-		fres << std::endl;
-		nEmbedd++;
-    };
-
-    fres.close();
+//    read = res_buf[counter++];
+//    fres << read << "\t";
+//    while(!(read == 0 && res_buf[counter] == 0)){
+//    	read = res_buf[counter++];
+//    	fres << read << "\t";
+//    	if ((counter % nQV)==0) {
+//    		fres << std::endl;
+//    		nEmbedd++;
+//    	}
+//    }
+    int count_zeros = 0;
+    while(count_zeros < 2){
+    	count_zeros = 0;
+    	for(int g = 0; g < nQV; g++){
+    		if (res_buf[counter++] == 0){
+    			count_zeros++;
+    		}
+    	}
+    	if (count_zeros < 2){
+    		nEmbedd++;
+    	}
+	}
+//    fres.close();
     return nEmbedd;	
 }
 
@@ -228,6 +241,11 @@ int main()
         std::cout << "Allocation failed." << std::endl;
         return -1;
     }
+    ap_uint<VERTEX_WIDTH_BIT> *res_buf = (ap_uint<VERTEX_WIDTH_BIT>*)calloc(RES_WIDTH, sizeof(ap_uint<VERTEX_WIDTH_BIT>));
+    if (!res_buf){
+		std::cout << "Allocation failed." << std::endl;
+		return -1;
+	}
 
     nQV = stream_query(
             stream_src,
@@ -251,11 +269,11 @@ int main()
             htb_buf,
             htb_buf,
             htb_buf,
-            stream_out);
+            res_buf);
 
     unsigned int res_actual = countSol(
             nQV,
-            stream_out);
+            res_buf);
 
     unsigned int res_expected = subgraphIsomorphism_sw();
 
@@ -263,5 +281,6 @@ int main()
         res_actual << std::endl;
 
     free(htb_buf);
+    free(res_buf);
     return (res_actual != res_expected);
 }

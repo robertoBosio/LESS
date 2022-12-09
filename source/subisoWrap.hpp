@@ -16,6 +16,6 @@ void subisoWrap(
 		ap_uint<512> htb_buf3[DDR_WIDTH],
 		ap_uint<512> htb_buf4[DDR_WIDTH],
 
-        hls::stream<T_NODE> &stream_out);
+		ap_uint<VERTEX_WIDTH_BIT> res_buf[RES_WIDTH]);
 
 #endif

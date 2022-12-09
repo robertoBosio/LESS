@@ -12,7 +12,7 @@ void subisoWrap(
         ap_uint<512> htb_buf3[DDR_WIDTH],
         ap_uint<512> htb_buf4[DDR_WIDTH],
 
-        hls::stream<T_NODE> &stream_out)
+        ap_uint<VERTEX_WIDTH_BIT> res_buf[RES_WIDTH])
 {
 
 #pragma HLS INTERFACE m_axi port=htb_buf0 bundle=gmem0
@@ -20,14 +20,14 @@ void subisoWrap(
 #pragma HLS INTERFACE m_axi port=htb_buf2 bundle=gmem2
 #pragma HLS INTERFACE m_axi port=htb_buf3 bundle=gmem3
 #pragma HLS INTERFACE m_axi port=htb_buf4 bundle=gmem4
+#pragma HLS INTERFACE m_axi port=res_buf bundle=gmem5
 #pragma HLS alias ports=htb_buf0,htb_buf1,htb_buf2,htb_buf3,htb_buf4 distance=0
-#pragma HLS INTERFACE s_axilite port=return
 
 #pragma HLS INTERFACE mode=axis port=stream_src
 #pragma HLS INTERFACE mode=axis port=stream_dst
 #pragma HLS INTERFACE mode=axis port=stream_src_l
 #pragma HLS INTERFACE mode=axis port=stream_dst_l
-#pragma HLS INTERFACE mode=axis port=stream_out
+#pragma HLS INTERFACE s_axilite port=return
 
     subgraphIsomorphism
             (stream_src,
@@ -39,7 +39,7 @@ void subisoWrap(
              htb_buf2,
              htb_buf3,
              htb_buf4,
-             stream_out);
+             res_buf);
 
 }
 

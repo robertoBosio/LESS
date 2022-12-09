@@ -1,17 +1,18 @@
-open_project -reset subgraphiso
+#open_project -reset subgraphiso
+open_project subgraphiso
 
-add_files Parameters.hpp
-add_files Trie.hpp
-add_files QueryVertex.hpp
-add_files subgraphIsomorphism.hpp
-add_files subisoWrap.hpp
-add_files subisoWrap.cpp
+add_files "source/Parameters.hpp"
+add_files "source/Trie.hpp"
+add_files "source/QueryVertex.hpp"
+add_files "source/subgraphIsomorphism.hpp"
+add_files "source/subisoWrap.hpp"
+add_files "source/subisoWrap.cpp"
 
-add_files types.hpp
-add_files utils.hpp
-add_files hash_lookup3.hpp
+add_files "source/types.hpp"
+add_files "source/utils.hpp"
+add_files "source/hash_lookup3.hpp"
 
-add_files -tb "subiso-test.cpp data" -cflags "-Wno-unknown-pragmas" -csimflags "-Wno-unknown-pragmas"
+add_files -tb "source/subiso-test.cpp data" -cflags "-Wno-unknown-pragmas" -csimflags "-Wno-unknown-pragmas"
 
 set_top subisoWrap
 

@@ -34,9 +34,10 @@
 
 #define MAX_COLLISIONS      (1UL << 5)
 
-#define STREAM_DEPTH        100
+#define STREAM_DEPTH        10
 #define STREAM_DEPTH_RES    150000
-#define DDR_WIDTH           2500
+#define DDR_WIDTH           5000
+#define RES_WIDTH			60000
 
 typedef ap_axiu<VERTEX_WIDTH_BIT, 0, 0, 0> T_NODE;
 typedef ap_axiu<LABEL_WIDTH, 0, 0, 0> T_LABEL;
