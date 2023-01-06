@@ -25,7 +25,7 @@
 
 /* bitwidth of the hash to index source vertices, 1st level.
  * Must be greater or equal to HASH_WIDTH_SECOND. */
-#define HASH_WIDTH_FIRST    6
+#define HASH_WIDTH_FIRST    9
 
 /* bitwidth of the hash to index a specific edge, 2nd level.
  * Must be greater or equal to 5 due to the filter in
@@ -36,7 +36,7 @@
 
 #define STREAM_DEPTH        10
 #define STREAM_DEPTH_RES    150000
-#define DDR_WIDTH           5000
+#define DDR_WIDTH           10000
 #define RES_WIDTH			60000
 
 typedef ap_axiu<VERTEX_WIDTH_BIT, 0, 0, 0> T_NODE;
