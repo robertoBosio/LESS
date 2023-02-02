@@ -1,6 +1,7 @@
 #open_project -reset subgraphiso
 open_project subgraphiso
 
+add_files "source/myhls_stream.h"
 add_files "source/Parameters.hpp"
 add_files "source/Trie.hpp"
 add_files "source/QueryVertex.hpp"

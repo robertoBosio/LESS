@@ -3,21 +3,27 @@
 #include <cstdio>
 #include <unordered_map>
 
+#ifndef __SYNTHESIS__
+#include "myhls_stream.h"
+#else
 #include <hls_stream.h>
+#endif
+
 #include <ap_int.h>
 
 #include "subisoWrap.hpp"
 #include "Parameters.hpp"
 
-int stream_query(
+void stream_query(
 		hls::stream<T_NODE> &stream_src,
 		hls::stream<T_NODE> &stream_dst,
 		hls::stream<T_LABEL> &stream_src_l,
-		hls::stream<T_LABEL> &stream_dst_l)
+		hls::stream<T_LABEL> &stream_dst_l,
+        int &numQueryVertices)
 {
 
     /* Query data structure */
-    uint8_t numQueryVertices = 0;       
+    //uint8_t numQueryVertices = 0;       
     uint16_t numQueryEdges = 0;       
 
     /* Query files */
@@ -82,7 +88,7 @@ int stream_query(
     fQueryLab.close();
     fQueryEdges.close();
     fQueryOrd.close();
-    return numQueryVertices;
+    //return numQueryVertices;
 }
 
 void stream_datagraph(
@@ -233,6 +239,7 @@ int main()
     hls::stream<T_NODE> stream_out("result");
     hls::stream<T_LABEL> stream_src_l("src labels");
     hls::stream<T_LABEL> stream_dst_l("dst labels");
+    hls::stream<T_LABEL> stream_result("results");
 
     int nQV = 0;
 
@@ -247,11 +254,12 @@ int main()
 		return -1;
 	}
 
-    nQV = stream_query(
+    stream_query(
             stream_src,
             stream_dst,
             stream_src_l,
-            stream_dst_l);
+            stream_dst_l,
+            nQV);
 
     stream_datagraph(
             stream_src,
@@ -259,17 +267,14 @@ int main()
             stream_src_l,
             stream_dst_l);
 
-    subisoWrap(
+    subisoWrapper(
             stream_src,
             stream_dst,
             stream_src_l,
             stream_dst_l,
             htb_buf,
-            htb_buf,
-            htb_buf,
-            htb_buf,
-            htb_buf,
             res_buf);
+
 
     unsigned int res_actual = countSol(
             nQV,
