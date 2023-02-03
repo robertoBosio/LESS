@@ -1320,14 +1320,15 @@ void mwj_verify_add(
         
         hls::stream<ap_uint<V_ID_W>> &stream_partial_out,
         hls::stream<bool> &stream_partial_end_out,
-		ap_uint<V_ID_W> *res_buf)
+		hls::stream<T_NODE> &stream_result)
 {
     ap_uint<8> curQV;
     ap_uint<V_ID_W> curEmb[MAX_QV];
-    static unsigned long int resCount = 0;
+    //static unsigned long int resCount = 0;
     static unsigned long int nPartSol = 1;
     bool last;
-#pragma HLS RESET variable=resCount
+    T_NODE node;
+#pragma HLS RESET variable=nPartSol
     
     /* start the pipeline with empty solution */
     stream_partial_end_out.write(true);
@@ -1351,9 +1352,15 @@ VERIFY_CHECK_LOOP:
                 if (curQV == nQueryVer){
 VERIFY_WRITE_FINAL_LOOP:
                     for (int g = 0; g < curQV; g++){
-                        res_buf[resCount++] = curEmb[g];
+                        node.data = curEmb[g];
+                        node.last = false;
+                        node.keep = 3;
+                        stream_result.write(node);
                     }
-                    res_buf[resCount++] = vToVerify;
+                    node.data = vToVerify;
+                    node.last = false;
+                    node.keep = 3;
+                    stream_result.write(node);
                 } else {
 VERIFY_WRITE_PARTIAL_LOOP:
                     for (int g = 0; g < curQV; g++){
@@ -1385,6 +1392,11 @@ VERIFY_WRITE_PARTIAL_LOOP:
 #pragma HLS unroll
                 streams_stop[g].write(true);
             }
+            /* Write last node */
+            node.data = 0;
+            node.last = true;
+            node.keep = 3;
+            stream_result.write(node);
             break;
         }
 
@@ -1529,7 +1541,7 @@ void mwj_verifyWrap(
         
         hls::stream<ap_uint<V_ID_W>> &stream_partial_out,
         hls::stream<bool> &stream_partial_end_out,
-		ap_uint<V_ID_W> *res_buf)
+		hls::stream<T_NODE> &stream_result)
         
 {
 
@@ -1578,7 +1590,7 @@ void mwj_verifyWrap(
                 streams_stop,
                 stream_partial_out,
                 stream_partial_end_out,
-                res_buf);
+                stream_result);
 }
 
 void multiwayJoin(
@@ -1593,7 +1605,7 @@ void multiwayJoin(
         QueryVertex *qVertices1,
         ap_uint<8> nQueryVer,
 
-		ap_uint<V_ID_W> *res_buf)
+		hls::stream<T_NODE> &stream_result)
 {
 #pragma HLS STABLE variable=htb_buf0
 #pragma HLS STABLE variable=htb_buf1
@@ -1703,7 +1715,7 @@ void multiwayJoin(
             streams_stop,
             stream_embed,
             stream_embed_end,
-            res_buf);
+            stream_result);
 
 }
 
@@ -1719,7 +1731,7 @@ void multiwayJoinWrap(
         QueryVertex *qVertices1,
         ap_uint<8> nQueryVer,
 
-		ap_uint<V_ID_W> *res_buf)
+		hls::stream<T_NODE> &stream_result)
 {
 
         multiwayJoin(
@@ -1733,7 +1745,7 @@ void multiwayJoinWrap(
                 qVertices0,
                 qVertices1,
                 nQueryVer,
-                res_buf);
+                stream_result);
 
 }
 
@@ -1749,7 +1761,7 @@ void multiwayJoinWrap_v2(
         QueryVertex *qVertices1,
         ap_uint<8> nQueryVer,
 
-		ap_uint<V_ID_W> *res_buf)
+		hls::stream<T_NODE> &stream_result)
 {
 #pragma HLS STABLE variable=htb_buf0
 #pragma HLS STABLE variable=htb_buf1
@@ -1918,7 +1930,7 @@ void multiwayJoinWrap_v2(
             streams_stop,
             fifo_embed,
             fifo_embed_end,
-            res_buf);
+            stream_result);
 #else
   
     for (int g = 0; g <= STOP_S; g++) 
@@ -2026,7 +2038,7 @@ void multiwayJoinWrap_v2(
             std::ref(streams_stop),
             std::ref(fifo_embed),
             std::ref(fifo_embed_end),
-            res_buf);
+            std::ref(stream_result));
 
     mwj_propose_findmin_t.join();
     mwj_propose_readmin_t.join();
@@ -2051,20 +2063,20 @@ void subgraphIsomorphism(
         ap_uint<512> htb_buf3[DDR_WIDTH],
         ap_uint<512> htb_buf4[DDR_WIDTH],
 
-        ap_uint<VERTEX_WIDTH_BIT> res_buf[RES_WIDTH])
+        hls::stream<T_NODE> &stream_result)
 {
 #pragma HLS INTERFACE m_axi port=htb_buf0 bundle=gmem0
 #pragma HLS INTERFACE m_axi port=htb_buf1 bundle=gmem1
 #pragma HLS INTERFACE m_axi port=htb_buf2 bundle=gmem2
 #pragma HLS INTERFACE m_axi port=htb_buf3 bundle=gmem3
 #pragma HLS INTERFACE m_axi port=htb_buf4 bundle=gmem4
-#pragma HLS INTERFACE m_axi port=res_buf bundle=gmem5
 #pragma HLS alias ports=htb_buf0,htb_buf1,htb_buf2,htb_buf3,htb_buf4 distance=0
 
 #pragma HLS INTERFACE mode=axis port=stream_src
 #pragma HLS INTERFACE mode=axis port=stream_dst
 #pragma HLS INTERFACE mode=axis port=stream_src_l
 #pragma HLS INTERFACE mode=axis port=stream_dst_l
+#pragma HLS INTERFACE mode=axis port=stream_result
 #pragma HLS INTERFACE s_axilite port=return
 
     QueryVertex qVertices0[MAX_QV], qVertices1[MAX_QV];
@@ -2106,7 +2118,7 @@ void subgraphIsomorphism(
             qVertices0,
             qVertices1,
             numQueryVert,
-            res_buf);
+            stream_result);
 
 #ifndef __SYNTHESIS__
     std::cout << "Max depth stream partial solutions: " << 

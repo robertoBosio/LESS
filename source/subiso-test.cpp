@@ -197,35 +197,23 @@ unsigned int subgraphIsomorphism_sw(){
 
 unsigned int countSol(
         int nQV,
-        ap_uint<VERTEX_WIDTH_BIT> res_buf[RES_WIDTH])
+        hls::stream<T_NODE> &stream_result)
 {
     unsigned int nEmbedd = 0;
 //    ap_uint<VERTEX_WIDTH_BIT> read;
 //    std::ofstream fres("data/resultkern.txt");
-    int counter = 0;
 
-//    read = res_buf[counter++];
-//    fres << read << "\t";
-//    while(!(read == 0 && res_buf[counter] == 0)){
-//    	read = res_buf[counter++];
-//    	fres << read << "\t";
-//    	if ((counter % nQV)==0) {
-//    		fres << std::endl;
-//    		nEmbedd++;
-//    	}
-//    }
-    int count_zeros = 0;
-    while(count_zeros < 2){
-    	count_zeros = 0;
+    T_NODE node;
+    node = stream_result.read();
+
+    while (!node.last){
     	for(int g = 0; g < nQV; g++){
-    		if (res_buf[counter++] == 0){
-    			count_zeros++;
-    		}
+//            fres << node.data << " " << std::endl;
+            node = stream_result.read();
     	}
-    	if (count_zeros < 2){
-    		nEmbedd++;
-    	}
-	}
+//        fres << std::endl;
+        nEmbedd++;
+    }
 //    fres.close();
     return nEmbedd;	
 }
@@ -239,7 +227,7 @@ int main()
     hls::stream<T_NODE> stream_out("result");
     hls::stream<T_LABEL> stream_src_l("src labels");
     hls::stream<T_LABEL> stream_dst_l("dst labels");
-    hls::stream<T_LABEL> stream_result("results");
+    hls::stream<T_NODE> stream_result("results");
 
     int nQV = 0;
 
@@ -248,11 +236,11 @@ int main()
         std::cout << "Allocation failed." << std::endl;
         return -1;
     }
-    ap_uint<VERTEX_WIDTH_BIT> *res_buf = (ap_uint<VERTEX_WIDTH_BIT>*)calloc(RES_WIDTH, sizeof(ap_uint<VERTEX_WIDTH_BIT>));
-    if (!res_buf){
-		std::cout << "Allocation failed." << std::endl;
-		return -1;
-	}
+//    ap_uint<VERTEX_WIDTH_BIT> *res_buf = (ap_uint<VERTEX_WIDTH_BIT>*)calloc(RES_WIDTH, sizeof(ap_uint<VERTEX_WIDTH_BIT>));
+//    if (!res_buf){
+//		std::cout << "Allocation failed." << std::endl;
+//		return -1;
+//	}
 
     stream_query(
             stream_src,
@@ -273,12 +261,12 @@ int main()
             stream_src_l,
             stream_dst_l,
             htb_buf,
-            res_buf);
+            stream_result);
 
 
     unsigned int res_actual = countSol(
             nQV,
-            res_buf);
+            stream_result);
 
     unsigned int res_expected = subgraphIsomorphism_sw();
 
@@ -286,6 +274,5 @@ int main()
         res_actual << std::endl;
 
     free(htb_buf);
-    free(res_buf);
     return (res_actual != res_expected);
 }
