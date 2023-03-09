@@ -7,8 +7,14 @@ void subisoWrapper(
 		hls::stream<T_LABEL> &stream_src_l,
 		hls::stream<T_LABEL> &stream_dst_l,
         ap_uint<512> htb_buf[DDR_WIDTH],
+        T_DDR res_buf[RES_WIDTH],
 
-		hls::stream<T_NODE> &stream_result)
+#ifdef COUNT_ONLY
+        long unsigned int &result
+#else
+        hls::stream<T_NODE> &result
+#endif
+        )
 {
 
     subgraphIsomorphism
@@ -21,6 +27,7 @@ void subisoWrapper(
              htb_buf,
              htb_buf,
              htb_buf,
-             stream_result);
+             res_buf,
+             result);
 }
 

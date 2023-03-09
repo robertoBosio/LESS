@@ -1,7 +1,7 @@
-#open_project -reset subgraphiso
-open_project subgraphiso
+open_project -reset subgraphiso
+#open_project subgraphiso
 
-add_files "source/myhls_stream.h"
+add_files "source/dynfifo_utils.hpp"
 add_files "source/Parameters.hpp"
 add_files "source/Trie.hpp"
 add_files "source/QueryVertex.hpp"
@@ -15,7 +15,7 @@ add_files "source/hash_lookup3.hpp"
 
 add_files -tb "source/subiso-test.cpp data" -cflags "-Wno-unknown-pragmas" -csimflags "-Wno-unknown-pragmas"
 
-set_top subisoWrap
+set_top subgraphIsomorphism
 
 open_solution "solution1" -flow_target vivado
 set_part {xczu3eg-sbva484-1-e}

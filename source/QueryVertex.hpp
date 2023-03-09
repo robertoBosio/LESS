@@ -3,7 +3,7 @@
 
 class QueryVertex {
     public:    
-        ap_uint<LABEL_WIDTH> label;            
+        //ap_uint<LABEL_WIDTH> label;            
         
         /* tables in which the vertex is indexed by other */
         ap_uint<8> tables_indexed[MAX_TABLES];

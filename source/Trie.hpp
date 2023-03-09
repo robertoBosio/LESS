@@ -10,7 +10,7 @@ struct AdjHT{
 };
 
 struct TableDescriptor{
-    
+
     /* True: src -> dst, False: dst <- src */
     bool dir;
     ap_uint<LABEL_WIDTH> src_label, dst_label;

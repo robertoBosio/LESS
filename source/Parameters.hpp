@@ -1,6 +1,5 @@
-#include <ap_axi_sdata.h>
 
-/* Definitions regarding data graph */
+/* ------ Definitions regarding data graph ------ */
 #define MAX_DATA_VERTICES	(1UL << VERTEX_WIDTH)
 #define MAX_DATA_EDGES		(1UL << 12)
 #define MAX_OUT_DEGREE      (1UL << COUNTER_WIDTH)
@@ -35,9 +34,18 @@
 #define MAX_COLLISIONS      (1UL << 5)
 
 #define STREAM_DEPTH        10
-#define STREAM_DEPTH_RES    150000
-#define DDR_WIDTH           10000
-#define RES_WIDTH			60000
+//#define STREAM_DEPTH_RES    150000
 
+#define S_DEPTH             32
+#define BURST_S             32
+#define DDR_WORD            512
+#define DDR_WIDTH           (40000000 / (DDR_WORD / 8))
+#define RES_WIDTH			(BURST_S * (1UL << 14))
+
+#define COUNT_ONLY
+#define UNDIRECTED
+
+#include <ap_axi_sdata.h>
 typedef ap_axiu<VERTEX_WIDTH_BIT, 0, 0, 0> T_NODE;
 typedef ap_axiu<LABEL_WIDTH, 0, 0, 0> T_LABEL;
+typedef ap_uint<DDR_WORD> T_DDR;

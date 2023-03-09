@@ -2,11 +2,7 @@
 #define SUBISOWRAP_HPP
 
 #include "Parameters.hpp"
-#ifndef __SYNTHESIS__
-#include "myhls_stream.h"
-#else
 #include <hls_stream.h>
-#endif
 #include <ap_int.h>
 
 void subisoWrapper(
@@ -15,7 +11,13 @@ void subisoWrapper(
 		hls::stream<T_LABEL> &stream_src_l,
 		hls::stream<T_LABEL> &stream_dst_l,
         ap_uint<512> htb_buf[DDR_WIDTH],
+        T_DDR res_buf[RES_WIDTH],
 
-		hls::stream<T_NODE> &stream_result);
+#ifdef COUNT_ONLY
+        long unsigned int &result
+#else
+        hls::stream<T_NODE> &result
+#endif
+        );
 
 #endif
