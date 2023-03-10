@@ -1,6 +1,5 @@
 #ifndef __SYNTHESIS__
 #define HLS_STREAM_THREAD_SAFE
-#define STATS
 #include <cassert>
 #include <fstream>
 #include <thread>
@@ -38,8 +37,21 @@
 #define DDR_WORDS   RES_WIDTH
 #define DDR_W       DDR_WORD
 
-#ifdef STATS
-/* statistic purpose */
+#ifndef __SYNTHESIS__
+#define DEBUG_STATS
+#endif /*__SYNTHESIS__*/
+
+#ifdef DEBUG_STATS
+/* statistic purposes */
+
+    unsigned long debug_findmin_reads {0};
+    unsigned long debug_readmin_reads {0};
+    unsigned long debug_intersect_reads {0};
+    unsigned long debug_hashtovid_reads {0};
+    unsigned long debug_verify_reads {0};
+    
+    unsigned long debug_indexed_tables {0};
+    unsigned long debug_indexing_tables {0};
 #endif
 
 /* Builds the table descriptors based on the information
@@ -632,10 +644,10 @@ STORE_EDGES_POINTER_LOOP:
 /* f.close(); */
 }
 
-template <uint8_t W_1,
-        uint8_t W_2,
-        uint8_t SHF,
-        uint8_t T>
+template <size_t W_1,
+        size_t W_2,
+        size_t SHF,
+        size_t T>
 ap_uint<(1UL << T)> read_table(
         ap_uint<W_1> index1,
         ap_uint<W_2> index2,
@@ -644,7 +656,8 @@ ap_uint<(1UL << T)> read_table(
 {
     //static ap_uint<DDR_W> ram_row;
     ap_uint<DDR_W> ram_row;
-    /* Impossible that the first word read is the all 1s
+    
+    /* It is impossible that the first word read is the all 1s
      * since before edges are read offsets which are on 
      * the lower address space of the memory */
     //static ap_uint<32> prev_addr_row = ~((ap_uint<32>)0);
@@ -760,6 +773,9 @@ PROPOSE_TBINDEXED_LOOP:
                         hTables[tableIndex].start_offset);
                 end_off = end_off.range((1UL << C_W) - 2, 0);
 
+#ifdef DEBUG_STATS
+                debug_findmin_reads += 2;
+#endif
                 // std::cout << "\tEvaluating " << tableIndex << " : size " <<
                 //    end_off << " - " << start_off << std::endl; 
                 if ((end_off - start_off) < minSize) {
@@ -838,7 +854,13 @@ PROPOSE_READ_MIN_INDEXED_LOOP:
                         stream_min_out.write(vertexHash);
                         stream_end_out.write(false);
                     }
+#ifdef DEBUG_STATS
+                    debug_readmin_reads++;
+#endif
                 }
+#ifdef DEBUG_STATS
+                debug_indexed_tables++;
+#endif
             } else {
                 ap_uint<(1UL << C_W)> start_off = 0;
                 ap_uint<(1UL << C_W)> end_off;
@@ -859,7 +881,13 @@ PROPOSE_READ_MIN_INDEXING_LOOP:
                         stream_end_out.write(false);
                         start_off = end_off;
                     }
+#ifdef DEBUG_STATS
+                    debug_readmin_reads++;
+#endif
                 }
+#ifdef DEBUG_STATS
+                debug_indexing_tables++;
+#endif
             }
             stream_end_out.write(true);
         }
@@ -936,6 +964,9 @@ INTERSECT_TBINDEXED_LOOP:
                             htb_buf,
                             hTables[tableIndex].start_offset);
                     inter = offset.test((1UL << C_W) - 1);
+#ifdef DEBUG_STATS
+                    debug_intersect_reads++;
+#endif
                 }
 
 INTERSECT_TBINDEXING_LOOP:
@@ -953,6 +984,9 @@ INTERSECT_TBINDEXING_LOOP:
                                 htb_buf,
                                 hTables[tableIndex].start_offset);
                         start_off = start_off.range((1UL << C_W) - 2, 0);
+#ifdef DEBUG_STATS
+                    debug_intersect_reads++;
+#endif
                     } else {
                         start_off = 0;
                     }
@@ -964,6 +998,10 @@ INTERSECT_TBINDEXING_LOOP:
                             hTables[tableIndex].start_offset);
                     end_off = end_off.range((1UL << C_W) - 2, 0);
                     inter = (end_off > start_off);
+
+#ifdef DEBUG_STATS
+                    debug_intersect_reads++;
+#endif
                 }
 
                 if (inter){
@@ -1062,6 +1100,10 @@ EXTRACT_HASHTOVID_LOOP:
                             htb_buf,
                             hTables[minData.range(7,0)].start_offset);
                     start_off = start_off.range((1UL << C_W) - 2, 0);
+
+#ifdef DEBUG_STATS
+                    debug_hashtovid_reads++;
+#endif
                 }
 
                 if (!minData.test(8)){
@@ -1074,6 +1116,10 @@ EXTRACT_HASHTOVID_LOOP:
                         htb_buf,
                         hTables[minData.range(7,0)].start_offset);
                 end_off = end_off.range((1UL << C_W) - 2, 0);
+
+#ifdef DEBUG_STATS
+                debug_hashtovid_reads++;
+#endif
 
                 /* If hash bit already present do no stream anything */
                 if (minData.test(8)){
@@ -1110,6 +1156,10 @@ EXTRACT_HASHTOVID_READ_LOOP:
 
                     stream_inter_out.write(vertex);
                     stream_set_end_out.write(false);            
+
+#ifdef DEBUG_STATS
+                    debug_hashtovid_reads++;
+#endif
                 }
 
                 stream_set_end_out.write(true);
@@ -1305,6 +1355,10 @@ VERIFY_CHECK_EDGE_LOOP:
                                 htb_buf,
                                 hTables[tableIndex].start_offset);
                         start_off = start_off.range((1UL << C_W) - 2, 0);
+
+#ifdef DEBUG_STATS
+                        debug_verify_reads++;
+#endif
                     }
 
                     end_off = read_table<H_W_1, H_W_2, H_W_2, C_W>(
@@ -1314,6 +1368,9 @@ VERIFY_CHECK_EDGE_LOOP:
                             hTables[tableIndex].start_offset);
                     end_off = end_off.range((1UL << C_W) - 2, 0);
 
+#ifdef DEBUG_STATS
+                    debug_verify_reads++;
+#endif
 VERIFY_READ_MEMORY_LOOP:
                     for (; start_off < end_off && checked == false; start_off++){
                         ap_uint<2 * V_ID_W> edge = read_table<32, 1, 0, E_W>(
@@ -1329,6 +1386,9 @@ VERIFY_READ_MEMORY_LOOP:
                                 vertexIndexed == vToVerify){
                             checked = true;
                         }
+#ifdef DEBUG_STATS
+                        debug_verify_reads++;
+#endif
                     }
                 }
 
@@ -1781,6 +1841,7 @@ void subgraphIsomorphism(
 #else
         hls::stream<T_NODE> &result
 #endif
+
         )
 {
 
@@ -1845,4 +1906,29 @@ void subgraphIsomorphism(
             qVertices1,
             numQueryVert,
             result);
+
+#ifdef DEBUG_STATS
+    unsigned long debug_total_reads = debug_findmin_reads +
+        debug_readmin_reads + debug_intersect_reads +
+        debug_hashtovid_reads + debug_verify_reads;
+
+    std::cout << "DEBUG STATISTICS {" << std::endl;
+    
+    std::cout << "\tfindmin reads:     " << debug_findmin_reads << "\t" <<
+        debug_findmin_reads * 100 / debug_total_reads << "%" << std::endl;
+    std::cout << "\treadmin reads:     " << debug_readmin_reads << "\t" <<
+        debug_readmin_reads * 100 / debug_total_reads << "%"<< std::endl;
+    std::cout << "\tintersect reads:   " << debug_intersect_reads << "\t" <<
+        debug_intersect_reads * 100 / debug_total_reads << "%"<< std::endl;
+    std::cout << "\thash_to_vid reads: " << debug_hashtovid_reads << "\t" << 
+        debug_hashtovid_reads * 100 / debug_total_reads << "%"<< std::endl;
+    std::cout << "\tverify reads:      " << debug_verify_reads << "\t" << 
+        debug_verify_reads * 100 / debug_total_reads << "%"<< std::endl;
+    std::cout << "\tTOTAL:             " <<  debug_total_reads << "\t100%\n" << 
+        std::endl;
+    std::cout << "\tindexed tables:    " << debug_indexed_tables << std::endl;
+    std::cout << "\tindexing tables:   " << debug_indexing_tables << std::endl;
+    
+    std::cout << "}" << std::endl;
+#endif
 }

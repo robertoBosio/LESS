@@ -215,9 +215,14 @@ int main()
     hls::stream<T_LABEL> stream_dst_l("dst labels");
 
 #ifdef COUNT_ONLY
-        long unsigned int result;
+    long unsigned int result;
 #else
     hls::stream<T_NODE> result("results");
+#endif
+
+
+#ifdef DEBUG_INTERFACE
+    unsigned int debug_endpreprocess_s {0};
 #endif
 
     unsigned int nQV = 0;
@@ -263,6 +268,10 @@ int main()
                 stream_dst_l,
                 htb_buf,
                 res_buf,
+
+#ifdef DEBUG_INTERFACE
+                debug_endpreprocess_s,
+#endif
                 result);
        
 #ifndef COUNT_ONLY 
@@ -276,17 +285,6 @@ int main()
         free(htb_buf);
     }
     unsigned int res_expected = subgraphIsomorphism_sw();
-
-    for (int p = 0; p < 4; p++){
-        std::cout << "[";
-        for (int g = 0; g < 32; g++){
-            std::cout << res_buf[p].range(((g + 1) * 16) - 1, g * 16) << " ";
-        }
-        std::cout << "]" << std::endl;
-    }
-    std::cout << "Expected: " << res_expected << ", Actual: " <<
-        res_actual << std::endl;
-
     free(res_buf);
     return (res_actual != res_expected);
 }

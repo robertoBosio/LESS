@@ -11,7 +11,7 @@
 #define MAX_QUERY_VERTICES	(1UL << 4)
 #define MAX_TABLES 		    10
 
-#define VERTEX_WIDTH        4
+#define VERTEX_WIDTH        5   /* 4 bytes */
 #define VERTEX_WIDTH_BIT    (1UL << VERTEX_WIDTH)
 #define EDGE_WIDTH          (VERTEX_WIDTH + 1)
 #define LABEL_WIDTH         8
@@ -24,12 +24,12 @@
 
 /* bitwidth of the hash to index source vertices, 1st level.
  * Must be greater or equal to HASH_WIDTH_SECOND. */
-#define HASH_WIDTH_FIRST    9
+#define HASH_WIDTH_FIRST    10
 
 /* bitwidth of the hash to index a specific edge, 2nd level.
  * Must be greater or equal to 5 due to the filter in
  * hashtovid function. */
-#define HASH_WIDTH_SECOND   5
+#define HASH_WIDTH_SECOND   6
 
 #define MAX_COLLISIONS      (1UL << 5)
 
@@ -44,6 +44,7 @@
 
 #define COUNT_ONLY
 #define UNDIRECTED
+//#define DEBUG_INTERFACE
 
 #include <ap_axi_sdata.h>
 typedef ap_axiu<VERTEX_WIDTH_BIT, 0, 0, 0> T_NODE;

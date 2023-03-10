@@ -13,6 +13,10 @@ void subisoWrapper(
         ap_uint<512> htb_buf[DDR_WIDTH],
         T_DDR res_buf[RES_WIDTH],
 
+#ifdef DEBUG_INTERFACE
+        unsigned int &debug_endpreprocess_s,
+#endif
+
 #ifdef COUNT_ONLY
         long unsigned int &result
 #else
