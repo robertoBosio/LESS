@@ -1,29 +1,33 @@
+#define HLS_STREAM_THREAD_SAFE
 #include <fstream>
 #include <iostream>
 #include <cstdio>
 #include <unordered_map>
-#include <hls_stream.h>
 #include <ap_int.h>
 
 #include "subisoWrap.hpp"
 #include "Parameters.hpp"
 
-void stream_query(
+#include <hls_stream.h>
+/* #include "hls_stream_sizeup.h" */
+int stream_query(
+        std::string filename,
 		hls::stream<T_NODE> &stream_src,
 		hls::stream<T_NODE> &stream_dst,
 		hls::stream<T_LABEL> &stream_src_l,
 		hls::stream<T_LABEL> &stream_dst_l,
         unsigned int &numQueryVertices)
 {
-
     /* Query data structure */
     unsigned int numQueryEdges = 0;       
 
-    /* Query files */
-    std::ifstream fQueryOrd("data/queryOrder.txt");
-    std::ifstream fQuery("data/querygraph.csv");
-    std::string fLine{};
+    /* Query file */
+    std::ifstream fQuery(filename);
+    
+    if (!fQuery.is_open())
+        return -1;
 
+    std::string fLine{};
     std::unordered_map<unsigned long, unsigned long> vToLabel;
 
     /* Store labels */
@@ -39,9 +43,7 @@ void stream_query(
     /* Stream matching order */
     for(int count = 0; count < numQueryVertices; count++){ 
         unsigned long node_t;   
-        getline (fQueryOrd, fLine);
-        sscanf(fLine.c_str(), "%lu", &node_t);
-        ap_uint<VERTEX_WIDTH_BIT> node = node_t;
+        ap_uint<VERTEX_WIDTH_BIT> node = count;
 
 		T_NODE nodesrcif;
         nodesrcif.data = node;
@@ -76,11 +78,11 @@ void stream_query(
     }
 
     fQuery.close();
-    fQueryOrd.close();
-    //return numQueryVertices;
+    return 0;
 }
 
-void stream_datagraph(
+int stream_datagraph(
+        std::string filename,
 		hls::stream<T_NODE> &stream_src,
 		hls::stream<T_NODE> &stream_dst,
 		hls::stream<T_LABEL> &stream_src_l,
@@ -92,8 +94,11 @@ void stream_datagraph(
     unsigned long numDataEdges = 0;       
 
     /* Data graph files */
-    std::ifstream fData("data/datagraph.csv");
+    std::ifstream fData(filename);
     std::string fLine{};
+
+    if (!fData.is_open())
+        return -1;
 
     std::unordered_map<unsigned long, unsigned long> vToLabel;
 
@@ -170,6 +175,7 @@ void stream_datagraph(
     }
 
     fData.close();
+    return 0;
 }
 
 unsigned int subgraphIsomorphism_sw(){
@@ -227,6 +233,8 @@ int main()
 
     unsigned int nQV = 0;
     unsigned int res_actual;
+    unsigned int res_expected;
+    bool flag = true;
 
     T_DDR *res_buf = (T_DDR*)malloc(RES_WIDTH * sizeof(T_DDR));
     
@@ -239,28 +247,46 @@ int main()
     std::cout << "Allocated " << 
         ((unsigned long)(DDR_WIDTH + RES_WIDTH) * DDR_WORD / 8 ) 
         << " bytes." << std::endl;
-   
-    for (int g = 0; g < 1; g++){ 
+ 
+    std::ifstream fTest("data/test.txt");
+    std::string fLine{};
+    char datagraph_file[100], querygraph_file[100];
+    std::getline(fTest, fLine);
+    
+    while (!fTest.eof()){
+        if (fLine.c_str()[0] == '#'){
+            std::getline(fTest, fLine);
+            continue;
+        }
         
+        sscanf(fLine.c_str(), "%s %s %u", datagraph_file, querygraph_file, &res_expected);	
         ap_uint<DDR_WORD> *htb_buf = (ap_uint<DDR_WORD>*)calloc(DDR_WIDTH, sizeof(ap_uint<DDR_WORD>));
         if (!htb_buf){
             std::cout << "Allocation failed." << std::endl;
             return -1;
         }
 
-        stream_query(
+        int fl = stream_query(
+                std::string(querygraph_file),
                 stream_src,
                 stream_dst,
                 stream_src_l,
                 stream_dst_l,
                 nQV);
 
-        stream_datagraph(
+        if (fl != 0)
+            return -1;
+
+        fl = stream_datagraph(
+                std::string(datagraph_file),
                 stream_src,
                 stream_dst,
                 stream_src_l,
                 stream_dst_l);
 
+        if (fl != 0)
+            return -1;
+        
         subisoWrapper(
                 stream_src,
                 stream_dst,
@@ -283,8 +309,11 @@ int main()
 #endif
 
         free(htb_buf);
+        std::cout << "Expected: " << res_expected << " actual: " << res_actual << std::endl;
+        flag &= (res_actual == res_expected);
+        std::getline(fTest, fLine);
     }
-    unsigned int res_expected = subgraphIsomorphism_sw();
+
     free(res_buf);
-    return (res_actual != res_expected);
+    return !flag;
 }

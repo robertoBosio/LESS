@@ -96,11 +96,16 @@ void MMU_fast(
     bool flagbuff_w {false};
     State_fast state {bypass};
 
+/* #ifndef __SYNTHESIS__ */
+/* std::this_thread::sleep_for(std::chrono::milliseconds(100)); */
+/* #endif */
+
     while(true) {
 #pragma HLS pipeline II=1 
         switch (state) {
-
+            
             case bypass: 
+
                 if (in_stream.read_nb(buff_w)){
                     if (!out_stream.write_nb(buff_w)){
                         /* Out stream full and input stream not empty */
@@ -109,6 +114,7 @@ void MMU_fast(
                         ddr_data = 1;
                     }
                 }
+
                 break;
 
             case stall:

@@ -1,9 +1,11 @@
 #ifndef SUBISOWRAP_HPP
 #define SUBISOWRAP_HPP
+#define HLS_STREAM_THREAD_SAFE
 
 #include "Parameters.hpp"
-#include <hls_stream.h>
 #include <ap_int.h>
+#include <hls_stream.h>
+/* #include "hls_stream_sizeup.h" */
 
 void subisoWrapper(
 		hls::stream<T_NODE> &stream_src,
@@ -14,7 +16,7 @@ void subisoWrapper(
         T_DDR res_buf[RES_WIDTH],
 
 #ifdef DEBUG_INTERFACE
-        unsigned int &debug_endpreprocess_s,
+        unsigned int &debif_endpreprocess,
 #endif
 
 #ifdef COUNT_ONLY

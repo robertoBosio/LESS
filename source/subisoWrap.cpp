@@ -10,7 +10,7 @@ void subisoWrapper(
         T_DDR res_buf[RES_WIDTH],
 
 #ifdef DEBUG_INTERFACE
-        unsigned int &debug_endpreprocess_s,
+        unsigned int &debif_endpreprocess,
 #endif
 
 #ifdef COUNT_ONLY
@@ -34,7 +34,7 @@ void subisoWrapper(
              htb_buf,
              res_buf,
 #ifdef DEBUG_INTERFACE
-             debug_endpreprocess_s,
+             debif_endpreprocess,
 #endif
              result);
 }

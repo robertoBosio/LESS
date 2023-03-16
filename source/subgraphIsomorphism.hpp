@@ -1,13 +1,14 @@
-#ifndef __SYNTHESIS__
 #define HLS_STREAM_THREAD_SAFE
+#ifndef __SYNTHESIS__
 #include <cassert>
 #include <fstream>
 #include <thread>
 #include <unordered_map>
 #endif
 
-#include <ap_int.h>
+/* #include "hls_stream_sizeup.h" */
 #include <hls_stream.h>
+#include <ap_int.h>
 #include <ap_axi_sdata.h>
 #include "hls_task.h"
 #include "hls_print.h"
@@ -22,7 +23,7 @@
 #define HTB_SIZE    (1UL << (H_W_1 + H_W_2 - (9 - C_W)))
 #define CNT_ROW     (1UL << (9 - C_W))
 #define EDGE_ROW    (1UL << (9 - E_W))
-#define STOP_S      9
+#define STOP_S      7
 
 #define V_ID_W      VERTEX_WIDTH_BIT
 #define V_L_W       LABEL_WIDTH
@@ -52,6 +53,12 @@
     
     unsigned long debug_indexed_tables {0};
     unsigned long debug_indexing_tables {0};
+
+    unsigned long debug_intersection_correct {0};
+    unsigned long debug_intersection_alias {0};
+    
+    unsigned long debug_embeddings {0};
+    unsigned long debug_max_collisions {0};
 #endif
 
 /* Builds the table descriptors based on the information
@@ -204,6 +211,10 @@ INCREASE_COUNTER_DDR_LOOP:
         ram_row = htb_buf[addr_outrow];
         counter = ram_row.range(((addr_inrow + 1) << C_W)-1, addr_inrow << C_W); 
         counter += 1;
+#ifdef DEBUG_STATS
+        if (counter > debug_max_collisions) 
+            debug_max_collisions = counter;
+#endif /* DEBUG_STATS */
         ram_row.range(((addr_inrow + 1) << C_W)-1, addr_inrow << C_W) = counter;
         htb_buf[addr_outrow] = ram_row;
  
@@ -523,6 +534,11 @@ void writeEdges(
 
 /* Reads two times the data graph and fills the data stuctures */
 void fillTables(
+
+#ifdef DEBUG_INTERFACE
+        unsigned int &debif_endpreprocess,
+#endif /* DEBUG_INTERFACE */
+        
         hls::stream<T_NODE> &stream_src,
         hls::stream<T_NODE> &stream_dst,
         hls::stream<T_LABEL> &stream_src_l,
@@ -597,6 +613,10 @@ STORE_EDGES_POINTER_LOOP:
             hTables0,
             htb_buf,
             numTables);
+
+#ifdef DEBUG_INTERFACE
+    debif_endpreprocess = hTables0[0].n_edges;
+#endif /* DEBUG_INTERFACE */
 
 #ifndef __SYNTHESIS__
     end_addr = start_addr;
@@ -716,7 +736,7 @@ void mwj_propose_findmin(
             tableIndex = 0;
             minSize = (1UL << 32) - 1;
            
-            //std::cout << "Current solution (" << curQV << "): "; 
+/* std::cout << "Current solution (" << curQV << "): "; */
 PROPOSE_COPYING_EMBEDDING_LOOP:
             for (int g = 0; g < curQV; g++){
                 curEmb[g] = stream_embed_in.read();
@@ -1395,6 +1415,11 @@ VERIFY_READ_MEMORY_LOOP:
                 if (checked){
                     stream_checked_out.write(vToVerify);
                     stream_checked_end_out.write(false);
+#ifdef DEBUG_STATS
+                    debug_intersection_correct++;
+                } else { 
+                    debug_intersection_alias++; 
+#endif
                 }
 
                 last = stream_end_inter_in.read();
@@ -1477,7 +1502,9 @@ VERIFY_WRITE_PARTIAL_LOOP:
                     stream_partial_out.write(vToVerify);
                     nPartSol++;
                 }
-
+#ifdef DEBUG_STATS
+                debug_embeddings++;
+#endif
                 last = stream_end_inter_in.read();
             }
             nPartSol--;
@@ -1591,8 +1618,10 @@ void multiwayJoinWrap(
     hls::stream<bool, MAX_QV> stream_embed2_end;
 
     hls::stream<ap_uint<V_ID_W>, 32> in_stream("in stream");
-    hls::stream<ap_uint<V_ID_W>, 32> out_stream("out stream");
 
+#ifdef __SYNTHESIS__
+    
+    hls::stream<ap_uint<V_ID_W>, 32> out_stream("out stream");
 
     dynfifo_init<
         ap_uint<V_ID_W>,    /* fifo data type */
@@ -1607,8 +1636,6 @@ void multiwayJoinWrap(
              streams_stop[7],
              streams_stop[8],
              res_buf);
-
-#ifdef __SYNTHESIS__
 
     mwj_propose_findmin(
             out_stream,
@@ -1711,7 +1738,7 @@ void multiwayJoinWrap(
 
     std::thread mwj_propose_findmin_t(
             mwj_propose_findmin,
-            std::ref(out_stream),
+            std::ref(in_stream),
             hTables0,
             qVertices0,
             htb_buf0,
@@ -1822,6 +1849,7 @@ void multiwayJoinWrap(
     mwj_verify_add_t.join();
 
 #endif
+
 }
 
 void subgraphIsomorphism(
@@ -1836,11 +1864,15 @@ void subgraphIsomorphism(
         ap_uint<DDR_W> htb_buf4[DDR_WIDTH],
         T_DDR res_buf[RES_WIDTH],
 
+#ifdef DEBUG_INTERFACE
+        unsigned int &debif_endpreprocess,
+#endif /* DEBUG_INTERFACE */
+
 #ifdef COUNT_ONLY
         long unsigned int &result
 #else
         hls::stream<T_NODE> &result
-#endif
+#endif /* COUNT_ONLY */
 
         )
 {
@@ -1859,10 +1891,33 @@ void subgraphIsomorphism(
 #pragma HLS INTERFACE mode=axis port=stream_dst_l
 #pragma HLS INTERFACE mode=s_axilite port=return
 
+#ifdef DEBUG_INTERFACE
+#pragma HLS INTERFACE mode=s_axilite port=debif_endpreprocess
+#endif /* DEBUG_INTERFACE */
+
 #ifdef COUNT_ONLY
 #pragma HLS INTERFACE mode=s_axilite port=result
 #else
 #pragma HLS INTERFACE mode=axis port=result
+#endif /* COUNT_ONLY */
+
+#ifdef DEBUG_STATS
+/* statistic purposes */
+
+    debug_findmin_reads = 0;
+    debug_readmin_reads = 0;
+    debug_intersect_reads = 0;
+    debug_hashtovid_reads = 0;
+    debug_verify_reads = 0;
+    
+    debug_indexed_tables = 0;
+    debug_indexing_tables = 0;
+
+    debug_intersection_correct = 0;
+    debug_intersection_alias = 0;
+    
+    debug_embeddings = 0;
+    debug_max_collisions = 0;
 #endif
 
     QueryVertex qVertices0[MAX_QV], qVertices1[MAX_QV];
@@ -1883,6 +1938,9 @@ void subgraphIsomorphism(
             numQueryVert);
 
     fillTables(
+#ifdef DEBUG_INTERFACE
+            debif_endpreprocess,
+#endif /* DEBUG_INTERFACE */
             stream_src,
             stream_dst,
             stream_src_l,
@@ -1892,6 +1950,7 @@ void subgraphIsomorphism(
             htb_buf0,
             tDescriptors,
             numTables);
+
 
     multiwayJoinWrap(
             htb_buf0,
@@ -1908,27 +1967,45 @@ void subgraphIsomorphism(
             result);
 
 #ifdef DEBUG_STATS
+    std::ofstream of("../../../../stats.txt", std::ofstream::app);
+    
     unsigned long debug_total_reads = debug_findmin_reads +
         debug_readmin_reads + debug_intersect_reads +
         debug_hashtovid_reads + debug_verify_reads;
 
-    std::cout << "DEBUG STATISTICS {" << std::endl;
+    unsigned long debug_verify = debug_intersection_alias + 
+        debug_intersection_correct;
+
+    unsigned int hw1, hw2, cnt;
+    hw1 = H_W_1; 
+    hw2 = H_W_2; 
+    cnt = C_W;
+
+    of << "DEBUG STATISTICS HW1: " << hw1 << " HW2: " << hw2
+        << " CNT: " << cnt << std::endl << std::endl;
     
-    std::cout << "\tfindmin reads:     " << debug_findmin_reads << "\t" <<
+    of << "\tfindmin reads:     " << debug_findmin_reads << "\t" <<
         debug_findmin_reads * 100 / debug_total_reads << "%" << std::endl;
-    std::cout << "\treadmin reads:     " << debug_readmin_reads << "\t" <<
+    of << "\treadmin reads:     " << debug_readmin_reads << "\t" <<
         debug_readmin_reads * 100 / debug_total_reads << "%"<< std::endl;
-    std::cout << "\tintersect reads:   " << debug_intersect_reads << "\t" <<
+    of << "\tintersect reads:   " << debug_intersect_reads << "\t" <<
         debug_intersect_reads * 100 / debug_total_reads << "%"<< std::endl;
-    std::cout << "\thash_to_vid reads: " << debug_hashtovid_reads << "\t" << 
+    of << "\thash_to_vid reads: " << debug_hashtovid_reads << "\t" << 
         debug_hashtovid_reads * 100 / debug_total_reads << "%"<< std::endl;
-    std::cout << "\tverify reads:      " << debug_verify_reads << "\t" << 
+    of << "\tverify reads:      " << debug_verify_reads << "\t" << 
         debug_verify_reads * 100 / debug_total_reads << "%"<< std::endl;
-    std::cout << "\tTOTAL:             " <<  debug_total_reads << "\t100%\n" << 
+    of << "\tTOTAL:             " <<  debug_total_reads << "\t100%\n" << 
         std::endl;
-    std::cout << "\tindexed tables:    " << debug_indexed_tables << std::endl;
-    std::cout << "\tindexing tables:   " << debug_indexing_tables << std::endl;
-    
-    std::cout << "}" << std::endl;
+    of << "\tread per embedding: " << debug_total_reads / debug_intersection_correct << std::endl;
+    of << "\tindexed tables:    " << debug_indexed_tables << std::endl;
+    of << "\tindexing tables:   " << debug_indexing_tables << std::endl;
+    of << "\n\tintersection aliases:   " << debug_intersection_alias << "\t" <<
+       debug_intersection_alias * 100 / debug_verify << "%" << std::endl;
+    of << "\tintersection correct:   " << debug_intersection_correct << "\t" <<
+       debug_intersection_correct * 100 / debug_verify << "%" << std::endl;
+    of << "\tmax collisions:   " << debug_max_collisions << std::endl;
+    of << std::endl; 
+    of.close();
+
 #endif
 }

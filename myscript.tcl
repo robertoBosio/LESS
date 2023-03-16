@@ -13,7 +13,7 @@ add_files "source/types.hpp"
 add_files "source/utils.hpp"
 add_files "source/hash_lookup3.hpp"
 
-add_files -tb "source/subiso-test.cpp data" -cflags "-Wno-unknown-pragmas" -csimflags "-Wno-unknown-pragmas"
+add_files -tb "source/subiso-test.cpp data dataset" -cflags "-Wno-unknown-pragmas" -csimflags "-Wno-unknown-pragmas"
 
 set_top subgraphIsomorphism
 
