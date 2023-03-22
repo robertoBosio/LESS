@@ -1,9 +1,10 @@
-open_project -reset subgraphiso
-#open_project subgraphiso
+#open_project -reset subgraphiso
+open_project subgraphiso
 
 add_files "source/dynfifo_utils.hpp"
 add_files "source/Parameters.hpp"
 add_files "source/Trie.hpp"
+add_files "source/debug.hpp"
 add_files "source/QueryVertex.hpp"
 add_files "source/subgraphIsomorphism.hpp"
 add_files "source/subisoWrap.hpp"

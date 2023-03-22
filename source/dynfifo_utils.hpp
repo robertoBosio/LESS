@@ -216,6 +216,8 @@ void MMU_slow(
     enum State_slow { bypass, stall, burst_read, burst_write, stall_ddr };
     unsigned int mem_tail {0};
     unsigned int mem_head {0};
+    unsigned long max_space {0};
+    unsigned long space_used {0};
     State_slow state {bypass};
 
     while(true) {
@@ -248,6 +250,9 @@ void MMU_slow(
                     mem[mem_head + g] = in_stream.read();
                 }
                 mem_head = (mem_head + BURST_SIZE) % DDR_WORDS;
+                space_used += BURST_SIZE;
+                if (space_used > max_space)
+                    max_space = space_used;
                 state = stall_ddr;
                 break;
 
@@ -257,6 +262,7 @@ void MMU_slow(
                     out_stream.write(mem[mem_tail + g]);
                 }
                 mem_tail = (mem_tail + BURST_SIZE) % DDR_WORDS;
+                space_used -= BURST_SIZE;
                 state = (mem_head == mem_tail)? bypass: stall_ddr;
                 break;
 
@@ -275,6 +281,8 @@ void MMU_slow(
             break;
         }
     }
+
+    mem[0] = (DDR_WORD_T)max_space;
 }
 
 /**

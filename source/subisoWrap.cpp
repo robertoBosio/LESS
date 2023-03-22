@@ -6,7 +6,8 @@ void subisoWrapper(
 		hls::stream<T_NODE> &stream_dst,
 		hls::stream<T_LABEL> &stream_src_l,
 		hls::stream<T_LABEL> &stream_dst_l,
-        ap_uint<512> htb_buf[DDR_WIDTH],
+        T_DDR htb_buf[DDR_WIDTH],
+        /* hls::burst_maxi<T_DDR> htb_buf1, */
         T_DDR res_buf[RES_WIDTH],
 
 #ifdef DEBUG_INTERFACE
@@ -31,7 +32,7 @@ void subisoWrapper(
              htb_buf,
              htb_buf,
              htb_buf,
-             htb_buf,
+             /* htb_buf1, */
              res_buf,
 #ifdef DEBUG_INTERFACE
              debif_endpreprocess,

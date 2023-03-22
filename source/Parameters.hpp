@@ -24,12 +24,12 @@
 
 /* bitwidth of the hash to index source vertices, 1st level.
  * Must be greater or equal to HASH_WIDTH_SECOND. */
-#define HASH_WIDTH_FIRST    11
+#define HASH_WIDTH_FIRST    9
 
 /* bitwidth of the hash to index a specific edge, 2nd level.
  * Must be greater or equal to 5 due to the filter in
  * hashtovid function. */
-#define HASH_WIDTH_SECOND   7
+#define HASH_WIDTH_SECOND   6
 
 #define MAX_COLLISIONS      (1UL << 5)
 
@@ -44,6 +44,7 @@
 #define COUNT_ONLY
 #define UNDIRECTED
 #define DEBUG_INTERFACE
+#define INTERSECT_INDEXING_LOOP 0
 
 #include <ap_axi_sdata.h>
 typedef ap_axiu<VERTEX_WIDTH_BIT, 0, 0, 0> T_NODE;

@@ -4,6 +4,7 @@
 #include <cstdio>
 #include <unordered_map>
 #include <ap_int.h>
+#include "hls_burst_maxi.h"
 
 #include "subisoWrap.hpp"
 #include "Parameters.hpp"
@@ -260,7 +261,7 @@ int main()
         }
         
         sscanf(fLine.c_str(), "%s %s %u", datagraph_file, querygraph_file, &res_expected);	
-        ap_uint<DDR_WORD> *htb_buf = (ap_uint<DDR_WORD>*)calloc(DDR_WIDTH, sizeof(ap_uint<DDR_WORD>));
+        T_DDR *htb_buf = (T_DDR*)calloc(DDR_WIDTH, sizeof(T_DDR));
         if (!htb_buf){
             std::cout << "Allocation failed." << std::endl;
             return -1;
@@ -293,6 +294,7 @@ int main()
                 stream_src_l,
                 stream_dst_l,
                 htb_buf,
+/* hls::burst_maxi<T_DDR>(htb_buf), */
                 res_buf,
 
 #ifdef DEBUG_INTERFACE

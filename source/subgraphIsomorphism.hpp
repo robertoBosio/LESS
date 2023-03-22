@@ -18,6 +18,7 @@
 #include "Trie.hpp"
 #include "hash_lookup3.hpp"
 #include "dynfifo_utils.hpp"
+#include "hls_burst_maxi.h"
 //#include "ap_utils.h"
 
 #define HTB_SIZE    (1UL << (H_W_1 + H_W_2 - (9 - C_W)))
@@ -40,26 +41,9 @@
 
 #ifndef __SYNTHESIS__
 #define DEBUG_STATS
+#include "debug.hpp"
 #endif /*__SYNTHESIS__*/
 
-#ifdef DEBUG_STATS
-/* statistic purposes */
-
-    unsigned long debug_findmin_reads {0};
-    unsigned long debug_readmin_reads {0};
-    unsigned long debug_intersect_reads {0};
-    unsigned long debug_hashtovid_reads {0};
-    unsigned long debug_verify_reads {0};
-    
-    unsigned long debug_indexed_tables {0};
-    unsigned long debug_indexing_tables {0};
-
-    unsigned long debug_intersection_correct {0};
-    unsigned long debug_intersection_alias {0};
-    
-    unsigned long debug_embeddings {0};
-    unsigned long debug_max_collisions {0};
-#endif
 
 /* Builds the table descriptors based on the information
  * from the query graph. */
@@ -166,6 +150,23 @@ FIND_CORRECT_TABLE_LOOP:
     } while(!last);
 }
 
+template <size_t WORD,
+         size_t COUNTER>
+ap_uint<(1UL << WORD)> utils_increasecounter(
+        ap_uint<(1UL << WORD)> row,
+        unsigned int pos)
+{
+#pragma HLS inline
+    const unsigned int CR = (1UL << (WORD - COUNTER));
+    ap_uint <(1UL << WORD)> mask = row >> (pos << COUNTER);
+    mask += 1;
+    mask <<= (pos << COUNTER);
+    row <<= ((CR - pos) << COUNTER);
+    row >>= ((CR - pos) << COUNTER);
+    return row |= mask;
+}
+
+
 /* Translating counter addresses to ram addresses and
  * increasing of one the counter specified.
  * The counter is on 16 bits, so shift by 4. */
@@ -184,7 +185,7 @@ void increaseCounter(
     ap_uint<(1UL << E_W)> edge;
     ap_uint<8> ntb;
     ap_uint<64> addr_outrow;
-    ap_uint<64> addr_inrow;
+    unsigned int addr_inrow;
     ap_uint<64> addr_counter;
     ap_uint<(1UL << C_W)> counter;
 
@@ -208,15 +209,7 @@ INCREASE_COUNTER_DDR_LOOP:
         addr_inrow = addr_counter.range((9 - C_W) - 1, 0);
 
         /* Read, modify and write the counter */
-        ram_row = htb_buf[addr_outrow];
-        counter = ram_row.range(((addr_inrow + 1) << C_W)-1, addr_inrow << C_W); 
-        counter += 1;
-#ifdef DEBUG_STATS
-        if (counter > debug_max_collisions) 
-            debug_max_collisions = counter;
-#endif /* DEBUG_STATS */
-        ram_row.range(((addr_inrow + 1) << C_W)-1, addr_inrow << C_W) = counter;
-        htb_buf[addr_outrow] = ram_row;
+        htb_buf[addr_outrow] = utils_increasecounter<9, C_W>(htb_buf[addr_outrow], addr_inrow);
  
         hTables[ntb].n_edges++;     
         last = stream_end.read();
@@ -229,29 +222,38 @@ void counterToOffset(
         AdjHT *hTables,
         ap_uint<DDR_W> *htb_buf)
 {
-    ap_uint<DDR_W> ram_row;
+    ap_uint<DDR_W> ram_row, ram_row_new;
 
 COUNTER_TO_OFFSET_DDR_LOOP:
-    for (ap_uint<8> ntb = 0; ntb < numTables; ntb++){
+    for (unsigned int ntb = 0; ntb < numTables; ntb++){
         ap_uint<(1 << C_W)> base_addr = 0;
         ap_uint<(1UL << C_W)> prev_addr = 0;
         ap_uint<(1UL << C_W)> counter;
         ap_uint<32> hash_used = 0;
 
 COUNTER_TO_OFFSET_TABLE_LOOP:
-        for(ap_uint<64> start = 0; start < HTB_SIZE; start++){
+        for(unsigned int start = 0; start < HTB_SIZE; start++){
             ram_row = htb_buf[start + hTables[ntb].start_offset];
             for (int g = 0; g < CNT_ROW; g++){
-                counter = ram_row.range(((g + 1) << C_W) - 1, g << C_W);
+                counter = ram_row.range((1UL << C_W) - 1, 0);
+                ram_row_new >>= (1UL << C_W);
+                ram_row >>= (1UL << C_W);
+
 #ifndef __SYNTHESIS__
                 assert(base_addr < (1UL << (1UL << (C_W))-1));
-#endif
-                ram_row.range(((g + 1) << C_W) - 1, g << C_W) = base_addr;
+#endif /* __SYNTHESIS__ */
+#ifdef DEBUG_STATS
+                if (counter > debug::max_collisions) 
+                    debug::max_collisions = counter;
+                debug::avg_collisions += (float)counter / (1 << (H_W_1 + H_W_2));
+#endif /* DEBUG_STATS */
+
+                ram_row_new.range((CNT_ROW << C_W) - 1, (CNT_ROW - 1) << C_W) = base_addr;
                 base_addr += counter;
 
                 /* Store used bit */
                 if (counter > 0){
-                    ram_row.set(((g + 1) << C_W) - 1);
+                    ram_row_new.set((CNT_ROW << C_W) - 1);
                 }
 
                 /* Check if an hash is used */
@@ -262,7 +264,7 @@ COUNTER_TO_OFFSET_TABLE_LOOP:
                     }
                 }
             }
-            htb_buf[start + hTables[ntb].start_offset] = ram_row;
+            htb_buf[start + hTables[ntb].start_offset] = ram_row_new;
         }
         hTables[ntb].hash_set = hash_used;
     }       
@@ -308,12 +310,21 @@ INCREASE_COUNTER_DDR_LOOP:
         addr_inrow = addr_offset.range((9 - C_W) - 1, 0);
 
         /* Read, modify and write the offset */
+        /* ram_row = htb_buf[addr_outrow]; */
+        /* offset = ram_row.range(((addr_inrow + 1) << C_W) - 2, addr_inrow << C_W); */
+        /* ram_row.range(((addr_inrow + 1) << C_W) - 2, */
+        /* addr_inrow << C_W) = offset + 1; */
+
         ram_row = htb_buf[addr_outrow];
-        offset = ram_row.range(((addr_inrow + 1) << C_W) - 2, addr_inrow << C_W); 
-        ram_row.range(((addr_inrow + 1) << C_W) - 2, 
-                addr_inrow << C_W) = offset + 1;
+        ap_uint <DDR_W> mask = ram_row >> (addr_inrow << C_W);
+        offset = mask & ((1UL << (1UL << C_W)) - 1);
+        mask += 1;
+        mask <<= (addr_inrow << C_W);
+        ram_row <<= ((CNT_ROW - addr_inrow) << C_W);
+        ram_row >>= ((CNT_ROW - addr_inrow) << C_W);
+        ram_row |= mask;
         htb_buf[addr_outrow] = ram_row;
- 
+        
         /* Compute address of row that will store the edge */
         addr_outrow = hTables[ntb].start_edges 
             + (offset >> (9 - E_W));
@@ -323,8 +334,11 @@ INCREASE_COUNTER_DDR_LOOP:
 
         /* Read, modify and write the edge */
         ram_row = htb_buf[addr_outrow];
-        ram_row.range(((addr_inrow + 1) << E_W) - 1,
-            addr_inrow << E_W) = edge;
+/* ram_row.range(((addr_inrow + 1) << E_W) - 1, */
+/* addr_inrow << E_W) = edge; */
+        mask = edge;
+        mask <<= (addr_inrow << E_W);
+        ram_row |= mask;
         htb_buf[addr_outrow] = ram_row;
 
         last = stream_end.read();
@@ -696,13 +710,12 @@ ap_uint<(1UL << T)> read_table(
     addr_inrow = addr_counter.range((9 - T) - 1, 0);
 
     /* Read the data */
-    //if (prev_addr_row != addr_row){
-        ram_row = htb_buf[addr_row];
-        //prev_addr_row = addr_row;
-    //}
+    ram_row = htb_buf[addr_row];
+    ram_row >>= (addr_inrow << T);
 
-    return ram_row.range(((addr_inrow + 1) << T) - 1,
-            addr_inrow << T);
+/* return ram_row.range(((addr_inrow + 1) << T) - 1, */
+/* addr_inrow << T); */
+    return ram_row;
 
 }
 
@@ -731,7 +744,8 @@ void mwj_propose_findmin(
     ap_uint<V_ID_W> curEmb[MAX_QV];
     bool stop;
 
-    while (1) { 
+    while (1) {
+/* #pragma HLS dataflow */
         if (stream_embed_in.read_nb(curQV)){
             tableIndex = 0;
             minSize = (1UL << 32) - 1;
@@ -739,6 +753,7 @@ void mwj_propose_findmin(
 /* std::cout << "Current solution (" << curQV << "): "; */
 PROPOSE_COPYING_EMBEDDING_LOOP:
             for (int g = 0; g < curQV; g++){
+#pragma HLS pipeline II=1
                 curEmb[g] = stream_embed_in.read();
                 stream_embed_out.write(curEmb[g]);
                 stream_end_embed_out.write(false);
@@ -749,15 +764,16 @@ PROPOSE_COPYING_EMBEDDING_LOOP:
             /* Find sizes of sets indexed by the current query vertex */
 PROPOSE_TBINDEXING_LOOP:
             for(int g = 0; g < qVertices[curQV].numTablesIndexing; g++){
+#pragma HLS pipeline II=1
                 tableIndex = qVertices[curQV].tables_indexing[g];
 
                 //std::cout << "\tEvaluating " << tableIndex << " : size " <<
                 //   hTables[tableIndex].hash_set << std::endl; 
                 if (hTables[tableIndex].hash_set < minSize){
                     minSize = hTables[tableIndex].hash_set;
-                    minOff = hTables[tableIndex].start_offset;
+                    minOff = hTables[tableIndex].start_edges;
                     minStart = 0;
-                    minEnd = HTB_SIZE;
+                    minEnd = hTables[tableIndex].n_edges;
                     minData.range(7, 0) = tableIndex;
                     minData.clear(8);
                     minData.range(V_ID_W + 8, 9) = 0;
@@ -768,6 +784,7 @@ PROPOSE_TBINDEXING_LOOP:
              * is indexed by an other query vertex */
 PROPOSE_TBINDEXED_LOOP:
             for(int g = 0; g < qVertices[curQV].numTablesIndexed; g++){
+#pragma HLS pipeline II=1
                 ap_uint<(1UL << C_W)> start_off = 0;
                 ap_uint<(1UL << C_W)> end_off;
                 tableIndex = qVertices[curQV].tables_indexed[g];
@@ -794,7 +811,7 @@ PROPOSE_TBINDEXED_LOOP:
                 end_off = end_off.range((1UL << C_W) - 2, 0);
 
 #ifdef DEBUG_STATS
-                debug_findmin_reads += 2;
+                debug::findmin_reads += 2;
 #endif
                 // std::cout << "\tEvaluating " << tableIndex << " : size " <<
                 //    end_off << " - " << start_off << std::endl; 
@@ -824,11 +841,11 @@ void mwj_propose_readmin(
         hls::stream<ap_uint<32>> &stream_minread_in,
         hls::stream<ap_uint<V_ID_W + 1 + 8>> &stream_min_in,
         ap_uint<DDR_W> *htb_buf,
+        /* hls::burst_maxi<T_DDR> htb_buf, */
         hls::stream<bool, 1> &stream_stop,
 
-        hls::stream<ap_uint<H_W_1>> &stream_min_out,
-        hls::stream<bool> &stream_end_out,
-        hls::stream<ap_uint<V_ID_W + 1 + 8>> &stream_min_set)
+        hls::stream<ap_uint<V_ID_W>> &stream_min_out,
+        hls::stream<bool> &stream_end_out)
 {
     hls::stream<ap_uint<V_ID_W>> stream_hash_in("Read min hash_in");
     hls::stream<ap_uint<64>> stream_hash_out("Read min hash_out");
@@ -836,6 +853,9 @@ void mwj_propose_readmin(
     ap_uint<32> minEnd;
     ap_uint<32> minOff;
     ap_uint<V_ID_W + 1 + 8> minData;
+    ap_uint<V_ID_W*2> edge;
+    ap_uint<V_ID_W> vertex, vertexCheck;
+    ap_uint<V_ID_W> set[MAX_CL];
     bool stop;
     
     while(1) {
@@ -844,69 +864,98 @@ void mwj_propose_readmin(
             minEnd = stream_minread_in.read();
             minOff = stream_minread_in.read();
             minData = stream_min_in.read();
-            stream_min_set.write(minData);
+            unsigned int rowstart = minOff + (minStart >> (9 - E_W));
+            unsigned int rowend = minOff + (minEnd >> (9 - E_W));
+            unsigned int window_left = minStart.range((9 - E_W) - 1, 0);
+            unsigned int window_right = minEnd.range((9 - E_W) - 1, 0) + 
+                (rowend - rowstart) * EDGE_ROW;
+            unsigned int cnt = 0;
             
 /* std::cout << "\tMinimum set is " << minData.range(7, 0) << std::endl; */
-/* std::cout << "\tReading from " << minStart << " to " << minEnd */
-/* << " with offset " << minOff << std::endl; */
+/* std::cout << "\tReading from " << rowstart << " to " << rowend */
+/* << " window " << window_left << "-" << window_right << std::endl; */
+            /* htb_buf.read_request(rowstart, rowend-rowstart+1); */
+
             if (minData.test(8)){
-                ap_uint<V_ID_W*2> edge;
-                ap_uint<V_ID_W> vertex, vertexCheck;
-
 PROPOSE_READ_MIN_INDEXED_LOOP:
-                for (ap_uint<32> i = minStart; i < minEnd; i++){
-                    edge = read_table<32, 1, 0, E_W>(
-                            i,
-                            0,
-                            htb_buf,
-                            minOff);
-
-                    vertexCheck = edge.range(2*V_ID_W - 1, V_ID_W);
-                    vertex = edge.range(V_ID_W - 1, 0);
-
-                    if (minData.range(V_ID_W + 8, 9) == vertexCheck){
-                        stream_hash_in.write(vertex);
-                        xf::database::hashLookup3<V_ID_W>(
-                                stream_hash_in, 
-                                stream_hash_out);
-                        ap_uint<H_W_1> vertexHash =
-                            stream_hash_out.read().range(H_W_1 - 1, 0);
-                        stream_min_out.write(vertexHash);
-                        stream_end_out.write(false);
+                for (int g = rowstart; g <= rowend; g++){
+                    T_DDR row = htb_buf[g];
+                    /* T_DDR row = htb_buf.read(); */
+                    for (int i = 0; i < EDGE_ROW; i++, cnt++){
+                        if (cnt >= window_left && cnt < window_right){
+/* edge = row.range(((i + 1) * V_ID_W*2) - 1, i * V_ID_W*2); */
+                            edge = row.range((1UL << E_W) - 1, 0);
+                            vertexCheck = edge.range(V_ID_W*2 - 1, V_ID_W);
+                            vertex = edge.range(V_ID_W - 1, 0);
+                            if (minData.range(V_ID_W + 8, 9) == vertexCheck){
+                                stream_min_out.write(vertex);
+                                stream_end_out.write(false);
+                            }
+                        }
+                        row >>= (1UL << E_W);
                     }
 #ifdef DEBUG_STATS
-                    debug_readmin_reads++;
+                    debug::readmin_reads++;
 #endif
                 }
 #ifdef DEBUG_STATS
-                debug_indexed_tables++;
+                debug::indexed_tables++;
 #endif
             } else {
-                ap_uint<(1UL << C_W)> start_off = 0;
-                ap_uint<(1UL << C_W)> end_off;
+                ap_uint<H_W_1> hash_buff = 0;
+                ap_uint<5> set_counter = 0;
+                bool flag_buff = false;
+                bool flag_new = true;
 
 PROPOSE_READ_MIN_INDEXING_LOOP:
-                for (int i = 0; i < (1UL << H_W_1); i++){
-                    end_off = read_table<H_W_1, H_W_2, H_W_2, C_W>(
-                            i,
-                            (1UL << H_W_2) - 1,
-                            htb_buf,
-                            minOff);
-                    end_off = end_off.range((1UL << C_W) - 2, 0);
+                for (int g = rowstart; g <= rowend; g++){
+                    T_DDR row = htb_buf[g];
+                    /* T_DDR row = htb_buf.read(); */
+                    for (int i = 0; i < EDGE_ROW; i++, cnt++){
+                        if (cnt < window_right){
+                            edge = row.range((1UL << E_W) - 1, 0);
+/* edge = row.range(((i + 1) * V_ID_W*2) - 1, i * V_ID_W*2); */
+                            vertex = edge.range(V_ID_W*2 - 1, V_ID_W);
+                            stream_hash_in.write(vertex);
+                            xf::database::hashLookup3<V_ID_W>(
+                                    stream_hash_in,
+                                    stream_hash_out);
+                            ap_uint<H_W_1> vertexHash = stream_hash_out.read();
 
-                    /* Compare offsets and only stream in case of difference, 
-                     * in other words if some stored edge has that hash */
-                    if (end_off > start_off){
-                        stream_min_out.write((ap_uint<H_W_1>)i);
-                        stream_end_out.write(false);
-                        start_off = end_off;
+                            if (flag_buff && hash_buff == vertexHash){
+                                int nSet = 0;
+                                flag_new = true;
+EXTRACT_BAGTOSET_SETCHECKER_LOOP:
+                                for(; nSet < set_counter; nSet++){
+                                    if (vertex == set[nSet]){
+                                        flag_new = false;
+                                        break;
+                                    }
+                                }
+                            } else {
+                                flag_new = true;
+                                set_counter = 0;
+                            }
+
+#ifndef __SYNTHESIS__
+                            assert(set_counter < MAX_CL);
+#endif
+                            if (flag_new) {
+                                set[set_counter++] = vertex;
+                                stream_min_out.write(vertex);
+                                stream_end_out.write(false);
+                            }
+                            hash_buff = vertexHash;
+                            flag_buff = true;
+                        }
+                        row >>= (1UL << E_W);
                     }
 #ifdef DEBUG_STATS
-                    debug_readmin_reads++;
+                    debug::readmin_reads++;
 #endif
                 }
 #ifdef DEBUG_STATS
-                debug_indexing_tables++;
+                debug::indexing_tables++;
 #endif
             }
             stream_end_out.write(true);
@@ -921,21 +970,20 @@ void mwj_intersect(
         QueryVertex *qVertices,
         hls::stream<ap_uint<V_ID_W>> &stream_embed_in,
         hls::stream<bool> &stream_end_embed_in,
-        hls::stream<ap_uint<H_W_1>> &stream_min_in,
+        hls::stream<ap_uint<V_ID_W>> &stream_min_in,
         hls::stream<bool> &stream_end_min_in,
-        hls::stream<ap_uint<V_ID_W + 1 + 8>> &stream_min_desc_in,
         ap_uint<DDR_W> *htb_buf,
         hls::stream<bool, 1> &stream_stop,
 
         hls::stream<ap_uint<V_ID_W>> &stream_embed_out,
         hls::stream<bool> &stream_end_embed_out,
-        hls::stream<ap_uint<H_W_1>> &stream_inter_out,
-        hls::stream<bool> &stream_end_out,
-        hls::stream<ap_uint<V_ID_W + 1 + 8>> &stream_min_desc_out)
+        hls::stream<ap_uint<V_ID_W>> &stream_inter_out,
+        hls::stream<bool> &stream_end_out)
 {
     hls::stream<ap_uint<V_ID_W>> stream_hash_in("Intersect hash_in");
     hls::stream<ap_uint<64>> stream_hash_out("Intersect hash_out");
-    ap_uint<H_W_1> candidate;
+    ap_uint<64> candidate_hash;
+    ap_uint<V_ID_W> candidate_v;
     ap_uint<8> tableIndex, curQV;
     ap_uint<V_ID_W> curEmb[MAX_QV];
     bool stop, last;
@@ -955,18 +1003,26 @@ INTERSECT_COPYING_EMBEDDING_LOOP:
             stream_end_embed_out.write(true);
 
             /* bypass data for extract phase */
-            stream_min_desc_out.write(stream_min_desc_in.read());
+/* stream_min_desc_out.write(stream_min_desc_in.read()); */
 
-            //std::cout << "Intersection: probing" << std::endl;
+/* std::cout << "Intersection: probing" << std::endl; */
             last = stream_end_min_in.read();
 INTERSECT_LOOP:
             while(!last){
-                candidate = stream_min_in.read();
+                candidate_v = stream_min_in.read();
+                stream_hash_in.write(candidate_v);
+                xf::database::hashLookup3<V_ID_W>(stream_hash_in, stream_hash_out);
+                candidate_hash = stream_hash_out.read();
+                
                 //std::cout << "\t" << candidate << std::endl;
                 bool inter = true;
+#ifdef DEBUG_STATS
+                bool real_inter = true;
+#endif
 INTERSECT_TBINDEXED_LOOP:
                 for(int g = 0; 
-                        g < qVertices[curQV].numTablesIndexed && inter;
+                        g < qVertices[curQV].numTablesIndexed;
+                        /* g < qVertices[curQV].numTablesIndexed && inter; */
                         g++)
                 {
                     ap_uint<(1UL << C_W)> offset;
@@ -976,28 +1032,85 @@ INTERSECT_TBINDEXED_LOOP:
                     stream_hash_in.write(curEmb[ivPos]);
                     xf::database::hashLookup3<V_ID_W>(stream_hash_in, stream_hash_out);
                     ap_uint<H_W_1> index1 = stream_hash_out.read().range(H_W_1 - 1, 0);
-                    ap_uint<H_W_2> index2 = candidate.range(H_W_2 - 1, 0);
+                    ap_uint<H_W_2> index2 = candidate_hash.range(H_W_2 - 1, 0);
 
                     offset = read_table<H_W_1, H_W_2, H_W_2, C_W>(
                             index1,
                             index2,
                             htb_buf,
                             hTables[tableIndex].start_offset);
-                    inter = offset.test((1UL << C_W) - 1);
+                    inter = inter && offset.test((1UL << C_W) - 1);
 #ifdef DEBUG_STATS
-                    debug_intersect_reads++;
+                    debug::intersect_reads++;
+
+                    /* Computing when there is an alias */
+                    ap_uint<H_W_1> index1_f;
+                    ap_uint<H_W_2> index2_f;
+                    ap_uint<(1UL << C_W)> start_off;
+
+                    bool checked = false;
+                    if (index2 != 0){
+                        index1_f = index1;
+                        index2_f = index2 - 1;
+                    } else if (index2 == 0 && index1 != 0){
+                        index1_f = index1 - 1;
+                        index2_f = (1UL << H_W_2)-1;
+                    }
+
+                    if (!(index2 == 0 && index1 == 0)){
+                        start_off = read_table<H_W_1, H_W_2, H_W_2, C_W>(
+                                index1_f,
+                                index2_f,
+                                htb_buf,
+                                hTables[tableIndex].start_offset);
+                        start_off = start_off.range((1UL << C_W) - 2, 0);
+                    }
+
+                    for (; start_off < offset.range((1UL << C_W) - 2,0) && checked == false; start_off++){
+                        ap_uint<2 * V_ID_W> edge = read_table<32, 1, 0, E_W>(
+                                start_off,
+                                0,
+                                htb_buf,
+                                hTables[tableIndex].start_edges);
+
+                        ap_uint<V_ID_W> vertexIndexed, vertexIndexing;
+                        vertexIndexed = edge.range(V_ID_W - 1, 0);
+                        vertexIndexing = edge.range(2*V_ID_W - 1, V_ID_W);
+                        if (vertexIndexing == curEmb[ivPos] &&
+                                vertexIndexed == candidate_v){
+                            checked = true;
+                        }
+                    }
+
+                    if (offset.test((1UL << C_W) - 1) && checked) {
+                        /* True positive */
+                        debug::intersect_bit_truepositive++;
+                    } else if (offset.test((1UL << C_W) - 1) && !checked) {
+                        /* False positive */
+                        real_inter = false;
+                        debug::intersect_bit_falsepositive++;
+                    } else if (!offset.test((1UL << C_W) - 1) && !checked) {
+                        /* True negative */
+                        real_inter = false;
+                        debug::intersect_bit_truenegative++;
+                    } else if (!offset.test((1UL << C_W) - 1) && checked) {
+                        /* False negative */
+                        debug::intersect_bit_falsenegative++;
+                    }
 #endif
                 }
 
+#if INTERESCT_INDEXING_LOOP
 INTERSECT_TBINDEXING_LOOP:
-                for(int g = 0; 
-                        g < qVertices[curQV].numTablesIndexing && inter; 
+                for(int g = 0;
+                        g < qVertices[curQV].numTablesIndexing;
+/* g < qVertices[curQV].numTablesIndexing && inter; */
                         g++)
                 {
                     ap_uint<(1UL << C_W)> start_off, end_off;
                     tableIndex = qVertices[curQV].tables_indexing[g];
-
-                    if (candidate != 0){ 
+                    ap_uint<H_W_1> candidate = candidate_hash.range(H_W_1 - 1, 0);
+                    if (candidate != 0){
                         start_off = read_table<H_W_1, H_W_2, H_W_2, C_W>(
                                 candidate - 1,
                                 (1UL << H_W_2) - 1,
@@ -1005,7 +1118,7 @@ INTERSECT_TBINDEXING_LOOP:
                                 hTables[tableIndex].start_offset);
                         start_off = start_off.range((1UL << C_W) - 2, 0);
 #ifdef DEBUG_STATS
-                    debug_intersect_reads++;
+                        debug::intersect_reads++;
 #endif
                     } else {
                         start_off = 0;
@@ -1017,15 +1130,65 @@ INTERSECT_TBINDEXING_LOOP:
                             htb_buf,
                             hTables[tableIndex].start_offset);
                     end_off = end_off.range((1UL << C_W) - 2, 0);
-                    inter = (end_off > start_off);
+                    inter = inter && (end_off > start_off);
 
 #ifdef DEBUG_STATS
-                    debug_intersect_reads++;
+                    bool temp = (end_off > start_off);
+                    debug::intersect_reads++;
+
+                    // Computing when there is an alias
+                    bool checked = false;
+                    for (; start_off < end_off && checked == false; start_off++){
+                        ap_uint<2 * V_ID_W> edge = read_table<32, 1, 0, E_W>(
+                                start_off,
+                                0,
+                                htb_buf,
+                                hTables[tableIndex].start_edges);
+
+                        ap_uint<V_ID_W> vertexIndexing;
+                        vertexIndexing = edge.range(2*V_ID_W - 1, V_ID_W);
+                        if (vertexIndexing == candidate_v){
+                            checked = true;
+                        }
+                    }
+
+                    if (temp && checked) {
+                        /* //True positive */
+                        debug::intersect_bit_truepositive++;
+                    } else if (temp && !checked) {
+                        /* //False positive */
+                        real_inter = false;
+                        debug::intersect_bit_falsepositive++;
+                    } else if (!temp && !checked) {
+                        /* //True negative */
+                        real_inter = false;
+                        debug::intersect_bit_truenegative++;
+                    } else if (!temp && checked) {
+                        /* //False negative */
+                        debug::intersect_bit_falsenegative++;
+                    }
+
 #endif
                 }
+#endif /* INTERSECT_INDEXING_LOOP */
+#ifdef DEBUG_STATS
+                if (inter && !real_inter) {
+                    /* //False positive */
+                    debug::intersect_sol_falsepositive++;
+                } else if (inter && real_inter) {
+                    /* //True positive */
+                    debug::intersect_sol_truepositive++;
+                } else if (!inter && !real_inter) {
+                    /* //True negative */
+                    debug::intersect_sol_truenegative++;
+                } else if (!inter && real_inter) {
+                    /* //False negative */
+                    debug::intersect_sol_falsenegative++;
+                }
+#endif
 
                 if (inter){
-                    stream_inter_out.write(candidate);
+                    stream_inter_out.write(candidate_v);
                     stream_end_out.write(false);
                 }
 
@@ -1122,7 +1285,7 @@ EXTRACT_HASHTOVID_LOOP:
                     start_off = start_off.range((1UL << C_W) - 2, 0);
 
 #ifdef DEBUG_STATS
-                    debug_hashtovid_reads++;
+                    debug::hashtovid_reads++;
 #endif
                 }
 
@@ -1138,7 +1301,7 @@ EXTRACT_HASHTOVID_LOOP:
                 end_off = end_off.range((1UL << C_W) - 2, 0);
 
 #ifdef DEBUG_STATS
-                debug_hashtovid_reads++;
+                debug::hashtovid_reads++;
 #endif
 
                 /* If hash bit already present do no stream anything */
@@ -1178,7 +1341,7 @@ EXTRACT_HASHTOVID_READ_LOOP:
                     stream_set_end_out.write(false);            
 
 #ifdef DEBUG_STATS
-                    debug_hashtovid_reads++;
+                    debug::hashtovid_reads++;
 #endif
                 }
 
@@ -1320,7 +1483,12 @@ void mwj_verify_edge(
     ap_uint<8> curQV;
     ap_uint<V_ID_W> curEmb[MAX_QV];
     bool stop, last;
-    //std::cout << "Verify: " << std::endl;
+/* ap_uint<64> addr_prev_row; */
+/* ap_uint<DDR_W> cache; */
+
+#ifdef DEBUG_STATS    
+    std::ofstream of("../../../../verstats.txt", std::ofstream::app);
+#endif
 
     while(1){
         if (stream_end_embed_in.read_nb(last)){
@@ -1341,10 +1509,10 @@ VERIFY_CHECK_LOOP:
             while(!last){
                 ap_uint<V_ID_W> vToVerify = stream_inter_in.read();
                 bool checked = true;
-                //hls::print("Ingresso: %d\n", (int)vToVerify);
+                int g = 0;
 
 VERIFY_CHECK_EDGE_LOOP:
-                for(int g = 0; g < qVertices[curQV].numTablesIndexed && checked; g++){
+                for(; g < qVertices[curQV].numTablesIndexed && checked; g++){
                     checked = false;
                     ap_uint<H_W_1> index1, index1_f;
                     ap_uint<H_W_2> index2, index2_f;
@@ -1377,7 +1545,7 @@ VERIFY_CHECK_EDGE_LOOP:
                         start_off = start_off.range((1UL << C_W) - 2, 0);
 
 #ifdef DEBUG_STATS
-                        debug_verify_reads++;
+                        debug::verify_reads++;
 #endif
                     }
 
@@ -1389,10 +1557,36 @@ VERIFY_CHECK_EDGE_LOOP:
                     end_off = end_off.range((1UL << C_W) - 2, 0);
 
 #ifdef DEBUG_STATS
-                    debug_verify_reads++;
+                    debug::verify_reads++;
+/* of << "(" << vToVerify << ") " << start_off + hTables[tableIndex].start_edges << */
+/* " - " << end_off - start_off << std::endl; */
 #endif
 VERIFY_READ_MEMORY_LOOP:
-                    for (; start_off < end_off && checked == false; start_off++){
+                    for (; start_off < end_off; start_off++){
+#pragma HLS pipeline II=1
+                        /* ap_uint<DDR_W> ram_row; */
+                        /* ap_uint<32> addr_row; */
+                        /* ap_uint<32> addr_inrow; */
+
+                        /* Compute address of row storing the counter */
+                        /* addr_row = hTables[tableIndex].start_edges + (start_off >> (9 - E_W)); */
+
+                        /* Compute address of data inside the row */
+                        /* addr_inrow = start_off.range((9 - E_W) - 1, 0); */
+
+                        /* Read the data */
+                        /* if (addr_prev_row == addr_row){ */
+                        /* ram_row = cache; */
+                        /* #ifdef DEBUG_STATS */
+                        /* debug::verify_reusage++; */
+                        /* #endif */
+                        /* } else { */
+                        /* ram_row = htb_buf[addr_row]; */
+                        /* cache = ram_row; */
+                        /* addr_prev_row = addr_row; */
+                        /* } */
+
+/* ap_uint<2 * V_ID_W> edge = ram_row >> (addr_inrow << E_W); */
                         ap_uint<2 * V_ID_W> edge = read_table<32, 1, 0, E_W>(
                                 start_off,
                                 0,
@@ -1407,18 +1601,23 @@ VERIFY_READ_MEMORY_LOOP:
                             checked = true;
                         }
 #ifdef DEBUG_STATS
-                        debug_verify_reads++;
+                        debug::verify_reads++;
 #endif
                     }
                 }
+
+/* #ifdef DEBUG_STATS */
+/* of << checked << std::endl << std::endl; */
+/* #endif */
 
                 if (checked){
                     stream_checked_out.write(vToVerify);
                     stream_checked_end_out.write(false);
 #ifdef DEBUG_STATS
-                    debug_intersection_correct++;
+/* if (g > 0) */
+                        debug::solution_correct++;
                 } else { 
-                    debug_intersection_alias++; 
+                    debug::solution_wrong++; 
 #endif
                 }
 
@@ -1503,7 +1702,7 @@ VERIFY_WRITE_PARTIAL_LOOP:
                     nPartSol++;
                 }
 #ifdef DEBUG_STATS
-                debug_embeddings++;
+                debug::embeddings++;
 #endif
                 last = stream_end_inter_in.read();
             }
@@ -1534,9 +1733,9 @@ VERIFY_WRITE_PARTIAL_LOOP:
 void multiwayJoinWrap(
         ap_uint<DDR_W> *htb_buf0,
         ap_uint<DDR_W> *htb_buf1,
+/* hls::burst_maxi<T_DDR> htb_buf1, */
         ap_uint<DDR_W> *htb_buf2,
         ap_uint<DDR_W> *htb_buf3,
-        ap_uint<DDR_W> *htb_buf4,
         T_DDR *res_buf,
         AdjHT *hTables0,
         AdjHT *hTables1,
@@ -1556,7 +1755,6 @@ void multiwayJoinWrap(
 #pragma HLS STABLE variable=htb_buf1
 #pragma HLS STABLE variable=htb_buf2
 #pragma HLS STABLE variable=htb_buf3
-#pragma HLS STABLE variable=htb_buf4
 #pragma HLS STABLE variable=hTables0
 #pragma HLS STABLE variable=hTables1
 #pragma HLS STABLE variable=qVertices0
@@ -1569,7 +1767,7 @@ void multiwayJoinWrap(
         ("Partial result propose");
     hls::stream<bool, MAX_QV> p_stream_embed_end("Partial result del. propose");
     
-    hls::stream<ap_uint<H_W_1>, S_D> p_stream_min
+    hls::stream<ap_uint<V_ID_W>, S_D> p_stream_min
         ("Min. set vertices propose");
     hls::stream<bool, S_D> p_stream_min_end("Min. set verices del. propose");
     
@@ -1581,7 +1779,7 @@ void multiwayJoinWrap(
     hls::stream<ap_uint<V_ID_W + 1 + 8>, S_D> p_find_stream_min("Min desc");
 
     /* Intersect data out */    
-    hls::stream<ap_uint<H_W_1>, S_D> i_stream_hash_set("Set intersection hashes");
+    hls::stream<ap_uint<V_ID_W>, S_D> i_stream_hash_set("Set intersection hashes");
     hls::stream<bool, S_D> i_stream_hash_set_end("Set intersection hashes del.");
     hls::stream<ap_uint<V_ID_W>, MAX_QV> i_stream_embed
         ("Partial result intersect.");
@@ -1590,19 +1788,6 @@ void multiwayJoinWrap(
     hls::stream<ap_uint<V_ID_W + 1 + 8>, S_D> i_stream_min_desc
         ("Min. set description propose");
     
-    /* Extract data out */
-    hls::stream<ap_uint<V_ID_W>, MAX_QV> e_stream_embed
-        ("Partial result intersect.");
-    hls::stream<bool, MAX_QV> e_stream_embed_end
-        ("Partial result del. intersect.");
-    hls::stream<ap_uint<V_ID_W>, S_D> e_stream_cand("Set candidates");
-    hls::stream<bool, S_D> e_stream_cand_end("Set candidates delimeter");
-
-    /* Extract internal streams */
-    hls::stream<ap_uint<V_ID_W>, S_D> e_stream_htv_inter("Bags of vertices");
-    hls::stream<bool, S_D> e_stream_htv_bag_end("Bag delimeter");
-    hls::stream<bool, S_D> e_stream_htv_end("Bags delimeter");
-
     /* Stop signals */
     hls::stream<bool, 1> streams_stop[STOP_S]; 
 
@@ -1618,9 +1803,6 @@ void multiwayJoinWrap(
     hls::stream<bool, MAX_QV> stream_embed2_end;
 
     hls::stream<ap_uint<V_ID_W>, 32> in_stream("in stream");
-
-#ifdef __SYNTHESIS__
-    
     hls::stream<ap_uint<V_ID_W>, 32> out_stream("out stream");
 
     dynfifo_init<
@@ -1633,10 +1815,12 @@ void multiwayJoinWrap(
         RES_WIDTH>          /* memory words available */
             (in_stream,
              out_stream,
-             streams_stop[7],
-             streams_stop[8],
+             streams_stop[5],
+             streams_stop[6],
              res_buf);
 
+#ifdef __SYNTHESIS__
+    
     mwj_propose_findmin(
             out_stream,
             hTables0,
@@ -1654,8 +1838,7 @@ void multiwayJoinWrap(
             htb_buf1,
             streams_stop[1],
             p_stream_min,
-            p_stream_min_end,
-            p_stream_min_desc);
+            p_stream_min_end);
 
     mwj_intersect(
             hTables1,
@@ -1664,44 +1847,19 @@ void multiwayJoinWrap(
             p_stream_embed_end,
             p_stream_min,
             p_stream_min_end,
-            p_stream_min_desc,
             htb_buf2,
             streams_stop[2],
             i_stream_embed,
             i_stream_embed_end,
             i_stream_hash_set,
-            i_stream_hash_set_end,
-            i_stream_min_desc);
+            i_stream_hash_set_end);
 
-    mwj_extract_hashtovid(
+    mwj_verify_nothomomorphism(
             i_stream_embed,
             i_stream_embed_end,
             i_stream_hash_set,
             i_stream_hash_set_end,
-            i_stream_min_desc,
-            hTables0,
-            htb_buf3,
             streams_stop[3],
-            e_stream_embed,
-            e_stream_embed_end,
-            e_stream_htv_inter,
-            e_stream_htv_bag_end,
-            e_stream_htv_end);
-
-    mwj_extract_bagtoset(
-            e_stream_htv_inter,
-            e_stream_htv_bag_end,
-            e_stream_htv_end,
-            streams_stop[4],
-            e_stream_cand,
-            e_stream_cand_end);
-
-    mwj_verify_nothomomorphism(
-            e_stream_embed,
-            e_stream_embed_end,
-            e_stream_cand,
-            e_stream_cand_end,
-            streams_stop[5],
             stream_embed1,
             stream_embed1_end,
             stream_checked1,
@@ -1714,8 +1872,8 @@ void multiwayJoinWrap(
             stream_checked1_end,
             hTables1,
             qVertices0,
-            htb_buf4,
-            streams_stop[6],
+            htb_buf3,
+            streams_stop[4],
             stream_embed2,
             stream_embed2_end,
             stream_checked2,
@@ -1738,7 +1896,7 @@ void multiwayJoinWrap(
 
     std::thread mwj_propose_findmin_t(
             mwj_propose_findmin,
-            std::ref(in_stream),
+            std::ref(out_stream),
             hTables0,
             qVertices0,
             htb_buf0,
@@ -1755,8 +1913,7 @@ void multiwayJoinWrap(
             htb_buf1,
             std::ref(streams_stop[1]),
             std::ref(p_stream_min),
-            std::ref(p_stream_min_end),
-            std::ref(p_stream_min_desc));
+            std::ref(p_stream_min_end));
 
     std::thread mwj_intersect_t(
             mwj_intersect,
@@ -1766,47 +1923,20 @@ void multiwayJoinWrap(
             std::ref(p_stream_embed_end),
             std::ref(p_stream_min),
             std::ref(p_stream_min_end),
-            std::ref(p_stream_min_desc),
             htb_buf2,
             std::ref(streams_stop[2]),
             std::ref(i_stream_embed),
             std::ref(i_stream_embed_end),
             std::ref(i_stream_hash_set),
-            std::ref(i_stream_hash_set_end),
-            std::ref(i_stream_min_desc));
+            std::ref(i_stream_hash_set_end));
 
-    std::thread mwj_extract_hashtovid_t(
-            mwj_extract_hashtovid,
+    std::thread mwj_verify_nothomomorphism_t(
+            mwj_verify_nothomomorphism,
             std::ref(i_stream_embed),
             std::ref(i_stream_embed_end),
             std::ref(i_stream_hash_set),
             std::ref(i_stream_hash_set_end),
-            std::ref(i_stream_min_desc),
-            hTables0,
-            htb_buf3,
             std::ref(streams_stop[3]),
-            std::ref(e_stream_embed),
-            std::ref(e_stream_embed_end),
-            std::ref(e_stream_htv_inter),
-            std::ref(e_stream_htv_bag_end),
-            std::ref(e_stream_htv_end));
-
-    std::thread mwj_extract_bagtoset_t(
-            mwj_extract_bagtoset,
-            std::ref(e_stream_htv_inter),
-            std::ref(e_stream_htv_bag_end),
-            std::ref(e_stream_htv_end),
-            std::ref(streams_stop[4]),
-            std::ref(e_stream_cand),
-            std::ref(e_stream_cand_end));
-
-    std::thread mwj_verify_nothomomorphism_t(
-            mwj_verify_nothomomorphism,
-            std::ref(e_stream_embed),
-            std::ref(e_stream_embed_end),
-            std::ref(e_stream_cand),
-            std::ref(e_stream_cand_end),
-            std::ref(streams_stop[5]),
             std::ref(stream_embed1),
             std::ref(stream_embed1_end),
             std::ref(stream_checked1),
@@ -1820,8 +1950,8 @@ void multiwayJoinWrap(
             std::ref(stream_checked1_end),
             hTables1,
             qVertices0,
-            htb_buf4,
-            std::ref(streams_stop[6]),
+            htb_buf3,
+            std::ref(streams_stop[4]),
             std::ref(stream_embed2),
             std::ref(stream_embed2_end),
             std::ref(stream_checked2),
@@ -1842,8 +1972,6 @@ void multiwayJoinWrap(
     mwj_propose_findmin_t.join();
     mwj_propose_readmin_t.join();
     mwj_intersect_t.join();
-    mwj_extract_hashtovid_t.join();
-    mwj_extract_bagtoset_t.join();
     mwj_verify_nothomomorphism_t.join(); 
     mwj_verify_edge_t.join();
     mwj_verify_add_t.join();
@@ -1857,11 +1985,11 @@ void subgraphIsomorphism(
         hls::stream<T_NODE> &stream_dst,
         hls::stream<T_LABEL> &stream_src_l,
         hls::stream<T_LABEL> &stream_dst_l,
-        ap_uint<DDR_W> htb_buf0[DDR_WIDTH],
-        ap_uint<DDR_W> htb_buf1[DDR_WIDTH],
-        ap_uint<DDR_W> htb_buf2[DDR_WIDTH],
-        ap_uint<DDR_W> htb_buf3[DDR_WIDTH],
-        ap_uint<DDR_W> htb_buf4[DDR_WIDTH],
+        T_DDR htb_buf0[DDR_WIDTH],
+        T_DDR htb_buf2[DDR_WIDTH],
+        T_DDR htb_buf3[DDR_WIDTH],
+        T_DDR htb_buf1[DDR_WIDTH],
+/* hls::burst_maxi<T_DDR> htb_buf1, */
         T_DDR res_buf[RES_WIDTH],
 
 #ifdef DEBUG_INTERFACE
@@ -1878,12 +2006,13 @@ void subgraphIsomorphism(
 {
 
 #pragma HLS INTERFACE mode=m_axi port=htb_buf0 bundle=gmem0
-#pragma HLS INTERFACE mode=m_axi port=htb_buf1 bundle=gmem1
+/* #pragma HLS INTERFACE mode=m_axi port=htb_buf1 bundle=gmem1 depth=DDR_WIDTH */
+#pragma HLS INTERFACE mode=m_axi port=htb_buf1 bundle=gmem1 
 #pragma HLS INTERFACE mode=m_axi port=htb_buf2 bundle=gmem2
 #pragma HLS INTERFACE mode=m_axi port=htb_buf3 bundle=gmem3
-#pragma HLS INTERFACE mode=m_axi port=htb_buf4 bundle=gmem4
-#pragma HLS INTERFACE mode=m_axi port=res_buf bundle=gmem5
-#pragma HLS alias ports=htb_buf0,htb_buf1,htb_buf2,htb_buf3,htb_buf4 distance=0
+#pragma HLS INTERFACE mode=m_axi port=res_buf bundle=gmem4
+/* #pragma HLS alias ports=htb_buf0,htb_buf2,htb_buf3 distance=0 */
+#pragma HLS alias ports=htb_buf0,htb_buf1,htb_buf2,htb_buf3 distance=0
 
 #pragma HLS INTERFACE mode=axis port=stream_src
 #pragma HLS INTERFACE mode=axis port=stream_dst
@@ -1904,21 +2033,9 @@ void subgraphIsomorphism(
 #ifdef DEBUG_STATS
 /* statistic purposes */
 
-    debug_findmin_reads = 0;
-    debug_readmin_reads = 0;
-    debug_intersect_reads = 0;
-    debug_hashtovid_reads = 0;
-    debug_verify_reads = 0;
-    
-    debug_indexed_tables = 0;
-    debug_indexing_tables = 0;
+    debug::init();
 
-    debug_intersection_correct = 0;
-    debug_intersection_alias = 0;
-    
-    debug_embeddings = 0;
-    debug_max_collisions = 0;
-#endif
+#endif /* DEBUG_STATS */
 
     QueryVertex qVertices0[MAX_QV], qVertices1[MAX_QV];
     TableDescriptor tDescriptors[MAX_TB];
@@ -1957,7 +2074,6 @@ void subgraphIsomorphism(
             htb_buf1,
             htb_buf2,
             htb_buf3,
-            htb_buf4,
             res_buf,
             hTables0,
             hTables1,
@@ -1967,45 +2083,71 @@ void subgraphIsomorphism(
             result);
 
 #ifdef DEBUG_STATS
-    std::ofstream of("../../../../stats.txt", std::ofstream::app);
-    
-    unsigned long debug_total_reads = debug_findmin_reads +
-        debug_readmin_reads + debug_intersect_reads +
-        debug_hashtovid_reads + debug_verify_reads;
+    {
+        using namespace debug;
+        std::ofstream of("../../../../stats.txt", std::ofstream::app);
 
-    unsigned long debug_verify = debug_intersection_alias + 
-        debug_intersection_correct;
+        unsigned long debug_total_reads = findmin_reads +
+            readmin_reads + intersect_reads +
+            hashtovid_reads + verify_reads;
 
-    unsigned int hw1, hw2, cnt;
-    hw1 = H_W_1; 
-    hw2 = H_W_2; 
-    cnt = C_W;
+        unsigned long debug_verify = solution_wrong + 
+            solution_correct;
 
-    of << "DEBUG STATISTICS HW1: " << hw1 << " HW2: " << hw2
-        << " CNT: " << cnt << std::endl << std::endl;
-    
-    of << "\tfindmin reads:     " << debug_findmin_reads << "\t" <<
-        debug_findmin_reads * 100 / debug_total_reads << "%" << std::endl;
-    of << "\treadmin reads:     " << debug_readmin_reads << "\t" <<
-        debug_readmin_reads * 100 / debug_total_reads << "%"<< std::endl;
-    of << "\tintersect reads:   " << debug_intersect_reads << "\t" <<
-        debug_intersect_reads * 100 / debug_total_reads << "%"<< std::endl;
-    of << "\thash_to_vid reads: " << debug_hashtovid_reads << "\t" << 
-        debug_hashtovid_reads * 100 / debug_total_reads << "%"<< std::endl;
-    of << "\tverify reads:      " << debug_verify_reads << "\t" << 
-        debug_verify_reads * 100 / debug_total_reads << "%"<< std::endl;
-    of << "\tTOTAL:             " <<  debug_total_reads << "\t100%\n" << 
-        std::endl;
-    of << "\tread per embedding: " << debug_total_reads / debug_intersection_correct << std::endl;
-    of << "\tindexed tables:    " << debug_indexed_tables << std::endl;
-    of << "\tindexing tables:   " << debug_indexing_tables << std::endl;
-    of << "\n\tintersection aliases:   " << debug_intersection_alias << "\t" <<
-       debug_intersection_alias * 100 / debug_verify << "%" << std::endl;
-    of << "\tintersection correct:   " << debug_intersection_correct << "\t" <<
-       debug_intersection_correct * 100 / debug_verify << "%" << std::endl;
-    of << "\tmax collisions:   " << debug_max_collisions << std::endl;
-    of << std::endl; 
-    of.close();
+        unsigned long debug_probe = intersect_bit_falsepositive + intersect_bit_falsenegative +
+            intersect_bit_truepositive + intersect_bit_truenegative;
+
+        unsigned long debug_sol = intersect_sol_falsepositive + intersect_sol_falsenegative +
+            intersect_sol_truepositive + intersect_sol_truenegative;
+        
+        unsigned int hw1, hw2, cnt;
+        hw1 = H_W_1; 
+        hw2 = H_W_2; 
+        cnt = C_W;
+
+        of << "DEBUG STATISTICS HW1: " << hw1 << " HW2: " << hw2
+            << " CNT: " << cnt << std::endl << std::endl;
+
+        of << "\tfindmin reads:     " << findmin_reads << "\t" <<
+            findmin_reads * 100 / debug_total_reads << "%" << std::endl;
+        of << "\treadmin reads:     " << readmin_reads << "\t" <<
+            readmin_reads * 100 / debug_total_reads << "%"<< std::endl;
+        of << "\tintersect reads:   " << intersect_reads << "\t" <<
+            intersect_reads * 100 / debug_total_reads << "%"<< std::endl;
+        of << "\tverify reads:      " << verify_reads << "\t" << 
+            verify_reads * 100 / debug_total_reads << "%"<< std::endl;
+        of << "\tTOTAL:             " <<  debug_total_reads << "\t100%\n" << 
+            std::endl;
+        of << "\tread per embedding: " << debug_total_reads / solution_correct << std::endl;
+        of << "\tindexed tables:    " << indexed_tables << std::endl;
+        of << "\tindexing tables:   " << indexing_tables << std::endl;
+        of << "\n\tsolution wrong:   " << solution_wrong << "\t" <<
+            solution_wrong * 100 / debug_verify << "%" << std::endl;
+        of << "\tsolution correct:   " << solution_correct << "\t" <<
+            solution_correct * 100 / debug_verify << "%" << std::endl;
+        of << "\tmax collisions:   " << max_collisions << std::endl;
+        of << "\tavg collisions:   " << avg_collisions / numTables << std::endl;
+        of << "\tverify reusage:   " << verify_reusage << std::endl << std::endl;
+        of << "\tdata struct prob: " << std::setprecision(3) << std::endl <<
+            "\t\tFP " << (float)intersect_bit_falsepositive / debug_probe << "\t" <<
+            intersect_bit_falsepositive << std::endl <<
+            "\t\tTP " << (float)intersect_bit_truepositive / debug_probe << "\t" <<
+            intersect_bit_truepositive << std::endl <<
+            "\t\tFN " << (float)intersect_bit_falsenegative / debug_probe << "\t" <<
+            intersect_bit_falsenegative << std::endl <<
+            "\t\tTN " << (float)intersect_bit_truenegative / debug_probe << "\t" <<
+            intersect_bit_truenegative << std::endl << std::endl;
+        of << "\tsolution prob: " << std::setprecision(3) << std::endl <<
+            "\t\tFP " << (float)intersect_sol_falsepositive / debug_sol << "\t" <<
+            intersect_sol_falsepositive << std::endl <<
+            "\t\tTP " << (float)intersect_sol_truepositive / debug_sol << "\t" <<
+            intersect_sol_truepositive << std::endl <<
+            "\t\tFN " << (float)intersect_sol_falsenegative / debug_sol << "\t" <<
+            intersect_sol_falsenegative << std::endl <<
+            "\t\tTN " << (float)intersect_sol_truenegative / debug_sol << "\t" <<
+            intersect_sol_truenegative << std::endl << std::endl;
+        of.close();
+    }
 
 #endif
 }
