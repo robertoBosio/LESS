@@ -10,6 +10,10 @@
 #include "hls_task.h"
 #include <hls_stream.h>
 
+#ifndef __SYNTHESIS__
+#define HW_SIM 1
+#endif
+
 /**
  * Pack data in DDR word. 
  */
@@ -77,7 +81,9 @@ void MMU_unpack(
  * DATA_PER_WORD: number of data inside a packet
  */
 template<typename DATA_T,
-    size_t DATA_PER_WORD>
+    size_t DATA_PER_WORD,
+    size_t SIZE_FIFO_T,
+    size_t SIZE_FIFO_P>
 void MMU_fast(
         hls::stream<DATA_T> &in_stream,
         hls::stream<DATA_T> &out_stream,
@@ -107,19 +113,35 @@ void MMU_fast(
             case bypass: 
 
                 if (in_stream.read_nb(buff_w)){
+#if HW_SIM
+                    if (out_stream.size() >= SIZE_FIFO_T){
+                        /* Out stream full and input stream not empty */
+                        state = stall;
+                        flagbuff_w = true;
+                        ddr_data = 1;
+                    } else {
+                        out_stream.write(buff_w);
+                    }
+#else
                     if (!out_stream.write_nb(buff_w)){
                         /* Out stream full and input stream not empty */
                         state = stall;
                         flagbuff_w = true;
                         ddr_data = 1;
                     }
+#endif
                 }
 
                 break;
 
             case stall:
                 if (in_stream.size() < DATA_PER_WORD){
+#if HW_SIM
+                    if (out_stream.size() < SIZE_FIFO_T){
+                        out_stream.write(buff_w);
+#else
                     if (out_stream.write_nb(buff_w)){
+#endif
                         /* Out stream not full and packet not ready,
                          * return to bypass state */
                         flagbuff_w = false;
@@ -139,7 +161,12 @@ void MMU_fast(
                     flagbuff_r = true;
                 }
 
+#if HW_SIM
+                if (store_stream.size() < SIZE_FIFO_P) {
+                    store_stream.write(buff_r);
+#else
                 if (store_stream.write_nb(buff_r)) {
+#endif
                     p_counter--;
                     ddr_data++;
                     flagbuff_r = false;
@@ -149,7 +176,12 @@ void MMU_fast(
                 }
 
                 if (flagbuff_w){
+#if HW_SIM
+                    if (out_stream.size() < SIZE_FIFO_T) {
+                        out_stream.write(buff_w);
+#else
                     if (out_stream.write_nb(buff_w)){
+#endif
                         ddr_data--;
                         if (!load_stream.read_nb(buff_w)){
                             flagbuff_w = false;
@@ -170,7 +202,12 @@ void MMU_fast(
                 }
 
                 if (flagbuff_w){
+#if HW_SIM
+                    if (out_stream.size() < SIZE_FIFO_T) {
+                        out_stream.write(buff_w);
+#else
                     if (out_stream.write_nb(buff_w)){
+#endif
                         ddr_data--;
                         if (ddr_data == 0){
                             state = bypass;
@@ -226,7 +263,11 @@ void MMU_slow(
 
             case bypass: 
                 if (!in_stream.empty()){
+#if HW_SIM
+                    if (out_stream.size() >= FIFO_SIZE) {
+#else
                     if (out_stream.full()){
+#endif
                         state = stall;
                     } else {
                         out_stream.write(in_stream.read());
@@ -283,6 +324,8 @@ void MMU_slow(
     }
 
     mem[0] = (DDR_WORD_T)max_space;
+    int temp = DDR_WORDS;
+    mem[1] = (DDR_WORD_T)temp;
 }
 
 /**
@@ -329,7 +372,9 @@ void dynfifo_init(
 #ifdef __SYNTHESIS__    
 
     MMU_fast<DATA_T,
-            DATA_PER_WORD>(
+            DATA_PER_WORD,
+            FIFO_SIZE_T,
+            FIFO_SIZE_P>(
             in_stream,
             out_stream,
             store_stream,
@@ -352,7 +397,9 @@ void dynfifo_init(
 
     std::thread mmu_fast_t(
             MMU_fast<DATA_T,
-            DATA_PER_WORD>,
+            DATA_PER_WORD,
+            FIFO_SIZE_T,
+            FIFO_SIZE_P>,
             std::ref(in_stream),
             std::ref(out_stream),
             std::ref(store_stream),

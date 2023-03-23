@@ -21,9 +21,9 @@
 #include "hls_burst_maxi.h"
 //#include "ap_utils.h"
 
-#define HTB_SIZE    (1UL << (H_W_1 + H_W_2 - (9 - C_W)))
-#define CNT_ROW     (1UL << (9 - C_W))
-#define EDGE_ROW    (1UL << (9 - E_W))
+#define HTB_SIZE    (1UL << (H_W_1 + H_W_2 - (DDR_BIT - C_W)))
+#define CNT_ROW     (1UL << (DDR_BIT - C_W))
+#define EDGE_ROW    (1UL << (DDR_BIT - E_W))
 #define STOP_S      7
 
 #define V_ID_W      VERTEX_WIDTH_BIT
@@ -203,13 +203,13 @@ INCREASE_COUNTER_DDR_LOOP:
         addr_counter += index2;
 
         /* Compute address of row storing the counter */
-        addr_outrow = hTables[ntb].start_offset + (addr_counter >> (9 - C_W));
+        addr_outrow = hTables[ntb].start_offset + (addr_counter >> (DDR_BIT - C_W));
 
         /* Compute address of counter inside the row */
-        addr_inrow = addr_counter.range((9 - C_W) - 1, 0);
+        addr_inrow = addr_counter.range((DDR_BIT - C_W) - 1, 0);
 
         /* Read, modify and write the counter */
-        htb_buf[addr_outrow] = utils_increasecounter<9, C_W>(htb_buf[addr_outrow], addr_inrow);
+        htb_buf[addr_outrow] = utils_increasecounter<DDR_BIT, C_W>(htb_buf[addr_outrow], addr_inrow);
  
         hTables[ntb].n_edges++;     
         last = stream_end.read();
@@ -257,7 +257,7 @@ COUNTER_TO_OFFSET_TABLE_LOOP:
                 }
 
                 /* Check if an hash is used */
-                if (((start << (9 - C_W)) + g) % (1UL << H_W_2) == 0){
+                if (((start << (DDR_BIT - C_W)) + g) % (1UL << H_W_2) == 0){
                     if(prev_addr < base_addr){
                         hash_used++;
                         prev_addr = base_addr;
@@ -304,10 +304,10 @@ INCREASE_COUNTER_DDR_LOOP:
         addr_offset += index2;
 
         /* Compute address of row storing the offset */
-        addr_outrow = hTables[ntb].start_offset + (addr_offset >> (9 - C_W));
+        addr_outrow = hTables[ntb].start_offset + (addr_offset >> (DDR_BIT - C_W));
 
         /* Compute address of offset inside the row */
-        addr_inrow = addr_offset.range((9 - C_W) - 1, 0);
+        addr_inrow = addr_offset.range((DDR_BIT - C_W) - 1, 0);
 
         /* Read, modify and write the offset */
         /* ram_row = htb_buf[addr_outrow]; */
@@ -327,10 +327,10 @@ INCREASE_COUNTER_DDR_LOOP:
         
         /* Compute address of row that will store the edge */
         addr_outrow = hTables[ntb].start_edges 
-            + (offset >> (9 - E_W));
+            + (offset >> (DDR_BIT - E_W));
 
         /* Compute address of the edge inside the row */
-        addr_inrow = offset.range((9 - E_W) - 1, 0);
+        addr_inrow = offset.range((DDR_BIT - E_W) - 1, 0);
 
         /* Read, modify and write the edge */
         ram_row = htb_buf[addr_outrow];
@@ -567,7 +567,7 @@ void fillTables(
     /* Resetting portion of memory dedicated to counters 
      * 1 << H_W_1 * H_W_2 is the number of counters needed
      * for each table, then it should be divided by the number
-     * of counters stored in each row which is 1 << (9 - C_W)*/
+     * of counters stored in each row which is 1 << (DDR_BIT - C_W)*/
     ap_uint<64> end_addr = numTables * HTB_SIZE;
 /*
 RESET_HASHTABLES_LOOP:
@@ -603,7 +603,7 @@ STORE_HASHTABLES_POINTER_LOOP:
 STORE_EDGES_POINTER_LOOP:
     for (ap_uint<8> ntb = 0; ntb < numTables; ntb++){
         hTables0[ntb].start_edges = start_addr;
-        start_addr += (hTables0[ntb].n_edges >> (9 - E_W)) + 1;
+        start_addr += (hTables0[ntb].n_edges >> (DDR_BIT - E_W)) + 1;
 #ifndef __SYNTHESIS__
         assert(start_addr < DDR_WIDTH);
 #endif
@@ -634,7 +634,7 @@ STORE_EDGES_POINTER_LOOP:
 
 #ifndef __SYNTHESIS__
     end_addr = start_addr;
-    std::cout << "Occupied " << end_addr * 64 << " bytes, " << end_addr <<
+    std::cout << "Occupied " << end_addr * (1 << (DDR_BIT-3)) << " bytes, " << end_addr <<
         " words." << std::endl;
 #endif
 
@@ -648,7 +648,7 @@ STORE_EDGES_POINTER_LOOP:
 /* addr++){ */
 /* ap_uint<DDR_W> row = htb_buf[start + addr]; */
 /* for(int g = 0; g < CNT_ROW; g++){ */
-/* if (((addr << (9 - C_W)) + g) % (1UL << H_W_2) == 0){ */
+/* if (((addr << (DDR_BIT - C_W)) + g) % (1UL << H_W_2) == 0){ */
 /* f << counter << ": " << std::endl; */
 /* counter++; */
 /* } */
@@ -665,7 +665,7 @@ STORE_EDGES_POINTER_LOOP:
 /* f << "Table " << tab << std::endl; */
 /* ap_uint<64> start = hTables0[tab].start_edges; */
 /* for(ap_uint<64> addr = 0; */
-/* addr <= (hTables0[tab].n_edges >> (9-E_W)); */
+/* addr <= (hTables0[tab].n_edges >> (DDR_BIT-E_W)); */
 /* addr++){ */
 /* ap_uint<DDR_W> row = htb_buf[start + addr]; */
 /* for(int g = 0; g < EDGE_ROW; g++){ */
@@ -704,10 +704,10 @@ ap_uint<(1UL << T)> read_table(
     addr_counter += index2;
 
     /* Compute address of row storing the counter */
-    addr_row = start_addr + (addr_counter >> (9 - T));
+    addr_row = start_addr + (addr_counter >> (DDR_BIT - T));
 
     /* Compute address of data inside the row */
-    addr_inrow = addr_counter.range((9 - T) - 1, 0);
+    addr_inrow = addr_counter.range((DDR_BIT - T) - 1, 0);
 
     /* Read the data */
     ram_row = htb_buf[addr_row];
@@ -864,10 +864,10 @@ void mwj_propose_readmin(
             minEnd = stream_minread_in.read();
             minOff = stream_minread_in.read();
             minData = stream_min_in.read();
-            unsigned int rowstart = minOff + (minStart >> (9 - E_W));
-            unsigned int rowend = minOff + (minEnd >> (9 - E_W));
-            unsigned int window_left = minStart.range((9 - E_W) - 1, 0);
-            unsigned int window_right = minEnd.range((9 - E_W) - 1, 0) + 
+            unsigned int rowstart = minOff + (minStart >> (DDR_BIT - E_W));
+            unsigned int rowend = minOff + (minEnd >> (DDR_BIT - E_W));
+            unsigned int window_left = minStart.range((DDR_BIT - E_W) - 1, 0);
+            unsigned int window_right = minEnd.range((DDR_BIT - E_W) - 1, 0) + 
                 (rowend - rowstart) * EDGE_ROW;
             unsigned int cnt = 0;
             
@@ -1569,10 +1569,10 @@ VERIFY_READ_MEMORY_LOOP:
                         /* ap_uint<32> addr_inrow; */
 
                         /* Compute address of row storing the counter */
-                        /* addr_row = hTables[tableIndex].start_edges + (start_off >> (9 - E_W)); */
+                        /* addr_row = hTables[tableIndex].start_edges + (start_off >> (DDR_BIT - E_W)); */
 
                         /* Compute address of data inside the row */
-                        /* addr_inrow = start_off.range((9 - E_W) - 1, 0); */
+                        /* addr_inrow = start_off.range((DDR_BIT - E_W) - 1, 0); */
 
                         /* Read the data */
                         /* if (addr_prev_row == addr_row){ */
@@ -1809,7 +1809,7 @@ void multiwayJoinWrap(
         ap_uint<V_ID_W>,    /* fifo data type */
         T_DDR,              /* fifo data type */
         S_DEPTH,            /* in/out stream size */
-        64,                 /* load/store stream size */
+        BURST_S*2,          /* load/store stream size */
         DDR_WORD,           /* bitwidth ddr word */
         BURST_S,            /* burst transaction size */
         RES_WIDTH>          /* memory words available */

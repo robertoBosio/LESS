@@ -24,12 +24,12 @@
 
 /* bitwidth of the hash to index source vertices, 1st level.
  * Must be greater or equal to HASH_WIDTH_SECOND. */
-#define HASH_WIDTH_FIRST    9
+#define HASH_WIDTH_FIRST    11
 
 /* bitwidth of the hash to index a specific edge, 2nd level.
  * Must be greater or equal to 5 due to the filter in
  * hashtovid function. */
-#define HASH_WIDTH_SECOND   6
+#define HASH_WIDTH_SECOND   7
 
 #define MAX_COLLISIONS      (1UL << 5)
 
@@ -37,9 +37,10 @@
 
 #define S_DEPTH             32
 #define BURST_S             32
-#define DDR_WORD            512
+#define DDR_BIT             7
+#define DDR_WORD            (1UL << DDR_BIT)
 #define DDR_WIDTH           (15000000 / (DDR_WORD / 8))
-#define RES_WIDTH			(BURST_S * (1UL << 15))
+#define RES_WIDTH			(BURST_S * (1UL << 17))
 
 #define COUNT_ONLY
 #define UNDIRECTED
