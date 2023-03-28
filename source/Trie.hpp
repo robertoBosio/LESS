@@ -1,3 +1,4 @@
+#pragma once
 #include <ap_int.h>
 #include "Parameters.hpp"
 #include "types.hpp"

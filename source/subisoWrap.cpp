@@ -2,13 +2,13 @@
 #include "subgraphIsomorphism.hpp"
 
 void subisoWrapper(
-		hls::stream<T_NODE> &stream_src,
-		hls::stream<T_NODE> &stream_dst,
-		hls::stream<T_LABEL> &stream_src_l,
-		hls::stream<T_LABEL> &stream_dst_l,
-        T_DDR htb_buf[DDR_WIDTH],
-        /* hls::burst_maxi<T_DDR> htb_buf1, */
-        T_DDR res_buf[RES_WIDTH],
+        edge_t edge_buf[GRAPHS_SPACE],
+        row_t htb_buf[HASHTABLES_SPACE],
+        /* hls::burst_maxi<row_t> htb_buf1, */
+        row_t res_buf[RESULTS_SPACE],
+        unsigned short numQueryVert,
+        unsigned short numQueryEdges,
+        unsigned long numDataEdges,
 
 #ifdef DEBUG_INTERFACE
         unsigned int &debif_endpreprocess,
@@ -24,16 +24,16 @@ void subisoWrapper(
 {
 
     subgraphIsomorphism
-            (stream_src,
-             stream_dst,
-             stream_src_l,
-             stream_dst_l,
+            (edge_buf,
              htb_buf,
              htb_buf,
              htb_buf,
              htb_buf,
              /* htb_buf1, */
              res_buf,
+             numQueryVert,
+             numQueryEdges,
+             numDataEdges,
 #ifdef DEBUG_INTERFACE
              debif_endpreprocess,
 #endif

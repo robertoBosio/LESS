@@ -2,6 +2,7 @@
 #include <fstream>
 #include <iostream>
 #include <cstdio>
+#include <cassert>
 #include <unordered_map>
 #include <ap_int.h>
 #include "hls_burst_maxi.h"
@@ -10,46 +11,60 @@
 #include "Parameters.hpp"
 
 #include <hls_stream.h>
-/* #include "hls_stream_sizeup.h" */
-int stream_query(
-        std::string filename,
-		hls::stream<T_NODE> &stream_src,
-		hls::stream<T_NODE> &stream_dst,
-		hls::stream<T_LABEL> &stream_src_l,
-		hls::stream<T_LABEL> &stream_dst_l,
-        unsigned int &numQueryVertices)
+
+template <size_t NODE_W,
+         size_t LAB_W,
+         size_t GRAPH_SPACE>
+edge_t *load_graphs(
+        std::string queryfile,
+        std::string datafile,
+        unsigned short &numQueryVertices,
+        unsigned short &numQueryEdges,
+        unsigned long &numDataEdges)
 {
-    /* Query data structure */
-    unsigned int numQueryEdges = 0;       
+    unsigned long numDataVertices;
+    unsigned long edge_buf_p = 0;
+    edge_t edge;
 
     /* Query file */
-    std::ifstream fQuery(filename);
+    std::ifstream fQuery(queryfile);
+    std::ifstream fData(datafile);
     
-    if (!fQuery.is_open())
-        return -1;
+    if (!fQuery.is_open() || !fData.is_open())
+        return (edge_t*)nullptr;
 
     std::string fLine{};
-    std::unordered_map<unsigned long, unsigned long> vToLabel;
+    std::unordered_map<unsigned long, unsigned long> vToLabelQuery;
+    std::unordered_map<unsigned long, unsigned long> vToLabelData;
 
-    /* Store labels */
+    /* Read vertices and edges cardinality */
     std::getline(fQuery, fLine);
-    sscanf(fLine.c_str(), "%*c %u %u", &numQueryVertices, &numQueryEdges);	
+    sscanf(fLine.c_str(), "%*c %hu %hu", &numQueryVertices, &numQueryEdges);	
+    std::getline(fData, fLine);
+    sscanf(fLine.c_str(), "%*c %lu %lu", &numDataVertices, &numDataEdges);
+
+    std::cout << numQueryVertices << " " << numQueryEdges << std::endl;
+    std::cout << numDataVertices << " " << numDataEdges << std::endl;
+    assert(GRAPH_SPACE > numDataEdges + numQueryVertices + numQueryEdges);
+
+    edge_t *edge_buf = (edge_t*)malloc(GRAPH_SPACE * sizeof(edge_t));
+
+    if (!edge_buf)
+        return (edge_t*)nullptr;
+
+    /* Store query labels */
     for(int count = 0; count < numQueryVertices; count++){    
         unsigned long node_t, label_t;
         std::getline(fQuery, fLine);
         sscanf(fLine.c_str(), "%*c %lu %lu %*u", &node_t, &label_t);
-        vToLabel.insert(std::make_pair(node_t, label_t));
+        vToLabelQuery.insert(std::make_pair(node_t, label_t));
     }
 
-    /* Stream matching order */
+    /* Stream matching order 
+     * RIGHT NOW NUMERICAL ORDERD */
     for(int count = 0; count < numQueryVertices; count++){ 
-        unsigned long node_t;   
-        ap_uint<VERTEX_WIDTH_BIT> node = count;
-
-		T_NODE nodesrcif;
-        nodesrcif.data = node;
-        nodesrcif.last = (count == (numQueryVertices - 1));
-        stream_src.write(nodesrcif);
+        edge.src = (ap_uint<NODE_W>)count;
+        edge_buf[edge_buf_p++] = edge;
     }
 
     /* Stream edges */
@@ -57,130 +72,35 @@ int stream_query(
         unsigned long nodesrc_t, nodedst_t;
         std::getline(fQuery, fLine);
         sscanf(fLine.c_str(), "%*c %lu %lu", &nodesrc_t, &nodedst_t);
-        ap_uint<VERTEX_WIDTH_BIT> nodesrc = nodesrc_t;
-        ap_uint<VERTEX_WIDTH_BIT> nodedst = nodedst_t;
-        ap_uint<LABEL_WIDTH> labelsrc = vToLabel.at(nodesrc_t);
-        ap_uint<LABEL_WIDTH> labeldst = vToLabel.at(nodedst_t);
-
-        T_LABEL labeldstif;
-		T_LABEL labelsrcif;
-		T_NODE nodedstif;
-		T_NODE nodesrcif;
-		labeldstif.data = labeldst;
-		labelsrcif.data = labelsrc;
-		nodedstif.data = nodedst;
-		nodesrcif.data = nodesrc;
-		nodesrcif.last = (count == (numQueryEdges - 1));
-
-		stream_dst_l.write(labeldstif);
-		stream_src_l.write(labelsrcif);
-		stream_dst.write(nodedstif);
-		stream_src.write(nodesrcif);
+        edge.src = (nodesrc_t << LAB_W) | vToLabelQuery.at(nodesrc_t);
+        edge.dst = (nodedst_t << LAB_W) | vToLabelQuery.at(nodedst_t);
+        edge_buf[edge_buf_p++] = edge;
     }
 
-    fQuery.close();
-    return 0;
-}
-
-int stream_datagraph(
-        std::string filename,
-		hls::stream<T_NODE> &stream_src,
-		hls::stream<T_NODE> &stream_dst,
-		hls::stream<T_LABEL> &stream_src_l,
-		hls::stream<T_LABEL> &stream_dst_l)
-{
-
-
-    unsigned long numDataVertices = 0;       
-    unsigned long numDataEdges = 0;       
-
-    /* Data graph files */
-    std::ifstream fData(filename);
-    std::string fLine{};
-
-    if (!fData.is_open())
-        return -1;
-
-    std::unordered_map<unsigned long, unsigned long> vToLabel;
-
-    /* Store labels */
-    std::getline(fData, fLine);
-    sscanf(fLine.c_str(), "%*c %lu %lu", &numDataVertices, &numDataEdges);	
+    /* Store data labels */
     for(int count = 0; count < numDataVertices; count++){    
         unsigned long node_t, label_t;
         std::getline(fData, fLine);
         sscanf(fLine.c_str(), "%*c %lu %lu %*u", &node_t, &label_t);
-        vToLabel.insert(std::make_pair(node_t, label_t));
+        vToLabelData.insert(std::make_pair(node_t, label_t));
     }
-
+    
     /* Stream edges */
     for(int count = 0; count < numDataEdges; count++){    
         unsigned long nodesrc_t, nodedst_t;
         std::getline(fData, fLine);
         sscanf(fLine.c_str(), "%*c %lu %lu", &nodesrc_t, &nodedst_t);
-        ap_uint<VERTEX_WIDTH_BIT> nodesrc = nodesrc_t;
-        ap_uint<VERTEX_WIDTH_BIT> nodedst = nodedst_t;
-        ap_uint<LABEL_WIDTH> labelsrc = vToLabel.at(nodesrc_t);
-        ap_uint<LABEL_WIDTH> labeldst = vToLabel.at(nodedst_t);
-
-        T_LABEL labeldstif;
-		T_LABEL labelsrcif;
-		T_NODE nodedstif;
-		T_NODE nodesrcif;
-        labeldstif.data = labeldst;
-		labelsrcif.data = labelsrc;
-		nodedstif.data = nodedst;
-		nodesrcif.data = nodesrc;
-        nodesrcif.last = (count == (numDataEdges - 1));
-
-		stream_dst_l.write(labeldstif);
-		stream_src_l.write(labelsrcif);
-		stream_dst.write(nodedstif);
-		stream_src.write(nodesrcif);
-
-    }
-
-    /* Rewind the file for 2nd stream */
-    fData.clear();
-    fData.seekg(0);
-
-    /* Skip vertices section */
-    for(int count = 0; count < numDataVertices + 1; count++){    
-        std::getline(fData, fLine);
-    }
-
-    /* Stream edges 2nd time */
-    for(int count = 0; count < numDataEdges; count++){    
-        unsigned long nodesrc_t, nodedst_t;
-        std::getline(fData, fLine);
-        sscanf(fLine.c_str(), "%*c %lu %lu", &nodesrc_t, &nodedst_t);
-        ap_uint<VERTEX_WIDTH_BIT> nodesrc = nodesrc_t;
-        ap_uint<VERTEX_WIDTH_BIT> nodedst = nodedst_t;
-        ap_uint<LABEL_WIDTH> labelsrc = vToLabel.at(nodesrc_t);
-        ap_uint<LABEL_WIDTH> labeldst = vToLabel.at(nodedst_t);
-
-        T_LABEL labeldstif;
-		T_LABEL labelsrcif;
-		T_NODE nodedstif;
-		T_NODE nodesrcif;
-		labeldstif.data = labeldst;
-		labelsrcif.data = labelsrc;
-		nodedstif.data = nodedst;
-		nodesrcif.data = nodesrc;
-		nodesrcif.last = (count == (numDataEdges - 1));
-
-		stream_dst_l.write(labeldstif);
-		stream_src_l.write(labelsrcif);
-		stream_dst.write(nodedstif);
-		stream_src.write(nodesrcif);
+        edge.src = (nodesrc_t << LAB_W) | vToLabelData.at(nodesrc_t);
+        edge.dst = (nodedst_t << LAB_W) | vToLabelData.at(nodedst_t);
+        edge_buf[edge_buf_p++] = edge;
     }
 
     fData.close();
-    return 0;
+    fQuery.close();
+    return edge_buf;
 }
 
 unsigned int subgraphIsomorphism_sw(){
-    
     std::ifstream fGolden("data/golden.txt");
     unsigned int nEmbedd = 0;
     std::string fLine{};
@@ -215,12 +135,6 @@ unsigned int countSol(
 
 int main()
 {
-    hls::stream<T_NODE> stream_src("src nodes");
-    hls::stream<T_NODE> stream_dst("dst nodes");
-    hls::stream<T_NODE> stream_out("result");
-    hls::stream<T_LABEL> stream_src_l("src labels");
-    hls::stream<T_LABEL> stream_dst_l("dst labels");
-
 #ifdef COUNT_ONLY
     long unsigned int result;
 #else
@@ -232,12 +146,14 @@ int main()
     unsigned int debug_endpreprocess_s {0};
 #endif
 
-    unsigned int nQV = 0;
+    unsigned short nQV = 0;
+    unsigned short nQE = 0;
+    unsigned long nDE = 0;
     unsigned int res_actual;
     unsigned int res_expected;
     bool flag = true;
 
-    T_DDR *res_buf = (T_DDR*)malloc(RES_WIDTH * sizeof(T_DDR));
+    row_t *res_buf = (row_t*)malloc(RESULTS_SPACE * sizeof(row_t));
     
     if (!res_buf){
 		std::cout << "Allocation failed." << std::endl;
@@ -245,11 +161,11 @@ int main()
 	}
 
 
-    std::cout << "Allocated " << 
-        ((unsigned long)(DDR_WIDTH + RES_WIDTH) * DDR_WORD / 8 ) 
-        << " bytes." << std::endl;
+    std::cout << "Allocating " << 
+        ((unsigned long)(HASHTABLES_SPACE + RESULTS_SPACE) * DDR_WORD / 8 ) +
+        GRAPHS_SPACE * sizeof(edge_t) << " bytes." << std::endl;
  
-    std::ifstream fTest("data/test.txt");
+    std::ifstream fTest("data/test.csv");
     std::string fLine{};
     char datagraph_file[100], querygraph_file[100];
     std::getline(fTest, fLine);
@@ -261,41 +177,33 @@ int main()
         }
         
         sscanf(fLine.c_str(), "%s %s %u", datagraph_file, querygraph_file, &res_expected);	
-        T_DDR *htb_buf = (T_DDR*)calloc(DDR_WIDTH, sizeof(T_DDR));
+        row_t *htb_buf = (row_t*)calloc(HASHTABLES_SPACE, sizeof(row_t));
         if (!htb_buf){
             std::cout << "Allocation failed." << std::endl;
             return -1;
         }
 
-        int fl = stream_query(
+        edge_t *edge_buf = load_graphs<
+            VERTEX_WIDTH_BIT,
+            LABEL_WIDTH,
+            GRAPHS_SPACE>(
                 std::string(querygraph_file),
-                stream_src,
-                stream_dst,
-                stream_src_l,
-                stream_dst_l,
-                nQV);
-
-        if (fl != 0)
-            return -1;
-
-        fl = stream_datagraph(
                 std::string(datagraph_file),
-                stream_src,
-                stream_dst,
-                stream_src_l,
-                stream_dst_l);
+                nQV,
+                nQE,
+                nDE);
 
-        if (fl != 0)
+        if (!edge_buf)
             return -1;
         
         subisoWrapper(
-                stream_src,
-                stream_dst,
-                stream_src_l,
-                stream_dst_l,
+                edge_buf,
                 htb_buf,
-/* hls::burst_maxi<T_DDR>(htb_buf), */
+/* hls::burst_maxi<row_t>(htb_buf), */
                 res_buf,
+                nQV,
+                nQE,
+                nDE,
 
 #ifdef DEBUG_INTERFACE
                 debug_endpreprocess_s,
@@ -311,6 +219,7 @@ int main()
 #endif
 
         free(htb_buf);
+        free(edge_buf);
         std::cout << "Expected: " << res_expected << " actual: " << res_actual << std::endl;
         flag &= (res_actual == res_expected);
         std::getline(fTest, fLine);
