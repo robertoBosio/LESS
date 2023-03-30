@@ -1,21 +1,22 @@
-#open_project -reset subgraphiso
-open_project subgraphiso
+open_project -reset subgraphiso
+# open_project subgraphiso
 
-add_files "source/dynfifo_utils.hpp"
-add_files "source/Parameters.hpp"
-add_files "source/Trie.hpp"
-add_files "source/debug.hpp"
-add_files "source/QueryVertex.hpp"
-add_files "source/preprocess.hpp"
-add_files "source/subgraphIsomorphism.hpp"
-add_files "source/subisoWrap.hpp"
-add_files "source/subisoWrap.cpp"
+# add_files "source/dynfifo_utils.hpp"
+# add_files "source/Parameters.hpp"
+# add_files "source/Trie.hpp"
+# add_files "source/debug.hpp"
+# add_files "source/QueryVertex.hpp"
+# add_files "source/preprocess.hpp"
+# add_files "source/subgraphIsomorphism.hpp"
+add_files "source/subisoWrap.cpp" -cflags "-I ./source"
 
-add_files "source/types.hpp"
-add_files "source/utils.hpp"
-add_files "source/hash_lookup3.hpp"
+# add_files "source/subisoWrap.hpp"
 
-add_files -tb "source/subiso-test.cpp data dataset" -cflags "-Wno-unknown-pragmas" -csimflags "-Wno-unknown-pragmas"
+# add_files "source/types.hpp"
+# add_files "source/utils.hpp"
+# add_files "source/hash_lookup3.hpp"
+
+add_files -tb "source/subiso-test.cpp data dataset" -cflags "-Wno-attributes -Wno-unknown-pragmas" -csimflags "-Wno-unknown-pragmas"
 
 set_top subgraphIsomorphism
 

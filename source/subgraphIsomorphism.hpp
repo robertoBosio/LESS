@@ -1,10 +1,11 @@
 #define HLS_STREAM_THREAD_SAFE
+#include "cache.h"
 #ifndef __SYNTHESIS__
 #include <cassert>
 #include <fstream>
-#include <thread>
 #include <unordered_map>
 #endif
+#include <thread>
 
 /* #include "hls_stream_sizeup.h" */
 #include <hls_stream.h>
@@ -21,6 +22,7 @@
 #include "hls_burst_maxi.h"
 #include "preprocess.hpp"
 #define STOP_S      7
+    
 
 #define V_ID_W      VERTEX_WIDTH_BIT
 #define V_L_W       LABEL_WIDTH
@@ -34,6 +36,9 @@
 #define S_D         STREAM_DEPTH    
 #define DDR_WORDS   RES_WIDTH
 #define DDR_W       DDR_WORD
+typedef cache< ap_uint<DDR_W>, true, false, 1,
+        HASHTABLES_SPACE, 1, 2, 8, false, 0, 0,
+        false, 7> cache_type;
 
 #ifndef __SYNTHESIS__
 #define DEBUG_STATS
@@ -72,6 +77,48 @@ ap_uint<(1UL << T)> read_table(
     addr_inrow = addr_counter.range((DDR_BIT - T) - 1, 0);
 
     /* Read the data */
+    ram_row = htb_buf[addr_row];
+    ram_row >>= (addr_inrow << T);
+
+/* return ram_row.range(((addr_inrow + 1) << T) - 1, */
+/* addr_inrow << T); */
+    return ram_row;
+
+}
+
+template <size_t W_1,
+        size_t W_2,
+        size_t SHF,
+        size_t T>
+ap_uint<(1UL << T)> read_table(
+        ap_uint<W_1> index1,
+        ap_uint<W_2> index2,
+        cache_type &htb_buf,
+        ap_uint<32> start_addr)
+{
+    //static ap_uint<DDR_W> ram_row;
+    ap_uint<DDR_W> ram_row;
+    
+    /* It is impossible that the first word read is the all 1s
+     * since before edges are read offsets which are on 
+     * the lower address space of the memory */
+    //static ap_uint<32> prev_addr_row = ~((ap_uint<32>)0);
+    unsigned long addr_row;
+    unsigned long addr_inrow;
+    ap_uint<64> addr_counter;
+
+    addr_counter = index1;
+    addr_counter <<= SHF;
+    addr_counter += index2;
+
+    /* Compute address of row storing the counter */
+    addr_row = start_addr + (addr_counter >> (DDR_BIT - T));
+
+    /* Compute address of data inside the row */
+    addr_inrow = addr_counter.range((DDR_BIT - T) - 1, 0);
+
+    /* Read the data */
+/* std::cout << "addr_row=" << addr_row << std::endl; */
     ram_row = htb_buf[addr_row];
     ram_row >>= (addr_inrow << T);
 
@@ -625,7 +672,7 @@ void mwj_verify_edge(
         hls::stream<bool> &stream_end_inter_in,
         AdjHT *hTables,
         QueryVertex *qVertices,
-        ap_uint<DDR_W> *htb_buf,
+        cache_type &htb_buf,
         hls::stream<bool, 1> &stream_stop,
         
         hls::stream<ap_uint<V_ID_W>> &stream_embed_out,
@@ -637,8 +684,6 @@ void mwj_verify_edge(
     hls::stream<ap_uint<64>> stream_hash_out("Verify edge hash_out");
     ap_uint<8> curQV;
     ap_uint<V_ID_W> curEmb[MAX_QV];
-    ap_uint<DDR_W> cache;
-    ap_uint<32> addr_prev_row = 0;
     bool stop, last;
 
 #ifdef DEBUG_STATS    
@@ -718,35 +763,11 @@ VERIFY_CHECK_EDGE_LOOP:
 #endif
 VERIFY_READ_MEMORY_LOOP:
                     for (; start_off < end_off; start_off++){
-#pragma HLS pipeline II=1
-                        ap_uint<DDR_W> ram_row;
-                        ap_uint<32> addr_row;
-                        ap_uint<32> addr_inrow;
-
-                        /* Compute address of row storing the counter */
-                        addr_row = hTables[tableIndex].start_edges + (start_off >> (DDR_BIT - E_W));
-
-                        /* Compute address of data inside the row */
-                        addr_inrow = start_off.range((DDR_BIT - E_W) - 1, 0);
-
-                        /* Read the data */
-                        if (addr_prev_row == addr_row){
-                            ram_row = cache;
-#ifdef DEBUG_STATS
-                            debug::verify_reusage++;
-#endif
-                        } else {
-                            ram_row = htb_buf[addr_row];
-                            cache = ram_row;
-                            addr_prev_row = addr_row;
-                        }
-
-                        ap_uint<2 * V_ID_W> edge = ram_row >> (addr_inrow << E_W);
-/* ap_uint<2 * V_ID_W> edge = read_table<32, 1, 0, E_W>( */
-/* start_off, */
-/* 0, */
-/* htb_buf, */
-/* hTables[tableIndex].start_edges); */
+                        ap_uint<2 * V_ID_W> edge = read_table<32, 1, 0, E_W>(
+                                start_off,
+                                0,
+                                htb_buf,
+                                hTables[tableIndex].start_edges);
 
                         ap_uint<V_ID_W> vertexIndexed, vertexIndexing;
                         vertexIndexed = edge.range(V_ID_W - 1, 0);
@@ -884,6 +905,40 @@ VERIFY_WRITE_PARTIAL_LOOP:
     }
 }
 
+void mwj_verify_edgeWrapper(
+        hls::stream<ap_uint<V_ID_W>> &stream_embed_in,
+        hls::stream<bool> &stream_end_embed_in,
+        hls::stream<ap_uint<V_ID_W>> &stream_inter_in,
+        hls::stream<bool> &stream_end_inter_in,
+        AdjHT *hTables,
+        QueryVertex *qVertices,
+        cache_type &htb_buf,
+        hls::stream<bool, 1> &stream_stop,
+        
+        hls::stream<ap_uint<V_ID_W>> &stream_embed_out,
+        hls::stream<bool> &stream_end_embed_out,
+        hls::stream<ap_uint<V_ID_W>> &stream_checked_out,
+        hls::stream<bool> &stream_checked_end_out)
+{
+    htb_buf.init();
+    std::thread mwj_verify_edge_t(
+            mwj_verify_edge,
+            std::ref(stream_embed_in),
+            std::ref(stream_end_embed_in),
+            std::ref(stream_inter_in),
+            std::ref(stream_end_inter_in),
+            hTables,
+            qVertices,
+            std::ref(htb_buf),
+            std::ref(stream_stop),
+            std::ref(stream_embed_out),
+            std::ref(stream_end_embed_out),
+            std::ref(stream_checked_out),
+            std::ref(stream_checked_end_out));
+    mwj_verify_edge_t.join();
+    htb_buf.stop();
+}
+
 void multiwayJoinWrap(
         ap_uint<DDR_W> *htb_buf0,
         ap_uint<DDR_W> *htb_buf1,
@@ -959,6 +1014,9 @@ void multiwayJoinWrap(
     hls::stream<ap_uint<V_ID_W>, 32> in_stream("in stream");
     hls::stream<ap_uint<V_ID_W>, 32> out_stream("out stream");
 
+    
+    cache_type a_cache(htb_buf3);
+
     dynfifo_init<
         ap_uint<V_ID_W>,    /* fifo data type */
         row_t,              /* fifo data type */
@@ -973,8 +1031,8 @@ void multiwayJoinWrap(
              streams_stop[6],
              res_buf);
 
-#ifdef __SYNTHESIS__
-    
+#ifdef __SYNTHESIS__  
+
     mwj_propose_findmin(
             out_stream,
             hTables0,
@@ -1019,14 +1077,14 @@ void multiwayJoinWrap(
             stream_checked1,
             stream_checked1_end);
 
-    mwj_verify_edge(
+    cache_wrapper (mwj_verify_edge,
             stream_embed1,
             stream_embed1_end,
             stream_checked1,
             stream_checked1_end,
             hTables1,
             qVertices0,
-            htb_buf3,
+            a_cache,
             streams_stop[4],
             stream_embed2,
             stream_embed2_end,
@@ -1095,22 +1153,7 @@ void multiwayJoinWrap(
             std::ref(stream_embed1_end),
             std::ref(stream_checked1),
             std::ref(stream_checked1_end));
-
-    std::thread mwj_verify_edge_t(
-            mwj_verify_edge,
-            std::ref(stream_embed1),
-            std::ref(stream_embed1_end),
-            std::ref(stream_checked1),
-            std::ref(stream_checked1_end),
-            hTables1,
-            qVertices0,
-            htb_buf3,
-            std::ref(streams_stop[4]),
-            std::ref(stream_embed2),
-            std::ref(stream_embed2_end),
-            std::ref(stream_checked2),
-            std::ref(stream_checked2_end));
-
+    
     std::thread mwj_verify_add_t(
             mwj_verify_add,
             std::ref(stream_embed2),
@@ -1121,13 +1164,26 @@ void multiwayJoinWrap(
             std::ref(streams_stop),
             std::ref(in_stream),
             std::ref(result));
-    
-    
+
+    mwj_verify_edgeWrapper(
+            stream_embed1,
+            stream_embed1_end,
+            stream_checked1,
+            stream_checked1_end,
+            hTables1,
+            qVertices0,
+            a_cache,
+            streams_stop[4],
+            stream_embed2,
+            stream_embed2_end,
+            stream_checked2,
+            stream_checked2_end);
+
     mwj_propose_findmin_t.join();
     mwj_propose_readmin_t.join();
     mwj_intersect_t.join();
     mwj_verify_nothomomorphism_t.join(); 
-    mwj_verify_edge_t.join();
+/* mwj_verify_edge_t.join(); */
     mwj_verify_add_t.join();
 
 #endif
@@ -1160,12 +1216,12 @@ void subgraphIsomorphism(
 {
 
 /* #pragma HLS INTERFACE mode=m_axi port=htb_buf1 bundle=gmem1 depth=DDR_WIDTH */
-#pragma HLS INTERFACE mode=m_axi port=htb_buf0 bundle=gmem0
-#pragma HLS INTERFACE mode=m_axi port=htb_buf1 bundle=gmem1 
-#pragma HLS INTERFACE mode=m_axi port=htb_buf2 bundle=gmem2
-#pragma HLS INTERFACE mode=m_axi port=htb_buf3 bundle=gmem3
-#pragma HLS INTERFACE mode=m_axi port=res_buf bundle=gmem4
-#pragma HLS INTERFACE mode=m_axi port=edge_buf bundle=gmem5
+#pragma HLS INTERFACE mode=m_axi port=htb_buf0 bundle=prep_pfind
+#pragma HLS INTERFACE mode=m_axi port=htb_buf1 bundle=pread
+#pragma HLS INTERFACE mode=m_axi port=htb_buf2 bundle=inter
+#pragma HLS INTERFACE mode=m_axi port=htb_buf3 bundle=verif
+#pragma HLS INTERFACE mode=m_axi port=res_buf bundle=fifo
+#pragma HLS INTERFACE mode=m_axi port=edge_buf bundle=graph
 /* #pragma HLS alias ports=htb_buf0,htb_buf2,htb_buf3 distance=0 */
 #pragma HLS alias ports=htb_buf0,htb_buf1,htb_buf2,htb_buf3 distance=0
 

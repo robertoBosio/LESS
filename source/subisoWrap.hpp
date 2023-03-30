@@ -1,6 +1,7 @@
 #ifndef SUBISOWRAP_HPP
 #define SUBISOWRAP_HPP
 #define HLS_STREAM_THREAD_SAFE
+#define AP_INT_MAX_W 8192
 
 #include "Parameters.hpp"
 #include <ap_int.h>
