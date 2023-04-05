@@ -12,6 +12,11 @@
 #define MAX_QUERY_VERTICES	(1UL << 4)
 #define MAX_TABLES 		    32
 
+/* 5 bits are dedicated to labels, to compact as
+ * much as possible input data.
+ * In the multiway join instead, labels are no more
+ * packed with vertex but 1 bit is used to signal
+ * the end of a solution */
 #define VERTEX_WIDTH        5   /* 4 bytes */
 #define VERTEX_WIDTH_BIT    (1UL << VERTEX_WIDTH)
 #define EDGE_WIDTH          (VERTEX_WIDTH + 1)
@@ -25,12 +30,12 @@
 
 /* bitwidth of the hash to index source vertices, 1st level.
  * Must be greater or equal to HASH_WIDTH_SECOND. */
-#define HASH_WIDTH_FIRST    9
+#define HASH_WIDTH_FIRST    11
 
 /* bitwidth of the hash to index a specific edge, 2nd level.
  * Must be greater or equal to 5 due to the filter in
  * hashtovid function. */
-#define HASH_WIDTH_SECOND   6
+#define HASH_WIDTH_SECOND   7
 
 #define MAX_COLLISIONS      (1UL << 5)
 
@@ -40,7 +45,7 @@
 #define BURST_S             32
 #define DDR_BIT             7
 #define DDR_WORD            (1UL << DDR_BIT)
-#define HASHTABLES_SPACE    (15000000 / (DDR_WORD / 8))
+#define HASHTABLES_SPACE    ((1UL << 24) / (DDR_WORD / 8))
 #define GRAPHS_SPACE        500000
 #define RESULTS_SPACE		(BURST_S * (1UL << 17))
 
@@ -51,6 +56,9 @@
 #define UNDIRECTED
 #define DEBUG_INTERFACE
 #define INTERSECT_INDEXING_LOOP 0
+#define VERIFY_CACHE 1
+#define START_BATCH_SIZE 512
+#define VERIFY_BATHC_SIZE 512
 
 #include <ap_axi_sdata.h>
 typedef struct {

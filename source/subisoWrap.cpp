@@ -11,7 +11,7 @@ void subisoWrapper(
         unsigned long numDataEdges,
 
 #ifdef DEBUG_INTERFACE
-        unsigned int &debif_endpreprocess,
+        volatile unsigned int &debif_endpreprocess,
 #endif
 
 #ifdef COUNT_ONLY

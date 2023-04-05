@@ -563,11 +563,6 @@ template <typename T_DDR,
          size_t STREAM_D,
          size_t HTB_SPACE>
 void fillTables(
-
-#ifdef DEBUG_INTERFACE
-        unsigned int &debif_endpreprocess,
-#endif /* DEBUG_INTERFACE */
-        
         edge_t *edge_buf,
         AdjHT *hTables0,
         AdjHT *hTables1,
@@ -653,10 +648,6 @@ STORE_EDGES_POINTER_LOOP:
             numTables,
             numDataEdges);
 
-#ifdef DEBUG_INTERFACE
-    debif_endpreprocess = hTables0[0].n_edges;
-#endif /* DEBUG_INTERFACE */
-
 #ifndef __SYNTHESIS__
     end_addr = start_addr;
     std::cout << "Occupied " << end_addr * 64 << " bytes, " << end_addr <<
@@ -719,9 +710,6 @@ template <typename T_DDR,
          size_t MAX_QV,
          size_t MAX_TB>
 void preprocess(
-#ifdef DEBUG_INTERFACE
-        unsigned int &debif_endpreprocess,
-#endif /* DEBUG_INTERFACE */
 
         edge_t *edge_buf,
         T_DDR *htb_buf,
@@ -760,9 +748,6 @@ void preprocess(
          HASH2_W,
          STREAM_D,
          HTB_SPACE>(
-#ifdef DEBUG_INTERFACE
-            debif_endpreprocess,
-#endif /* DEBUG_INTERFACE */
             &edge_buf[numQueryVert + numQueryEdges],
             hTables0,
             hTables1,

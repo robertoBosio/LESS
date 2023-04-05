@@ -1,5 +1,5 @@
-open_project -reset subgraphiso
-# open_project subgraphiso
+# open_project -reset subgraphiso
+open_project subgraphiso
 
 # add_files "source/dynfifo_utils.hpp"
 # add_files "source/Parameters.hpp"

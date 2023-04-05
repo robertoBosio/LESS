@@ -28,6 +28,12 @@ namespace debug {
     unsigned long max_collisions {0};
     float avg_collisions {0};
 
+    float cache_hit_0 {0};
+    float cache_hit_1 {0};
+    unsigned long cache_req_0 {0};
+    unsigned long cache_req_1 {0};
+    unsigned long batches {0};
+
     static void init(){
         findmin_reads  = 0;
         readmin_reads  = 0;
@@ -50,5 +56,10 @@ namespace debug {
         intersect_bit_falsepositive = 0;
         intersect_bit_falsenegative = 0;
         verify_reusage = 0;
+        cache_hit_0 = 0;
+        cache_hit_1 = 0;
+        cache_req_0 = 0;
+        cache_req_1 = 0;
+        batches = 0;
     }
 };
