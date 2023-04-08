@@ -210,7 +210,7 @@ int main()
 #endif
                 result);
        
-#ifndef COUNT_ONLY 
+#ifndef COUNT_ONLY
         res_actual = countSol(
             nQV,
             result);

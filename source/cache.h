@@ -17,15 +17,14 @@
  *			- Multi-ports (read-only).
  */
 
-#include <type_traits>
 #include <cstddef>
-/* #define AP_INT_MAX_W (1 << 15) */
 #include "address.h"
 #include "replacer.h"
 #include "l1_cache.h"
 #include "raw_cache.h"
 #define HLS_STREAM_THREAD_SAFE
 #include "hls_stream.h"
+#include <array>
 #include "ap_utils.h"
 #include "ap_int.h"
 #include "utils.h"
@@ -44,7 +43,6 @@ class cache {
 		static const size_t OFF_SIZE = utils::log2_ceil(N_WORDS_PER_LINE);
 		static const size_t TAG_SIZE = (ADDR_SIZE - (SET_SIZE + OFF_SIZE));
 		static const size_t WAY_SIZE = utils::log2_ceil(N_WAYS);
-		static const size_t WORD_SIZE = (sizeof(T) * 8);
 
 		static_assert((RD_ENABLED || WR_ENABLED),
 				"RD_ENABLED and/or WR_ENABLED must be true");
@@ -65,7 +63,12 @@ class cache {
 
 		typedef address<ADDR_SIZE, TAG_SIZE, SET_SIZE, WAY_SIZE, SWAP_TAG_SET>
 			address_type;
-		typedef ap_uint<WORD_SIZE * N_WORDS_PER_LINE> line_type;
+#ifdef __SYNTHESIS__
+		typedef ap_uint<(ADDR_SIZE > 0) ? ADDR_SIZE : 1> addr_main_type;
+#else
+		typedef unsigned long int addr_main_type;
+#endif /* __SYNTHESIS__ */
+		typedef std::array<T, N_WORDS_PER_LINE> line_type;
 		typedef l1_cache<line_type, MAIN_SIZE, N_L1_SETS, N_L1_WAYS,
 			N_WORDS_PER_LINE, SWAP_TAG_SET> l1_cache_type;
 		typedef raw_cache<line_type, (N_SETS * N_WAYS * N_WORDS_PER_LINE), 2>
@@ -90,20 +93,20 @@ class cache {
 
 		typedef struct {
 			op_type op;
-			ap_uint<ADDR_SIZE> addr;
+			addr_main_type addr;
 			T data;
 		} core_req_type;
 
 		typedef struct {
 			op_type op;
-			ap_uint<ADDR_SIZE> load_addr;
-			ap_uint<ADDR_SIZE> write_back_addr;
+			addr_main_type load_addr;
+			addr_main_type write_back_addr;
 			line_type line;
 		} mem_req_type;
 
 		ap_uint<(TAG_SIZE > 0) ? TAG_SIZE : 1> m_tag[N_SETS * N_WAYS];	// 0
-		ap_uint<N_SETS * N_WAYS> m_valid;				// 1
-		ap_uint<N_SETS * N_WAYS> m_dirty;				// 2
+		std::array<bool, N_SETS * N_WAYS> m_valid;			// 1
+		std::array<bool, N_SETS * N_WAYS> m_dirty;			// 2
 		line_type m_cache_mem[N_SETS * N_WAYS];				// 3
 		hls::stream<core_req_type, (LATENCY * PORTS)> m_core_req[PORTS];// 4
 		hls::stream<line_type, (LATENCY * PORTS)> m_core_resp[PORTS];	// 5
@@ -114,7 +117,7 @@ class cache {
 		replacer_type m_replacer;					// 10
 		unsigned int m_core_port;					// 11
 #ifndef __SYNTHESIS__
-		T *m_main_mem;
+		T * const m_main_mem;
 		int m_n_reqs[PORTS] = {0};
 		int m_n_hits[PORTS] = {0};
 		int m_n_l1_reqs[PORTS] = {0};
@@ -122,7 +125,8 @@ class cache {
 #endif /* __SYNTHESIS__ */
 
 	public:
-		cache(T *main_mem) {
+#ifdef __SYNTHESIS__
+		cache(T * const main_mem) {
 #pragma HLS array_partition variable=m_tag type=complete dim=0
 			if (PORTS > 1) {
 #pragma HLS array_partition variable=m_core_req type=complete dim=0
@@ -131,15 +135,9 @@ class cache {
 			}
 			run(main_mem);
 		}
-
-		cache() {
-#pragma HLS array_partition variable=m_tag type=complete dim=0
-			if (PORTS > 1) {
-#pragma HLS array_partition variable=m_core_req type=complete dim=0
-#pragma HLS array_partition variable=m_core_resp type=complete dim=0
-#pragma HLS array_partition variable=m_l1_cache_get type=complete dim=0
-			}
-		}
+#else
+		cache(T * const main_mem): m_main_mem(main_mem) {}
+#endif /* __SYNTHESIS__ */
 
 		/**
 		 * \brief	Initialize the cache.
@@ -149,7 +147,7 @@ class cache {
 		void init() {
 #ifndef __SYNTHESIS__
 			// invalidate all cache lines
-			m_valid = 0;
+			m_valid = {0};
 
 			m_replacer.init();
 			m_raw_cache_core.init();
@@ -172,14 +170,10 @@ class cache {
 		 * 			the function in which cache is
 		 * 			accessed.
 		 */
-		void run(T *main_mem) {
+		void run(T * const main_mem) {
 #pragma HLS inline
-#ifdef __SYNTHESIS__
 			run_core();
 			run_mem_if(main_mem);
-#else
-			m_main_mem = main_mem;
-#endif /* __SYNTHESIS__ */
 		}
 
 		/**
@@ -214,7 +208,7 @@ class cache {
 		 * \param[in] port	The port from which to read.
 		 * \param[out] line	The buffer to store the read line.
 		 */
-		void get_line(const ap_uint<ADDR_SIZE> addr_main,
+		void get_line(const addr_main_type addr_main,
 				const unsigned int port, line_type &line) {
 #pragma HLS inline
 #ifndef __SYNTHESIS__
@@ -269,20 +263,17 @@ class cache {
 		 *
 		 * \return		The read data element.
 		 */
-		T get(const ap_uint<ADDR_SIZE> addr_main, const unsigned int port) {
+		T get(const addr_main_type addr_main, const unsigned int port) {
 #pragma HLS inline
 			line_type line;
-
+#pragma HLS array_partition variable=line type=complete dim=0
 			// get the whole cache line
 			get_line(addr_main, port, line);
 
 			// extract information from address
 			address_type addr(addr_main);
 
-			const auto LSB = (addr.m_off * WORD_SIZE);
-			const auto MSB = (LSB + WORD_SIZE - 1);
-			ap_uint<WORD_SIZE> buff = line(LSB, MSB);
-			return *reinterpret_cast<T *>(&buff);
+			return line[addr.m_off];
 		}
 
 		/**
@@ -293,7 +284,7 @@ class cache {
 		 *
 		 * \return		The read data element.
 		 */
-		T get(const ap_uint<ADDR_SIZE> addr_main) {
+		T get(const addr_main_type addr_main) {
 #pragma HLS inline
 			const auto data = get(addr_main, m_core_port);
 			m_core_port = ((m_core_port + 1) % PORTS);
@@ -308,7 +299,7 @@ class cache {
 		 * 			the data element to be written.
 		 * \param[in] data	The data to be written.
 		 */
-		void set(const ap_uint<ADDR_SIZE> addr_main, const T data) {
+		void set(const addr_main_type addr_main, const T data) {
 #pragma HLS inline
 #ifndef __SYNTHESIS__
 			assert(addr_main < MAIN_SIZE);
@@ -446,9 +437,7 @@ class cache {
 
 			if (!read) {
 				// modify the line
-				const auto LSB = (addr.m_off * WORD_SIZE);
-				const auto MSB = (LSB + WORD_SIZE - 1);
-				line(LSB, MSB) = *reinterpret_cast<ap_uint<WORD_SIZE> *>(&(req.data));
+				line[addr.m_off] = req.data;
 
 				// store the modified line to cache
 				m_raw_cache_core.set_line(m_cache_mem,
@@ -463,7 +452,7 @@ class cache {
 #endif /* __SYNTHESIS__ */
 		}
 
-		void exec_mem_req(T *main_mem, mem_req_type &req,
+		void exec_mem_req(T * const main_mem, mem_req_type &req,
 				line_type &line) {
 #pragma HLS inline
 			if ((req.op == READ_OP) || (req.op == READ_WRITE_OP)) {
@@ -490,7 +479,7 @@ class cache {
 		void run_core() {
 #pragma HLS inline off
 			// invalidate all cache lines
-			m_valid = 0;
+			m_valid = {0};
 
 			m_replacer.init();
 			m_raw_cache_core.init();
@@ -622,33 +611,25 @@ MEM_IF_LOOP:		while (1) {
 			}
 		}
 
-		void get_line(const T * const mem,
-				const ap_uint<(ADDR_SIZE > 0) ? ADDR_SIZE : 1> addr,
+		void get_line(const T * const mem, const addr_main_type addr,
 				line_type &line) {
 #pragma HLS inline
 			const T * const mem_line = &(mem[addr & (-1U << OFF_SIZE)]);
 
 			for (auto off = 0; off < N_WORDS_PER_LINE; off++) {
 #pragma HLS unroll
-				const auto LSB = (off * WORD_SIZE);
-				const auto MSB = (LSB + WORD_SIZE - 1);
-				line(LSB, MSB) = *const_cast<ap_uint<WORD_SIZE> *>(
-						reinterpret_cast<const ap_uint<WORD_SIZE> *>(&mem_line[off]));
+				line[off] = mem_line[off];
 			}
 		}
 
-		void set_line(T * const mem,
-				const ap_uint<(ADDR_SIZE > 0) ? ADDR_SIZE : 1> addr,
+		void set_line(T * const mem, const addr_main_type addr,
 				const line_type &line) {
 #pragma HLS inline
 			T * const mem_line = &(mem[addr & (-1U << OFF_SIZE)]);
 
 			for (auto off = 0; off < N_WORDS_PER_LINE; off++) {
 #pragma HLS unroll
-				const auto LSB = (off * WORD_SIZE);
-				const auto MSB = (LSB + WORD_SIZE - 1);
-				ap_uint<WORD_SIZE> buff = line(LSB, MSB);
-				mem_line[off] = *reinterpret_cast<T *>(&buff);
+				mem_line[off] = line[off];
 			}
 		}
 
@@ -670,10 +651,10 @@ MEM_IF_LOOP:		while (1) {
 		class square_bracket_proxy {
 			private:
 				cache *m_cache;
-				const ap_uint<ADDR_SIZE> m_addr_main;
+				const addr_main_type m_addr_main;
 			public:
 				square_bracket_proxy(cache *c,
-						const ap_uint<ADDR_SIZE> addr_main):
+						const addr_main_type addr_main):
 					m_cache(c), m_addr_main(addr_main) {
 #pragma HLS inline
 					}
@@ -709,7 +690,7 @@ MEM_IF_LOOP:		while (1) {
 		};
 
 	public:
-		square_bracket_proxy operator[](const ap_uint<ADDR_SIZE> addr_main) {
+		square_bracket_proxy operator[](const addr_main_type addr_main) {
 #pragma HLS inline
 			return square_bracket_proxy(this, addr_main);
 		}

@@ -58,8 +58,8 @@
 #define INTERSECT_INDEXING_LOOP 0
 #define VERIFY_CACHE 1
 #define START_BATCH_SIZE 512
-#define VERIFY_BATHC_SIZE 512
-
+#define PROPOSE_BATCH_SIZE 64
+#define SET_INFO_WIDTH 16
 #include <ap_axi_sdata.h>
 typedef struct {
     ap_uint<VERTEX_WIDTH_BIT> src, dst;

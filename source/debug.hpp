@@ -23,7 +23,7 @@ namespace debug {
     unsigned long intersect_bit_falsepositive {0};
     unsigned long intersect_bit_falsenegative {0};
     
-    unsigned long verify_reusage {0};
+    unsigned long empty_sol {0};
     unsigned long embeddings {0};
     unsigned long max_collisions {0};
     float avg_collisions {0};
@@ -55,7 +55,7 @@ namespace debug {
         intersect_bit_truenegative = 0;
         intersect_bit_falsepositive = 0;
         intersect_bit_falsenegative = 0;
-        verify_reusage = 0;
+        empty_sol = 0;
         cache_hit_0 = 0;
         cache_hit_1 = 0;
         cache_req_0 = 0;
