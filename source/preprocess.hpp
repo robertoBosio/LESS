@@ -335,9 +335,6 @@ void edgeToHash(
         hls::stream<bool> &stream_end_out)
 {
     
-    hls::stream<ap_uint<NODE_W>> stream_hash_in;
-    hls::stream<ap_uint<64>> stream_hash_out;
-    
 COUNT_OCCURENCIES_TOP_LOOP:
     for (int s = 0; s < numDataEdges; s++) {
         edge_t edge = edge_buf[s];
@@ -363,21 +360,18 @@ COUNT_OCCURENCIES_FIND_TABLE_LOOP:
                 }
 
                 /* Compute indices for hash table */
-                stream_hash_in.write(vertexIndexing);
-                xf::database::hashLookup3<NODE_W>(
-                        stream_hash_in,
-                        stream_hash_out);
+                ap_uint<64> hash_out;
+                xf::database::details::hashlookup3_core<NODE_W>(
+                        vertexIndexing,
+                        hash_out);
 
-                ap_uint<HASH1_W> indexAdj = 
-                    stream_hash_out.read().range(HASH1_W - 1, 0); 
+                ap_uint<HASH1_W> indexAdj = hash_out.range(HASH1_W - 1, 0); 
 
-                stream_hash_in.write(vertexIndexed);
-                xf::database::hashLookup3<NODE_W>(
-                        stream_hash_in, 
-                        stream_hash_out);
+                xf::database::details::hashlookup3_core<NODE_W>(
+                        vertexIndexed,
+                        hash_out);
 
-                ap_uint<HASH2_W> indexEdge = 
-                    stream_hash_out.read().range(HASH2_W - 1, 0); 
+                ap_uint<HASH2_W> indexEdge = hash_out.range(HASH2_W - 1, 0); 
 
                 stream_index1.write(indexAdj);
                 stream_index2.write(indexEdge);
@@ -400,21 +394,18 @@ COUNT_OCCURENCIES_FIND_TABLE_LOOP:
                 }
                 
                 /* Compute indices for hash table */
-                stream_hash_in.write(vertexIndexing);
-                xf::database::hashLookup3<NODE_W>(
-                        stream_hash_in,
-                        stream_hash_out);
+                ap_uint<64> hash_out;
+                xf::database::details::hashlookup3_core<NODE_W>(
+                        vertexIndexing,
+                        hash_out);
 
-                ap_uint<HASH1_W> indexAdj = 
-                    stream_hash_out.read().range(HASH1_W - 1, 0); 
+                ap_uint<HASH1_W> indexAdj = hash_out.range(HASH1_W - 1, 0); 
 
-                stream_hash_in.write(vertexIndexed);
-                xf::database::hashLookup3<NODE_W>(
-                        stream_hash_in, 
-                        stream_hash_out);
+                xf::database::details::hashlookup3_core<NODE_W>(
+                        vertexIndexed,
+                        hash_out);
 
-                ap_uint<HASH2_W> indexEdge = 
-                    stream_hash_out.read().range(HASH2_W - 1, 0); 
+                ap_uint<HASH2_W> indexEdge = hash_out.range(HASH2_W - 1, 0); 
 
                 stream_index1.write(indexAdj);
                 stream_index2.write(indexEdge);

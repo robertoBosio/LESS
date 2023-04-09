@@ -142,8 +142,6 @@ void mwj_propose(
         hls::stream<bool> &stream_end_embed_out)
 {
     
-    hls::stream<ap_uint<V_ID_W>> stream_hash_in("Propose findmin hash_in");
-    hls::stream<ap_uint<64>> stream_hash_out("Propose readmin hash_in");
     ap_uint<8> tableIndex;
     ap_uint<V_ID_W> curQV;
     ap_uint<V_ID_W> readv;
@@ -189,12 +187,9 @@ PROPOSE_TBINDEXED_LOOP:
                 tableIndex = qVertices[curQV].tables_indexed[g];
                 uint8_t ivPos = qVertices[curQV].vertex_indexing[g];
 
-                stream_hash_in.write(curEmb[ivPos]);
-                xf::database::hashLookup3<V_ID_W>(stream_hash_in, stream_hash_out);
-                /* ap_uint<64> hash_out; */
-                /* xf::database::details::hashlookup3_core<V_ID_W>(curEmb[ivPos], hash_out); */
-                /* ap_uint<H_W_1> index = hash_out.range(H_W_1 - 1, 0); */
-                ap_uint<H_W_1> index = stream_hash_out.read().range(H_W_1 - 1, 0);
+                ap_uint<64> hash_out;
+                xf::database::details::hashlookup3_core<V_ID_W>(curEmb[ivPos], hash_out);
+                ap_uint<H_W_1> index = hash_out.range(H_W_1 - 1, 0);
 
                 if (index != 0){ 
                     start_off = read_table<H_W_1, H_W_2, H_W_2, C_W>(
@@ -353,8 +348,6 @@ void mwj_intersect(
         hls::stream<ap_uint<V_ID_W>> &stream_embed_out,
         hls::stream<bool> &stream_end_embed_out)
 {
-    hls::stream<ap_uint<V_ID_W>> stream_hash_in("Intersect hash_in");
-    hls::stream<ap_uint<64>> stream_hash_out("Intersect hash_out");
     ap_uint<64> candidate_hash;
     ap_uint<V_ID_W> candidate_v;
     ap_uint<8> tableIndex, curQV;
@@ -384,9 +377,7 @@ INTERSECT_COPYING_EMBEDDING_LOOP:
 INTERSECT_LOOP:
             while(!last_set.test(0)){
                 candidate_v = stream_min_in.read();
-                stream_hash_in.write(candidate_v);
-                xf::database::hashLookup3<V_ID_W>(stream_hash_in, stream_hash_out);
-                candidate_hash = stream_hash_out.read();
+                xf::database::details::hashlookup3_core<V_ID_W>(candidate_v, candidate_hash);
                 
                 //std::cout << "\t" << candidate << std::endl;
                 bool inter = true;
@@ -403,9 +394,9 @@ INTERSECT_TBINDEXED_LOOP:
                     tableIndex = qVertices[curQV].tables_indexed[g];
                     uint8_t ivPos = qVertices[curQV].vertex_indexing[g];
                     if (setinfo.range(7, 0) != tableIndex || setinfo.range(15, 8) != ivPos) {
-                        stream_hash_in.write(curEmb[ivPos]);
-                        xf::database::hashLookup3<V_ID_W>(stream_hash_in, stream_hash_out);
-                        ap_uint<H_W_1> index1 = stream_hash_out.read().range(H_W_1 - 1, 0);
+                        ap_uint<64> hash_out;
+                        xf::database::details::hashlookup3_core<V_ID_W>(curEmb[ivPos], hash_out);
+                        ap_uint<H_W_1> index1 = hash_out.range(H_W_1 - 1, 0);
                         ap_uint<H_W_2> index2 = candidate_hash.range(H_W_2 - 1, 0);
 
                         offset = read_table<H_W_1, H_W_2, H_W_2, C_W>(
@@ -655,8 +646,6 @@ void mwj_verify(
         hls::stream<ap_uint<V_ID_W>> &stream_embed_out,
         hls::stream<bool> &stream_end_embed_out)
 {
-    hls::stream<ap_uint<V_ID_W>> stream_hash_in("Verify edge hash_in");
-    hls::stream<ap_uint<64>> stream_hash_out("Verify edge hash_out");
     ap_uint<8> curQV;
     ap_uint<2> last_set;
     ap_uint<V_ID_W> curEmb[MAX_QV];
@@ -697,11 +686,9 @@ VERIFY_EDGE_COPYING_EMBEDDING_LOOP:
                 if (g == 0) {
                     last_set = stream_end_inter_in.read();
                     last_batch = last_set[1];
-/* std::cout << last_batch << std::endl; */
                 } else {
                         last_set[1] = last_batch;
                         last_set[0] = (buffer_pr == buffer_size);
-/* std::cout << last_set << std::endl; */
                 }
 
 VERIFY_CHECK_LOOP:
@@ -709,9 +696,7 @@ VERIFY_CHECK_LOOP:
                      
                     if (g == 0){
                         vToVerify = stream_inter_in.read();
-/* std::cout << " " << vToVerify << std::endl; */
                     } else {
-/* std::cout << g << " Reading in " << buffer_pw << std::endl; */
                         vToVerify = buffer[buffer_pr++];
                     }
 
@@ -722,12 +707,11 @@ VERIFY_CHECK_LOOP:
                     if (setinfo.range(7, 0) != tableIndex || 
                             setinfo.range(15, 8) != ivPos) {
                         checked = false;
-                        stream_hash_in.write(curEmb[ivPos]);
-                        stream_hash_in.write(vToVerify);
-                        xf::database::hashLookup3<V_ID_W>(stream_hash_in, stream_hash_out);
-                        index1 = stream_hash_out.read().range(H_W_1 - 1, 0);
-                        xf::database::hashLookup3<V_ID_W>(stream_hash_in, stream_hash_out);
-                        index2 = stream_hash_out.read().range(H_W_2 - 1, 0);
+                        ap_uint<64> hash_out;
+                        xf::database::details::hashlookup3_core<V_ID_W>(curEmb[ivPos], hash_out);
+                        index1 = hash_out.range(H_W_1 - 1, 0);
+                        xf::database::details::hashlookup3_core<V_ID_W>(vToVerify, hash_out);
+                        index2 = hash_out.range(H_W_2 - 1, 0);
 
                         ap_uint<(1UL << C_W)> start_off = 0;
                         ap_uint<(1UL << C_W)> end_off = 0;
@@ -998,9 +982,6 @@ void mwj_batch(
         hls::stream<bool> &stream_batches_end,
         hls::stream<ap_uint<V_ID_W>> &stream_batch)
 {
-    
-    hls::stream<ap_uint<V_ID_W>> stream_hash_in("Propose findmin hash_in");
-    hls::stream<ap_uint<64>> stream_hash_out("Propose readmin hash_out");
     ap_uint<8> tableIndex {0};
     ap_uint<32> minSize = (1UL << 32) - 1;
     ap_uint<32> minStart, minEnd, minOff;
@@ -1044,11 +1025,11 @@ PROPOSE_READ_MIN_INDEXING_LOOP:
             if (cnt < window_right){
                 edge = row.range((1UL << E_W) - 1, 0);
                 vertex = edge.range(V_ID_W * 2 - 1, V_ID_W);
-                stream_hash_in.write(vertex);
-                xf::database::hashLookup3<V_ID_W>(
-                        stream_hash_in,
-                        stream_hash_out);
-                ap_uint<H_W_1> vertexHash = stream_hash_out.read();
+                ap_uint<64> hash_out;
+                xf::database::details::hashlookup3_core<V_ID_W>(
+                        vertex,
+                        hash_out);
+                ap_uint<H_W_1> vertexHash = hash_out.range(H_W_1 - 1, 0);
 
                 if (flag_buff && hash_buff == vertexHash){
                     int nSet = 0;
