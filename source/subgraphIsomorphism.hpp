@@ -570,14 +570,14 @@ INTERSECT_TBINDEXING_LOOP:
 
 void mwj_homomorphism(
         hls::stream<ap_uint<V_ID_W>> &stream_inter_in,
-        hls::stream<ap_uint<2>> &stream_end_inter_in,
+        hls::stream<bool> &stream_end_inter_in,
         hls::stream<ap_uint<SET_INFO_WIDTH>> &stream_setinfo_in,
         hls::stream<ap_uint<V_ID_W>> &stream_embed_in,
         hls::stream<bool> &stream_end_embed_in,
         hls::stream<bool, 1> &stream_stop,
         
         hls::stream<ap_uint<V_ID_W>> &stream_batch_out,
-        hls::stream<ap_uint<2>> &stream_batch_end_out,
+        hls::stream<bool> &stream_batch_end_out,
         hls::stream<ap_uint<SET_INFO_WIDTH>> &stream_setinfo_out,
         hls::stream<ap_uint<V_ID_W>> &stream_embed_out,
         hls::stream<bool> &stream_end_embed_out)
@@ -662,8 +662,6 @@ void mwj_verify(
     while(1){
         if (stream_end_embed_in.read_nb(last_sol)){
             curQV = 0;
-            buffer_pr = 0;
-            buffer_pw = 0;
             buffer_size = 0;
 
 VERIFY_EDGE_COPYING_EMBEDDING_LOOP:
@@ -680,7 +678,7 @@ VERIFY_EDGE_COPYING_EMBEDDING_LOOP:
             nEdgesToVerify = qVertices[curQV].numTablesIndexed;
 
             for (int g = 0; g < nEdgesToVerify; g++){
-                
+                buffer_pw = buffer_pr = 0; 
                 uint8_t tableIndex = qVertices[curQV].tables_indexed[g];
                 uint8_t ivPos = qVertices[curQV].vertex_indexing[g];
                 if (g == 0) {
@@ -1145,7 +1143,7 @@ void multiwayJoin(
         ("Homomorphism - partial solution end flag");
     hls_thread_local hls::stream<ap_uint<V_ID_W>, S_D> h_stream_set
         ("Homomorphism - set nodes");
-    hls_thread_local hls::stream<ap_uint<2>, S_D> h_stream_set_end
+    hls_thread_local hls::stream<bool, S_D> h_stream_set_end
         ("Homomorphism - set nodes end flag");
     hls_thread_local hls::stream<ap_uint<SET_INFO_WIDTH>, S_D> h_stream_set_info
         ("Homomorphism - set info");
@@ -1211,12 +1209,25 @@ void multiwayJoin(
             p_stream_sol,
             p_stream_sol_end);
 
-    mwj_batchbuild(
+    mwj_homomorphism(
             p_stream_set,
             p_stream_set_end,
             p_stream_set_info,
             p_stream_sol,
             p_stream_sol_end,
+            streams_stop[3],
+            h_stream_set,
+            h_stream_set_end,
+            h_stream_set_info,
+            h_stream_sol,
+            h_stream_sol_end);
+    
+    mwj_batchbuild(
+            h_stream_set,
+            h_stream_set_end,
+            h_stream_set_info,
+            h_stream_sol,
+            h_stream_sol_end,
             streams_stop[1],
             b_stream_set,
             b_stream_set_end,
@@ -1240,18 +1251,6 @@ void multiwayJoin(
             i_stream_sol,
             i_stream_sol_end);
 
-    mwj_homomorphism(
-            i_stream_set,
-            i_stream_set_end,
-            i_stream_set_info,
-            i_stream_sol,
-            i_stream_sol_end,
-            streams_stop[3],
-            h_stream_set,
-            h_stream_set_end,
-            h_stream_set_info,
-            h_stream_sol,
-            h_stream_sol_end);
 
 #if VERIFY_CACHE
 
@@ -1260,11 +1259,11 @@ void multiwayJoin(
             hTables1,
             qVertices0,
             a_cache,
-            h_stream_set,
-            h_stream_set_end,
-            h_stream_set_info,
-            h_stream_sol,
-            h_stream_sol_end,
+            i_stream_set,
+            i_stream_set_end,
+            i_stream_set_info,
+            i_stream_sol,
+            i_stream_sol_end,
             streams_stop[4],
             v_stream_set,
             v_stream_set_end,
@@ -1276,11 +1275,11 @@ void multiwayJoin(
             hTables1,
             qVertices0,
             htb_buf2,
-            h_stream_set,
-            h_stream_set_end,
-            h_stream_set_info,
-            h_stream_sol,
-            h_stream_sol_end,
+            i_stream_set,
+            i_stream_set_end,
+            i_stream_set_info,
+            i_stream_sol,
+            i_stream_sol_end,
             streams_stop[4],
             v_stream_set,
             v_stream_set_end,
@@ -1319,13 +1318,27 @@ void multiwayJoin(
             std::ref(p_stream_sol),
             std::ref(p_stream_sol_end));
 
-    std::thread mwj_batchbuild_t(
-            mwj_batchbuild,
+    std::thread mwj_homomorphism_t(
+            mwj_homomorphism,
             std::ref(p_stream_set),
             std::ref(p_stream_set_end),
             std::ref(p_stream_set_info),
             std::ref(p_stream_sol),
             std::ref(p_stream_sol_end),
+            std::ref(streams_stop[3]),
+            std::ref(h_stream_set),
+            std::ref(h_stream_set_end),
+            std::ref(h_stream_set_info),
+            std::ref(h_stream_sol),
+            std::ref(h_stream_sol_end));
+    
+    std::thread mwj_batchbuild_t(
+            mwj_batchbuild,
+            std::ref(h_stream_set),
+            std::ref(h_stream_set_end),
+            std::ref(h_stream_set_info),
+            std::ref(h_stream_sol),
+            std::ref(h_stream_sol_end),
             std::ref(streams_stop[1]),
             std::ref(b_stream_set),
             std::ref(b_stream_set_end),
@@ -1350,19 +1363,6 @@ void multiwayJoin(
             std::ref(i_stream_sol),
             std::ref(i_stream_sol_end));
 
-    std::thread mwj_homomorphism_t(
-            mwj_homomorphism,
-            std::ref(i_stream_set),
-            std::ref(i_stream_set_end),
-            std::ref(i_stream_set_info),
-            std::ref(i_stream_sol),
-            std::ref(i_stream_sol_end),
-            std::ref(streams_stop[3]),
-            std::ref(h_stream_set),
-            std::ref(h_stream_set_end),
-            std::ref(h_stream_set_info),
-            std::ref(h_stream_sol),
-            std::ref(h_stream_sol_end));
     
     std::thread mwj_assembly_t(
             mwj_assembly,
@@ -1383,11 +1383,11 @@ void multiwayJoin(
             hTables1,
             qVertices0,
             a_cache,
-            h_stream_set,
-            h_stream_set_end,
-            h_stream_set_info,
-            h_stream_sol,
-            h_stream_sol_end,
+            i_stream_set,
+            i_stream_set_end,
+            i_stream_set_info,
+            i_stream_sol,
+            i_stream_sol_end,
             streams_stop[4],
             v_stream_set,
             v_stream_set_end,
@@ -1401,11 +1401,11 @@ void multiwayJoin(
             hTables1,
             qVertices0,
             htb_buf2,
-            std::ref(h_stream_set),
-            std::ref(h_stream_set_end),
-            std::ref(h_stream_set_info),
-            std::ref(h_stream_sol),
-            std::ref(h_stream_sol_end),
+            std::ref(i_stream_set),
+            std::ref(i_stream_set_end),
+            std::ref(i_stream_set_info),
+            std::ref(i_stream_sol),
+            std::ref(i_stream_sol_end),
             std::ref(streams_stop[4]),
             std::ref(v_stream_set),
             std::ref(v_stream_set_end),
