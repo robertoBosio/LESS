@@ -21,7 +21,7 @@
 #include "dynfifo_utils.hpp"
 #include "hls_burst_maxi.h"
 #include "preprocess.hpp"
-#define STOP_S      7
+#define STOP_S      6
     
 #define V_ID_W      VERTEX_WIDTH_BIT
 #define V_L_W       LABEL_WIDTH
@@ -38,8 +38,8 @@
 
 #if VERIFY_CACHE
 typedef cache< ap_uint<DDR_W>, true, false, 2,
-        HASHTABLES_SPACE, 1, 1, 8, false, 1, 1,
-        false, 7> cache_type;
+        HASHTABLES_SPACE, 1, 1, 16, false, 1, 1,
+        false, 2> cache_type;
 #endif /* VERIFY_CACHE */
 
 #ifndef __SYNTHESIS__
@@ -57,13 +57,7 @@ ap_uint<(1UL << T)> read_table(
         ap_uint<DDR_W> *htb_buf,
         ap_uint<32> start_addr)
 {
-    //static ap_uint<DDR_W> ram_row;
     ap_uint<DDR_W> ram_row;
-    
-    /* It is impossible that the first word read is the all 1s
-     * since before edges are read offsets which are on 
-     * the lower address space of the memory */
-    //static ap_uint<32> prev_addr_row = ~((ap_uint<32>)0);
     unsigned long addr_row;
     unsigned long addr_inrow;
     ap_uint<64> addr_counter;
@@ -82,8 +76,6 @@ ap_uint<(1UL << T)> read_table(
     ram_row = htb_buf[addr_row];
     ram_row >>= (addr_inrow << T);
 
-/* return ram_row.range(((addr_inrow + 1) << T) - 1, */
-/* addr_inrow << T); */
     return ram_row;
 
 }
@@ -101,11 +93,6 @@ ap_uint<(1UL << T)> read_table(
         ap_uint<32> start_addr)
 {
     ap_uint<DDR_W> ram_row;
-    
-    /* It is impossible that the first word read is the all 1s
-     * since before edges are read offsets which are on 
-     * the lower address space of the memory */
-    //static ap_uint<32> prev_addr_row = ~((ap_uint<32>)0);
     unsigned long addr_row;
     unsigned long addr_inrow;
     ap_uint<64> addr_counter;
@@ -128,6 +115,7 @@ ap_uint<(1UL << T)> read_table(
 
 }
 #endif /* VERIFY_CACHE */
+
 void mwj_propose(
         AdjHT *hTables,
         QueryVertex *qVertices,
@@ -259,76 +247,69 @@ PROPOSE_READ_MIN_INDEXED_LOOP:
 }
 
 void mwj_batchbuild(
-        hls::stream<ap_uint<V_ID_W>> &stream_set_in,
-        hls::stream<bool> &stream_set_end_in,
-        hls::stream<ap_uint<SET_INFO_WIDTH>> &stream_setinfo_in,
-        hls::stream<ap_uint<V_ID_W>> &stream_embed_in,
-        hls::stream<bool> &stream_end_embed_in,
-        hls::stream<bool, 1> &stream_stop,
-        
-        hls::stream<ap_uint<V_ID_W>> &stream_batch_out,
-        hls::stream<ap_uint<2>> &stream_batch_end_out,
-        hls::stream<ap_uint<SET_INFO_WIDTH>> &stream_setinfo_out,
-        hls::stream<ap_uint<V_ID_W>> &stream_embed_out,
-        hls::stream<bool> &stream_end_embed_out)
+        hls::stream<ap_uint<V_ID_W>>            &stream_set_in,
+        hls::stream<bool>                       &stream_set_end_in,
+        hls::stream<ap_uint<SET_INFO_WIDTH>>    &stream_set_info_in,
+        hls::stream<ap_uint<V_ID_W>>            &stream_sol_in,
+        hls::stream<bool>                       &stream_sol_end_in,
+       
+        hls::stream<bool>                       &stream_req,
+        hls::stream<ap_uint<V_ID_W>>            &stream_batch_out,
+        hls::stream<bool>                       &stream_batch_end_out,
+        hls::stream<ap_uint<SET_INFO_WIDTH>>    &stream_set_info_out,
+        hls::stream<ap_uint<V_ID_W>>            &stream_sol_out,
+        hls::stream<bool>                       &stream_sol_end_out)
 {
-    ap_uint<8> curQV;
+    ap_uint<8> curQV {0};
     ap_uint<V_ID_W> curEmb[MAX_QV];
-    ap_uint<V_ID_W> setinfo;
-    unsigned int batch_counter;
+    ap_uint<V_ID_W> set_info;
+    unsigned int batch_counter {0};
     bool stop, last;
     
-    while(1){
-        if (stream_end_embed_in.read_nb(last)){
-            curQV = 0;
-            batch_counter = 0;
-
+    last = stream_sol_end_in.read();
 BATCHBUILD_COPYING_EMBEDDING_LOOP:
-            while(!last){
-                curEmb[curQV] = stream_embed_in.read();
-                stream_embed_out.write(curEmb[curQV]);
-                stream_end_embed_out.write(false);
-                curQV++;
-                last = stream_end_embed_in.read();
-            }
-            stream_end_embed_out.write(true);
+    while(!last){
+        curEmb[curQV] = stream_sol_in.read();
+        stream_sol_out.write(curEmb[curQV]);
+        stream_sol_end_out.write(false);
+        curQV++;
+        last = stream_sol_end_in.read();
+    }
+    stream_sol_end_out.write(true);
 
-            setinfo = stream_setinfo_in.read();
-            stream_setinfo_out.write(setinfo);
-            last = stream_set_end_in.read();
+    set_info = stream_set_info_in.read();
+    stream_set_info_out.write(set_info);
+    last = stream_set_end_in.read();
 
 BATCHBUILD_MAIN_LOOP:
-            while(!last){
+    while(!last){
 
 BATCHBUILD_MOVING_SET_LOOP:
-                while(!last && batch_counter != (PROPOSE_BATCH_SIZE - 1)){
+        while(!last && batch_counter != (PROPOSE_BATCH_SIZE - 1)){
 #pragma HLS pipeline II=1
-                    ap_uint<V_ID_W> node = stream_set_in.read();
-                    stream_batch_out.write(node);
-                    stream_batch_end_out.write(0);
-                    batch_counter++;
-                    last = stream_set_end_in.read();
-                }
-
-                // Stream again partial solution if max batch size is reached
-                if (!last && batch_counter == (PROPOSE_BATCH_SIZE - 1)){
-                    stream_batch_end_out.write(1);
-                    batch_counter = 0;
-
-                    for (int g = 0; g < curQV; g++){
-                        stream_embed_out.write(curEmb[g]);
-                        stream_end_embed_out.write(false);
-                    }
-                    stream_end_embed_out.write(true);
-                    stream_setinfo_out.write(setinfo);
-                }
-            }
-            stream_batch_end_out.write(3);
+            ap_uint<V_ID_W> node = stream_set_in.read();
+            stream_batch_out.write(node);
+            stream_batch_end_out.write(false);
+            batch_counter++;
+            last = stream_set_end_in.read();
         }
 
-        if (stream_stop.read_nb(stop))
-            break;
+        // Stream again partial solution if max batch size is reached
+        if (!last && batch_counter == (PROPOSE_BATCH_SIZE - 1)){
+            stream_req.write(true);
+            stream_batch_end_out.write(true);
+            batch_counter = 0;
+
+            for (int g = 0; g < curQV; g++){
+                stream_sol_out.write(curEmb[g]);
+                stream_sol_end_out.write(false);
+            }
+            stream_sol_end_out.write(true);
+            stream_set_info_out.write(set_info);
+        }
     }
+    stream_batch_end_out.write(true);
+
 }
 
 void mwj_intersect(
@@ -336,14 +317,14 @@ void mwj_intersect(
         QueryVertex *qVertices,
         ap_uint<DDR_W> *htb_buf,
         hls::stream<ap_uint<V_ID_W>> &stream_min_in,
-        hls::stream<ap_uint<2>> &stream_end_min_in,
+        hls::stream<bool> &stream_end_min_in,
         hls::stream<ap_uint<SET_INFO_WIDTH>> &stream_setinfo_in,
         hls::stream<ap_uint<V_ID_W>> &stream_embed_in,
         hls::stream<bool> &stream_end_embed_in,
         hls::stream<bool, 1> &stream_stop,
 
         hls::stream<ap_uint<V_ID_W>> &stream_inter_out,
-        hls::stream<ap_uint<2>> &stream_end_out,
+        hls::stream<bool> &stream_end_out,
         hls::stream<ap_uint<SET_INFO_WIDTH>> &stream_setinfo_out,
         hls::stream<ap_uint<V_ID_W>> &stream_embed_out,
         hls::stream<bool> &stream_end_embed_out)
@@ -351,10 +332,9 @@ void mwj_intersect(
     ap_uint<64> candidate_hash;
     ap_uint<V_ID_W> candidate_v;
     ap_uint<8> tableIndex, curQV;
-    ap_uint<2> last_set;
     ap_uint<V_ID_W> curEmb[MAX_QV];
     ap_uint<SET_INFO_WIDTH> setinfo;
-    bool stop, last_sol;
+    bool stop, last_sol, last_set;
 
     while (1) {
         if (stream_end_embed_in.read_nb(last_sol)){
@@ -375,7 +355,7 @@ INTERSECT_COPYING_EMBEDDING_LOOP:
             
             last_set = stream_end_min_in.read();
 INTERSECT_LOOP:
-            while(!last_set.test(0)){
+            while(!last_set){
                 candidate_v = stream_min_in.read();
                 xf::database::details::hashlookup3_core<V_ID_W>(candidate_v, candidate_hash);
                 
@@ -555,12 +535,12 @@ INTERSECT_TBINDEXING_LOOP:
 
                 if (inter){
                     stream_inter_out.write(candidate_v);
-                    stream_end_out.write(last_set);
+                    stream_end_out.write(false);
                 }
 
                 last_set = stream_end_min_in.read();
             }
-            stream_end_out.write(last_set);
+            stream_end_out.write(true);
         }
 
         if (stream_stop.read_nb(stop))
@@ -569,63 +549,107 @@ INTERSECT_TBINDEXING_LOOP:
 }
 
 void mwj_homomorphism(
-        hls::stream<ap_uint<V_ID_W>> &stream_inter_in,
-        hls::stream<bool> &stream_end_inter_in,
-        hls::stream<ap_uint<SET_INFO_WIDTH>> &stream_setinfo_in,
-        hls::stream<ap_uint<V_ID_W>> &stream_embed_in,
-        hls::stream<bool> &stream_end_embed_in,
-        hls::stream<bool, 1> &stream_stop,
+        hls::stream<ap_uint<V_ID_W>>            &stream_set_in,
+        hls::stream<bool>                       &stream_set_end_in,
+        hls::stream<ap_uint<SET_INFO_WIDTH>>    &stream_set_info_in,
+        hls::stream<ap_uint<V_ID_W>>            &stream_sol_in,
+        hls::stream<bool>                       &stream_sol_end_in,
         
-        hls::stream<ap_uint<V_ID_W>> &stream_batch_out,
-        hls::stream<bool> &stream_batch_end_out,
-        hls::stream<ap_uint<SET_INFO_WIDTH>> &stream_setinfo_out,
-        hls::stream<ap_uint<V_ID_W>> &stream_embed_out,
-        hls::stream<bool> &stream_end_embed_out)
+        hls::stream<ap_uint<V_ID_W>>            &stream_set_out,
+        hls::stream<bool>                       &stream_set_end_out,
+        hls::stream<ap_uint<SET_INFO_WIDTH>>    &stream_set_info_out,
+        hls::stream<ap_uint<V_ID_W>>            &stream_sol_out,
+        hls::stream<bool>                       &stream_sol_end_out)
 {
-    ap_uint<8> curQV;
+    ap_uint<8> curQV {0};
     ap_uint<2> last_set;
     ap_uint<V_ID_W> curEmb[MAX_QV];
     bool stop, last_sol;
 
-    while(1){
-        if (stream_end_embed_in.read_nb(last_sol)){
-            curQV = 0;
+    last_sol = stream_sol_end_in.read();
+HOMOMORPHISM_COPYING_EMBEDDING_LOOP:
+    while(!last_sol){
+        curEmb[curQV] = stream_sol_in.read();
+        stream_sol_out.write(curEmb[curQV]);
+        stream_sol_end_out.write(false);
+        curQV++;
+        last_sol = stream_sol_end_in.read();
+    }
+    stream_sol_end_out.write(true);
 
-VERIFY_HOMOMO_COPYING_EMBEDDING_LOOP:
-            while(!last_sol){
-                curEmb[curQV] = stream_embed_in.read();
-                stream_embed_out.write(curEmb[curQV]);
-                stream_end_embed_out.write(false);
-                curQV++;
-                last_sol = stream_end_embed_in.read();
-            }
-            stream_end_embed_out.write(true);
+    stream_set_info_out.write(stream_set_info_in.read());
+    last_set = stream_set_end_in.read();
 
-            stream_setinfo_out.write(stream_setinfo_in.read());
-            last_set = stream_end_inter_in.read();
+HOMOMORPHISM_CHECK_LOOP:
+    while(!last_set.test(0)){
+        ap_uint<V_ID_W> vToVerify = stream_set_in.read();
+        bool homomorphism = false;
 
-VERIFY_CHECK_LOOP:
-            while(!last_set.test(0)){
-                ap_uint<V_ID_W> vToVerify = stream_inter_in.read();
-                bool homomorphism = false;
-         
-                for (int g = 0; g < curQV; g++){
-                    if (vToVerify == curEmb[g])
-                        homomorphism = true;
-                }
-
-                if (!homomorphism){
-                    stream_batch_out.write(vToVerify);
-                    stream_batch_end_out.write(last_set);
-                }
-
-                last_set = stream_end_inter_in.read();
-            }
-            stream_batch_end_out.write(last_set);
+        for (int g = 0; g < curQV; g++){
+            if (vToVerify == curEmb[g])
+                homomorphism = true;
         }
 
-        if (stream_stop.read_nb(stop))
-            break;
+        if (!homomorphism){
+            stream_set_out.write(vToVerify);
+            stream_set_end_out.write(last_set);
+        }
+
+        last_set = stream_set_end_in.read();
+    }
+    stream_set_end_out.write(last_set);
+}
+
+template<typename FLAG_T>
+void mwj_garbagecollector(
+        hls::stream<ap_uint<V_ID_W>>            &stream_set_in,
+        hls::stream<FLAG_T>                     &stream_set_end_in,
+        hls::stream<ap_uint<SET_INFO_WIDTH>>    &stream_set_info_in,
+        hls::stream<ap_uint<V_ID_W>>            &stream_sol_in,
+        hls::stream<bool>                       &stream_sol_end_in,
+        
+        hls::stream<bool>                       &stream_req, 
+        hls::stream<ap_uint<V_ID_W>>            &stream_set_out,
+        hls::stream<FLAG_T>                     &stream_set_end_out,
+        hls::stream<ap_uint<SET_INFO_WIDTH>>    &stream_set_info_out,
+        hls::stream<ap_uint<V_ID_W>>            &stream_sol_out,
+        hls::stream<bool>                       &stream_sol_end_out)
+{
+    ap_uint<8> curQV {0};
+    ap_uint<SET_INFO_WIDTH> set_info;
+    ap_uint<V_ID_W> curEmb[MAX_QV];
+    bool last;
+    FLAG_T last_set;
+
+    last = stream_sol_end_in.read();
+
+GARBAGECOLLECTOR_READING_SOL_LOOP:
+    while(!last){
+        curEmb[curQV++] = stream_sol_in.read();
+        last = stream_sol_end_in.read();
+    }
+
+    set_info = stream_set_info_in.read();
+    last_set = stream_set_end_in.read();
+
+    if (!last_set){
+GARBAGECOLLECTOR_WRITING_SOL_LOOP:
+        for (int g = 0; g < curQV; g++){
+            stream_sol_out.write(curEmb[g]);
+            stream_sol_end_out.write(false);
+        }
+        stream_sol_end_out.write(true);
+        stream_set_info_out.write(set_info);
+        stream_set_end_out.write(last_set);
+    } else {
+        stream_req.write(false);
+    }
+
+GARBAGECOLLECTOR_WRITING_SET_LOOP:
+    while(!last_set){
+        stream_set_out.write(stream_set_in.read());
+        last_set = stream_set_end_in.read();
+        stream_set_end_out.write(last_set);
     }
 }
 
@@ -635,27 +659,25 @@ void mwj_verify(
         QueryVertex *qVertices,
         T htb_buf,
         hls::stream<ap_uint<V_ID_W>> &stream_inter_in,
-        hls::stream<ap_uint<2>> &stream_end_inter_in,
+        hls::stream<bool> &stream_end_inter_in,
         hls::stream<ap_uint<SET_INFO_WIDTH>> &stream_setinfo_in,
         hls::stream<ap_uint<V_ID_W>> &stream_embed_in,
         hls::stream<bool> &stream_end_embed_in,
         hls::stream<bool, 1> &stream_stop,
 
         hls::stream<ap_uint<V_ID_W>> &stream_checked_out,
-        hls::stream<ap_uint<2>> &stream_checked_end_out,
+        hls::stream<bool> &stream_checked_end_out,
         hls::stream<ap_uint<V_ID_W>> &stream_embed_out,
         hls::stream<bool> &stream_end_embed_out)
 {
     ap_uint<8> curQV;
-    ap_uint<2> last_set;
     ap_uint<V_ID_W> curEmb[MAX_QV];
-    bool stop, last_sol;
+    bool stop, last_sol, last_set, last_batch;
     ap_uint<SET_INFO_WIDTH> setinfo;
     ap_uint<V_ID_W> vToVerify;
     unsigned short nEdgesToVerify;
     unsigned short buffer_pr, buffer_pw;
     unsigned short buffer_size;
-    bool last_batch;
     ap_uint<V_ID_W> buffer[PROPOSE_BATCH_SIZE];
 #pragma HLS bind_storage variable=buffer type=ram_1p impl=bram
 
@@ -683,14 +705,12 @@ VERIFY_EDGE_COPYING_EMBEDDING_LOOP:
                 uint8_t ivPos = qVertices[curQV].vertex_indexing[g];
                 if (g == 0) {
                     last_set = stream_end_inter_in.read();
-                    last_batch = last_set[1];
                 } else {
-                        last_set[1] = last_batch;
-                        last_set[0] = (buffer_pr == buffer_size);
+                    last_set = (buffer_pr == buffer_size);
                 }
 
 VERIFY_CHECK_LOOP:
-                while(!last_set.test(0)){
+                while(!last_set){
                      
                     if (g == 0){
                         vToVerify = stream_inter_in.read();
@@ -770,15 +790,12 @@ VERIFY_READ_MEMORY_LOOP:
 
                     if (checked){
                         if (g == (nEdgesToVerify - 1)){
-/* std::cout << g << " Out " << vToVerify << std::endl; */
                             stream_checked_out.write(vToVerify);
                             stream_checked_end_out.write(last_set);
-/* std::cout << last_set << std::endl; */
 #ifdef DEBUG_STATS
                             debug::solution_correct++;
 #endif
                         } else {
-/* std::cout << g << " Writing " << vToVerify << " in " << buffer_pw << std::endl; */
                             buffer[buffer_pw++] = vToVerify;
                         } 
                     }
@@ -790,19 +807,15 @@ VERIFY_READ_MEMORY_LOOP:
 #endif
                     if (g == 0) {
                         last_set = stream_end_inter_in.read();
-                        last_batch = last_set[1];
                     } else {
-                        last_set[1] = last_batch;
-                        last_set[0] = (buffer_pr == buffer_size);
+                        last_set = (buffer_pr == buffer_size);
                     }
 
                 }
 
                 if (g == (nEdgesToVerify - 1)){
-/* std::cout << last_set << std::endl; */
                     stream_checked_end_out.write(last_set);
                 } else {
-/* std::cout << g << " Set size " << buffer_pw << std::endl; */
                     buffer_size = buffer_pw;
                 } 
             }
@@ -817,27 +830,27 @@ VERIFY_READ_MEMORY_LOOP:
 void mwj_assembly(
         unsigned short nQueryVer,
         hls::stream<ap_uint<V_ID_W>> &stream_inter_in,
-        hls::stream<ap_uint<2>> &stream_end_inter_in,
+        hls::stream<bool> &stream_end_inter_in,
         hls::stream<ap_uint<V_ID_W>> &stream_embed_in,
         hls::stream<bool> &stream_end_embed_in,
         hls::stream<ap_uint<V_ID_W>> &stream_batch,
         hls::stream<bool> &stream_batch_end,
-        hls::stream<bool, 1> streams_stop[STOP_S],
-        
+       
+        hls::stream<bool> &stream_stop,
+        hls::stream<bool> &stream_req, 
         hls::stream<ap_uint<V_ID_W>> &stream_partial_out,
 #ifdef COUNT_ONLY
         long unsigned int &result
-#else
+#else  
         hls::stream<T_NODE> &result
 #endif
         )
 {
     ap_uint<V_ID_W> curQV;
-    ap_uint<2> last_set;
     ap_uint<V_ID_W> curEmb[MAX_QV];
     ap_uint<SET_INFO_WIDTH> setinfo;
     unsigned long int nPartSol {0};
-    bool last_sol;
+    bool last_sol, last_set, stop;
     T_NODE node;
 
 #ifdef COUNT_ONLY
@@ -849,13 +862,13 @@ void mwj_assembly(
     stream_partial_out.write(curQV);
     while(!last_sol){
         stream_partial_out.write(stream_batch.read());
-        nPartSol++;
+        stream_req.write(true);
         last_sol = stream_batch_end.read();
     }
-    
+
     while(1) {
         if (stream_end_embed_in.read_nb(last_sol)){
-            
+
             curQV = 0;
 VERIFY_ADD_COPYING_EMBEDDING_LOOP:
             while(!last_sol){
@@ -865,9 +878,12 @@ VERIFY_ADD_COPYING_EMBEDDING_LOOP:
             }
 
             last_set = stream_end_inter_in.read();
-            
-            // Write delimiter for new solutions
-            if (!last_set.test(0) && (curQV != nQueryVer - 1)){
+
+#ifdef DEBUG_STATS
+            if (last_set)
+                debug::empty_sol++;
+#endif
+            if (!last_set && (curQV != nQueryVer - 1)){
                 stream_partial_out.write((curQV + 1) | (1UL << (V_ID_W - 1)));
                 for (int g = 0; g < curQV; g++){
                     stream_partial_out.write(curEmb[g]);
@@ -875,9 +891,9 @@ VERIFY_ADD_COPYING_EMBEDDING_LOOP:
             }
 
 VERIFY_CHECK_LOOP:
-            while(!last_set.test(0)){
+            while(!last_set){
                 ap_uint<V_ID_W> vToVerify = stream_inter_in.read();
-                
+
                 /* Write in the correct stream */
                 if (curQV == nQueryVer - 1){
 #ifdef COUNT_ONLY
@@ -898,7 +914,7 @@ VERIFY_WRITE_FINAL_LOOP:
                 } else {
 VERIFY_WRITE_PARTIAL_LOOP:
                     stream_partial_out.write(vToVerify);
-                    nPartSol++;
+                    stream_req.write(true);
                 }
 #ifdef DEBUG_STATS
                 debug::embeddings++;
@@ -907,47 +923,81 @@ VERIFY_WRITE_PARTIAL_LOOP:
             }
 
             // Last batch of a set 
-            if (last_set.test(1))
-                nPartSol--;
+            stream_req.write(false);
+
         }
 
-        if (nPartSol == 0){
-            for (int g = 0; g < STOP_S; g++){
-#pragma HLS unroll
-                streams_stop[g].write(true);
-            }
+        if (stream_stop.read_nb(stop))
+            break;
+    }
 
 #ifdef COUNT_ONLY
-            /* Write in output number of results */
-            result += counter;
+    /* Write in output number of results */
+    result += counter;
 #else
-            /* Write last node */
-            node.data = 0;
-            node.last = true;
-            node.keep = ~0;
-            result.write(node);
+    /* Write last node */
+    node.data = 0;
+    node.last = true;
+    node.keep = ~0;
+    result.write(node);
 #endif
-            break;
+
+#ifdef DEBUG_STATS
+    std::cout << debug::empty_sol << std::endl;
+#endif
+}
+
+template<typename T>
+void mwj_merge(
+        hls::stream<T> in[MERGE_IN_STREAMS],
+        hls::stream<T> &out)
+{
+    T data;
+    for(int g = 0; g < MERGE_IN_STREAMS; g++){
+#pragma HLS unroll
+        if (in[g].read_nb(data))
+            out.write(data);
+    }
+}
+
+void mwj_stop(
+        hls::stream<bool> &stream_req,
+        hls::stream<bool> streams_stop[STOP_S])
+{
+    static unsigned long sol {0};
+    bool req = stream_req.read();
+    
+    if (req) {
+        sol++;
+    } else {
+        sol--;
+    }
+
+    if (sol == 0){
+        for (int g = 0; g < STOP_S; g++){
+#pragma HLS unroll
+            streams_stop[g].write(true);
         }
     }
 }
+
 
 #if VERIFY_CACHE
 void mwj_verifyWrapper(
         AdjHT *hTables,
         QueryVertex *qVertices,
         cache_type &htb_buf,
-        hls::stream<ap_uint<V_ID_W>> &stream_set_in,
-        hls::stream<ap_uint<2>> &stream_set_end_in,
-        hls::stream<ap_uint<SET_INFO_WIDTH>> &stream_set_info_in,
-        hls::stream<ap_uint<V_ID_W>> &stream_sol_in,
-        hls::stream<bool> &stream_sol_end_in,
-        hls::stream<bool, 1> &stream_stop,
+        hls::stream<ap_uint<V_ID_W>>            &stream_set_in,
+        hls::stream<bool>                       &stream_set_end_in,
+        hls::stream<ap_uint<SET_INFO_WIDTH>>    &stream_set_info_in,
+        hls::stream<ap_uint<V_ID_W>>            &stream_sol_in,
+        hls::stream<bool>                       &stream_sol_end_in,
+        hls::stream<bool, 1>                    &stream_stop,
         
-        hls::stream<ap_uint<V_ID_W>> &stream_set_out,
-        hls::stream<ap_uint<2>> &stream_set_end_out,
-        hls::stream<ap_uint<V_ID_W>> &stream_sol_out,
-        hls::stream<bool> &stream_sol_end_out)
+        hls::stream<ap_uint<V_ID_W>>            &stream_set_out,
+        hls::stream<bool>                       &stream_set_end_out,
+        hls::stream<ap_uint<V_ID_W>>            &stream_sol_out,
+        hls::stream<bool>                       &stream_sol_end_out)
 {
     htb_buf.init();
     std::thread mwj_verify_t(
@@ -1119,7 +1169,7 @@ void multiwayJoin(
         ("Batchbuild - partial solution end flag");
     hls_thread_local hls::stream<ap_uint<V_ID_W>, S_D> b_stream_set
         ("Batchbuild - set nodes");
-    hls_thread_local hls::stream<ap_uint<2>, S_D> b_stream_set_end
+    hls_thread_local hls::stream<bool, S_D> b_stream_set_end
         ("Batchbuild - set nodes end flag");
     hls_thread_local hls::stream<ap_uint<SET_INFO_WIDTH>, S_D> b_stream_set_info
         ("Batchbuild - set info");
@@ -1131,7 +1181,7 @@ void multiwayJoin(
         ("Intersect - partial solution end flag");
     hls_thread_local hls::stream<ap_uint<V_ID_W>, S_D> i_stream_set
         ("Intersect - set nodes");
-    hls_thread_local hls::stream<ap_uint<2>, S_D> i_stream_set_end
+    hls_thread_local hls::stream<bool, S_D> i_stream_set_end
         ("Intersect - set nodes end flag");
     hls_thread_local hls::stream<ap_uint<SET_INFO_WIDTH>, S_D> i_stream_set_info
         ("Intersect - set info");
@@ -1148,6 +1198,18 @@ void multiwayJoin(
     hls_thread_local hls::stream<ap_uint<SET_INFO_WIDTH>, S_D> h_stream_set_info
         ("Homomorphism - set info");
     
+    /* Garbagecollector data out */    
+    /* hls_thread_local hls::stream<ap_uint<V_ID_W>, MAX_QV> g_stream_sol */
+    /* ("Garbagecollector - partial solution"); */
+    /* hls_thread_local hls::stream<bool, MAX_QV> g_stream_sol_end */
+    /* ("Garbagecollector - partial solution end flag"); */
+    /* hls_thread_local hls::stream<ap_uint<V_ID_W>, S_D> g_stream_set */
+    /* ("Garbagecollector - set nodes"); */
+    /* hls_thread_local hls::stream<bool, S_D> g_stream_set_end */
+    /* ("Garbagecollector - set nodes end flag"); */
+    /* hls_thread_local hls::stream<ap_uint<SET_INFO_WIDTH>, S_D> g_stream_set_info */
+    /* ("Garbagecollector - set info"); */
+    
     /* Verify data out */
     hls_thread_local hls::stream<ap_uint<V_ID_W>, MAX_QV> v_stream_sol
         ("Verify - partial solution");
@@ -1155,7 +1217,7 @@ void multiwayJoin(
         ("Verify - partial solution end flag");
     hls_thread_local hls::stream<ap_uint<V_ID_W>, S_D> v_stream_set
         ("Verify - set nodes");
-    hls_thread_local hls::stream<ap_uint<2>, S_D> v_stream_set_end
+    hls_thread_local hls::stream<bool, S_D> v_stream_set_end
         ("Verify - set nodes end flag");
 
     /* Assembly data out */
@@ -1168,6 +1230,9 @@ void multiwayJoin(
  
     /* Stop signals */
     hls_thread_local hls::stream<bool, 1> streams_stop[STOP_S];
+    hls_thread_local hls::stream<bool, S_D> merge_out;
+    hls_thread_local hls::stream<bool, S_D> merge_in[MERGE_IN_STREAMS];
+#pragma HLS array_partition variable=merge_in type=complete    
 
 #ifndef __SYNTHESIS__
     for (int g = 0; g < STOP_S; g++) {
@@ -1195,6 +1260,47 @@ void multiwayJoin(
              streams_stop[STOP_S - 1],
              res_buf);
 
+    /* hls_thread_local hls::task mwj_garbagecollector_t( */
+    /* mwj_garbagecollector<ap_uint<2>>, */
+    /* i_stream_set, */
+    /* i_stream_set_end, */
+    /* i_stream_set_info, */
+    /* i_stream_sol, */
+    /* i_stream_sol_end, */
+    /* merge_in[0], */
+    /* g_stream_set, */
+    /* g_stream_set_end, */
+    /* g_stream_set_info, */
+    /* g_stream_sol, */
+    /* g_stream_sol_end); */
+
+    hls_thread_local hls::task mwj_homomorphism_t(
+            mwj_homomorphism,
+            p_stream_set,
+            p_stream_set_end,
+            p_stream_set_info,
+            p_stream_sol,
+            p_stream_sol_end,
+            h_stream_set,
+            h_stream_set_end,
+            h_stream_set_info,
+            h_stream_sol,
+            h_stream_sol_end);
+
+    hls_thread_local hls::task mwj_batchbuild_t(
+            mwj_batchbuild,
+            h_stream_set,
+            h_stream_set_end,
+            h_stream_set_info,
+            h_stream_sol,
+            h_stream_sol_end,
+            merge_in[0],
+            b_stream_set,
+            b_stream_set_end,
+            b_stream_set_info,
+            b_stream_sol,
+            b_stream_sol_end);
+
 #ifdef __SYNTHESIS__ 
 
     mwj_propose(
@@ -1209,32 +1315,6 @@ void multiwayJoin(
             p_stream_sol,
             p_stream_sol_end);
 
-    mwj_homomorphism(
-            p_stream_set,
-            p_stream_set_end,
-            p_stream_set_info,
-            p_stream_sol,
-            p_stream_sol_end,
-            streams_stop[3],
-            h_stream_set,
-            h_stream_set_end,
-            h_stream_set_info,
-            h_stream_sol,
-            h_stream_sol_end);
-    
-    mwj_batchbuild(
-            h_stream_set,
-            h_stream_set_end,
-            h_stream_set_info,
-            h_stream_sol,
-            h_stream_sol_end,
-            streams_stop[1],
-            b_stream_set,
-            b_stream_set_end,
-            b_stream_set_info,
-            b_stream_sol,
-            b_stream_sol_end);
-    
     mwj_intersect(
             hTables1,
             qVertices1,
@@ -1244,7 +1324,7 @@ void multiwayJoin(
             b_stream_set_info,
             b_stream_sol,
             b_stream_sol_end,
-            streams_stop[2],
+            streams_stop[1],
             i_stream_set,
             i_stream_set_end,
             i_stream_set_info,
@@ -1264,7 +1344,7 @@ void multiwayJoin(
             i_stream_set_info,
             i_stream_sol,
             i_stream_sol_end,
-            streams_stop[4],
+            streams_stop[2],
             v_stream_set,
             v_stream_set_end,
             v_stream_sol,
@@ -1280,7 +1360,7 @@ void multiwayJoin(
             i_stream_set_info,
             i_stream_sol,
             i_stream_sol_end,
-            streams_stop[4],
+            streams_stop[2],
             v_stream_set,
             v_stream_set_end,
             v_stream_sol,
@@ -1296,10 +1376,21 @@ void multiwayJoin(
             v_stream_sol_end,
             stream_batch,
             stream_batch_end,
-            streams_stop,
+            streams_stop[3],
+            merge_in[1],
             a_stream_sol,
             result);
     
+    hls_thread_local hls::task mwj_merge_t(
+            mwj_merge<bool>,
+            merge_in,
+            merge_out);
+
+    hls_thread_local hls::task mwj_stop_t(
+            mwj_stop,
+            merge_out,
+            streams_stop);
+
 #else
   
     for (int g = 0; g < STOP_S - 2; g++) 
@@ -1317,34 +1408,6 @@ void multiwayJoin(
             std::ref(p_stream_set_info),
             std::ref(p_stream_sol),
             std::ref(p_stream_sol_end));
-
-    std::thread mwj_homomorphism_t(
-            mwj_homomorphism,
-            std::ref(p_stream_set),
-            std::ref(p_stream_set_end),
-            std::ref(p_stream_set_info),
-            std::ref(p_stream_sol),
-            std::ref(p_stream_sol_end),
-            std::ref(streams_stop[3]),
-            std::ref(h_stream_set),
-            std::ref(h_stream_set_end),
-            std::ref(h_stream_set_info),
-            std::ref(h_stream_sol),
-            std::ref(h_stream_sol_end));
-    
-    std::thread mwj_batchbuild_t(
-            mwj_batchbuild,
-            std::ref(h_stream_set),
-            std::ref(h_stream_set_end),
-            std::ref(h_stream_set_info),
-            std::ref(h_stream_sol),
-            std::ref(h_stream_sol_end),
-            std::ref(streams_stop[1]),
-            std::ref(b_stream_set),
-            std::ref(b_stream_set_end),
-            std::ref(b_stream_set_info),
-            std::ref(b_stream_sol),
-            std::ref(b_stream_sol_end));
     
     std::thread mwj_intersect_t(
             mwj_intersect,
@@ -1356,14 +1419,13 @@ void multiwayJoin(
             std::ref(b_stream_set_info),
             std::ref(b_stream_sol),
             std::ref(b_stream_sol_end),
-            std::ref(streams_stop[2]),
+            std::ref(streams_stop[1]),
             std::ref(i_stream_set),
             std::ref(i_stream_set_end),
             std::ref(i_stream_set_info),
             std::ref(i_stream_sol),
             std::ref(i_stream_sol_end));
 
-    
     std::thread mwj_assembly_t(
             mwj_assembly,
             nQueryVer,
@@ -1373,9 +1435,20 @@ void multiwayJoin(
             std::ref(v_stream_sol_end),
             std::ref(stream_batch),
             std::ref(stream_batch_end),
-            std::ref(streams_stop),
+            std::ref(streams_stop[3]),
+            std::ref(merge_in[0]),
             std::ref(a_stream_sol),
             std::ref(result));
+
+    hls_thread_local hls::task mwj_merge_t(
+            mwj_merge<bool>,
+            merge_in,
+            merge_out);
+
+    hls_thread_local hls::task mwj_stop_t(
+            mwj_stop,
+            merge_out,
+            streams_stop);
 
 #if VERIFY_CACHE
 
@@ -1388,7 +1461,7 @@ void multiwayJoin(
             i_stream_set_info,
             i_stream_sol,
             i_stream_sol_end,
-            streams_stop[4],
+            streams_stop[2],
             v_stream_set,
             v_stream_set_end,
             v_stream_sol,
@@ -1406,7 +1479,7 @@ void multiwayJoin(
             std::ref(i_stream_set_info),
             std::ref(i_stream_sol),
             std::ref(i_stream_sol_end),
-            std::ref(streams_stop[4]),
+            std::ref(streams_stop[2]),
             std::ref(v_stream_set),
             std::ref(v_stream_set_end),
             std::ref(v_stream_sol),
@@ -1415,10 +1488,8 @@ void multiwayJoin(
 #endif /* VERIFY_CACHE */
 
     mwj_assembly_t.join();
-    mwj_batchbuild_t.join();
     mwj_propose_t.join();
     mwj_intersect_t.join();
-    mwj_homomorphism_t.join(); 
 
 #if !VERIFY_CACHE
     mwj_verify_t.join();
@@ -1433,7 +1504,7 @@ void multiwayJoin(
     
 
 #endif /* __SYNTHESIS__ */
-
+    
 }
 
 void multiwayJoinWrap(

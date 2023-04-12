@@ -3,8 +3,13 @@
 
 #include "address.h"
 #include "utils.h"
-#include "ap_int.h"
-#include <array>
+#include <ap_int.h>
+
+#pragma GCC diagnostic push
+#pragma GCC diagnostic error "-Wpedantic"
+#pragma GCC diagnostic error "-Wall"
+#pragma GCC diagnostic error "-Wextra"
+#pragma GCC diagnostic ignored "-Wunused-label"
 
 template <typename LINE_TYPE, size_t MAIN_SIZE, size_t N_SETS, size_t N_WAYS,
 	 size_t N_WORDS_PER_LINE, bool SWAP_TAG_SET>
@@ -32,16 +37,11 @@ class l1_cache {
 
 		typedef address<ADDR_SIZE, TAG_SIZE, SET_SIZE, WAY_SIZE, SWAP_TAG_SET>
 			addr_type;
-#ifdef __SYNTHESIS__
-		typedef ap_uint<(ADDR_SIZE > 0) ? ADDR_SIZE : 1> addr_main_type;
-#else
-		typedef unsigned long int addr_main_type;
-#endif /* __SYNTHESIS__ */
 		typedef replacer<false, addr_type, ((N_SETS > 0) ? N_SETS : 1),
 			((N_WAYS > 0) ? N_WAYS : 1), N_WORDS_PER_LINE> replacer_type;
 
 		ap_uint<(TAG_SIZE > 0) ? TAG_SIZE : 1> m_tag[N_LINES];	// 1
-		std::array<bool, N_LINES> m_valid;			// 2
+		ap_uint<N_LINES> m_valid;				// 2
 		LINE_TYPE m_cache_mem[N_LINES];				// 3
 		replacer_type m_replacer;				// 4
 
@@ -52,11 +52,11 @@ class l1_cache {
 
 		void init() {
 #pragma HLS inline
-			m_valid = {0};
+			m_valid = 0;
 			m_replacer.init();
 		}
 
-		bool get_line(const addr_main_type addr_main, LINE_TYPE &line) const {
+		bool get_line(const ap_uint<ADDR_SIZE> addr_main, LINE_TYPE &line) const {
 #pragma HLS inline
 			addr_type addr(addr_main);
 			const auto way = hit(addr);
@@ -70,7 +70,7 @@ class l1_cache {
 			return true;
 		}
 
-		void set_line(const addr_main_type addr_main,
+		void set_line(const ap_uint<ADDR_SIZE> addr_main,
 				const LINE_TYPE &line) {
 #pragma HLS inline
 			addr_type addr(addr_main);
@@ -84,7 +84,7 @@ class l1_cache {
 			m_replacer.notify_insertion(addr);
 		}
 
-		void notify_write(const addr_main_type addr_main) {
+		void notify_write(const ap_uint<ADDR_SIZE> addr_main) {
 #pragma HLS inline
 			const addr_type addr(addr_main);
 
@@ -97,7 +97,7 @@ class l1_cache {
 #pragma HLS inline
 			addr_type addr_tmp = addr;
 			auto hit_way = -1;
-			for (auto way = 0; way < N_WAYS; way++) {
+			for (size_t way = 0; way < N_WAYS; way++) {
 				addr_tmp.set_way(way);
 				if (m_valid[addr_tmp.m_addr_line] &&
 						(addr_tmp.m_tag == m_tag[addr_tmp.m_addr_line])) {
@@ -108,6 +108,8 @@ class l1_cache {
 			return hit_way;
 		}
 };
+
+#pragma GCC diagnostic pop
 
 #endif /* L1_CACHE_H */
 

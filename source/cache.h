@@ -18,19 +18,31 @@
  */
 
 #include <cstddef>
+#define AP_INT_MAX_W 8192
 #include "address.h"
 #include "replacer.h"
 #include "l1_cache.h"
 #include "raw_cache.h"
-#define HLS_STREAM_THREAD_SAFE
-#include "hls_stream.h"
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wattributes"
+#include <ap_utils.h>
+#pragma GCC diagnostic pop
+#include <ap_int.h>
 #include <array>
-#include "ap_utils.h"
-#include "ap_int.h"
 #include "utils.h"
-#ifndef __SYNTHESIS__
+#ifdef __SYNTHESIS__
+#define HLS_STREAM_THREAD_SAFE
+#include <hls_stream.h>
+#include "sliced_stream.h"
+#else
 #include <cassert>
 #endif /* __SYNTHESIS__ */
+
+#pragma GCC diagnostic push
+#pragma GCC diagnostic error "-Wpedantic"
+#pragma GCC diagnostic error "-Wall"
+#pragma GCC diagnostic error "-Wextra"
+#pragma GCC diagnostic ignored "-Wunused-label"
 
 template <typename T, bool RD_ENABLED, bool WR_ENABLED, size_t PORTS,
 	 size_t MAIN_SIZE, size_t N_SETS, size_t N_WAYS, size_t N_WORDS_PER_LINE,
@@ -38,11 +50,13 @@ template <typename T, bool RD_ENABLED, bool WR_ENABLED, size_t PORTS,
 class cache {
 	private:
 		static const bool L1_CACHE = ((N_L1_SETS * N_L1_WAYS) > 0);
+		static const bool RAW_CACHE = (RD_ENABLED && WR_ENABLED);
 		static const size_t ADDR_SIZE = utils::log2_ceil(MAIN_SIZE);
 		static const size_t SET_SIZE = utils::log2_ceil(N_SETS);
 		static const size_t OFF_SIZE = utils::log2_ceil(N_WORDS_PER_LINE);
 		static const size_t TAG_SIZE = (ADDR_SIZE - (SET_SIZE + OFF_SIZE));
 		static const size_t WAY_SIZE = utils::log2_ceil(N_WAYS);
+		static const size_t WORD_SIZE = (sizeof(T) * 8);
 
 		static_assert((RD_ENABLED || WR_ENABLED),
 				"RD_ENABLED and/or WR_ENABLED must be true");
@@ -63,11 +77,6 @@ class cache {
 
 		typedef address<ADDR_SIZE, TAG_SIZE, SET_SIZE, WAY_SIZE, SWAP_TAG_SET>
 			address_type;
-#ifdef __SYNTHESIS__
-		typedef ap_uint<(ADDR_SIZE > 0) ? ADDR_SIZE : 1> addr_main_type;
-#else
-		typedef unsigned long int addr_main_type;
-#endif /* __SYNTHESIS__ */
 		typedef std::array<T, N_WORDS_PER_LINE> line_type;
 		typedef l1_cache<line_type, MAIN_SIZE, N_L1_SETS, N_L1_WAYS,
 			N_WORDS_PER_LINE, SWAP_TAG_SET> l1_cache_type;
@@ -93,30 +102,36 @@ class cache {
 
 		typedef struct {
 			op_type op;
-			addr_main_type addr;
+			ap_uint<ADDR_SIZE> addr;
 			T data;
 		} core_req_type;
 
 		typedef struct {
 			op_type op;
-			addr_main_type load_addr;
-			addr_main_type write_back_addr;
-			line_type line;
+			ap_uint<ADDR_SIZE> load_addr;
 		} mem_req_type;
 
+		typedef struct {
+			ap_uint<ADDR_SIZE> write_back_addr;
+			line_type line;
+		} mem_st_req_type;
+
 		ap_uint<(TAG_SIZE > 0) ? TAG_SIZE : 1> m_tag[N_SETS * N_WAYS];	// 0
-		std::array<bool, N_SETS * N_WAYS> m_valid;			// 1
-		std::array<bool, N_SETS * N_WAYS> m_dirty;			// 2
+		ap_uint<N_SETS * N_WAYS> m_valid;				// 1
+		ap_uint<N_SETS * N_WAYS> m_dirty;				// 2
 		line_type m_cache_mem[N_SETS * N_WAYS];				// 3
-		hls::stream<core_req_type, (LATENCY * PORTS)> m_core_req[PORTS];// 4
-		hls::stream<line_type, (LATENCY * PORTS)> m_core_resp[PORTS];	// 5
-		hls::stream<mem_req_type, 2> m_mem_req;				// 6
-		hls::stream<line_type, 2> m_mem_resp;				// 7
-		raw_cache_type m_raw_cache_core;				// 8
-		l1_cache_type m_l1_cache_get[PORTS];				// 9
-		replacer_type m_replacer;					// 10
-		unsigned int m_core_port;					// 11
-#ifndef __SYNTHESIS__
+		raw_cache_type m_raw_cache_core;				// 4
+		l1_cache_type m_l1_cache_get[PORTS];				// 5
+		replacer_type m_replacer;					// 6
+		unsigned int m_core_port;					// 7
+#ifdef __SYNTHESIS__
+		hls::stream<core_req_type, (LATENCY * PORTS)> m_core_req[PORTS];// 8
+		sliced_stream<T, N_WORDS_PER_LINE, (LATENCY * PORTS)>
+			m_core_resp[PORTS];					// 9
+		hls::stream<mem_req_type, 2> m_mem_req;				// 10
+		hls::stream<mem_st_req_type, 2> m_mem_st_req;			// 11
+		sliced_stream<T, N_WORDS_PER_LINE, 2> m_mem_resp;		// 12
+#else
 		T * const m_main_mem;
 		int m_n_reqs[PORTS] = {0};
 		int m_n_hits[PORTS] = {0};
@@ -147,20 +162,22 @@ class cache {
 		void init() {
 #ifndef __SYNTHESIS__
 			// invalidate all cache lines
-			m_valid = {0};
+			m_valid = 0;
 
 			m_replacer.init();
-			m_raw_cache_core.init();
+			if (RAW_CACHE)
+				m_raw_cache_core.init();
 #endif /* __SYNTHESIS__ */
 
 			m_core_port = 0;
 
 			if (L1_CACHE) {
-				for (auto port = 0; port < PORTS; port++)
+				for (size_t port = 0; port < PORTS; port++)
 					m_l1_cache_get[port].init();
 			}
 		}
 
+#ifdef __SYNTHESIS__
 		/**
 		 * \brief		Start cache internal processes.
 		 *
@@ -175,6 +192,7 @@ class cache {
 			run_core();
 			run_mem_if(main_mem);
 		}
+#endif /* __SYNTHESIS__ */
 
 		/**
 		 * \brief	Stop cache internal processes.
@@ -184,12 +202,15 @@ class cache {
 		 */
 		void stop() {
 #ifdef __SYNTHESIS__
-			m_core_req[m_core_port].write((core_req_type){.op = STOP_OP});
+			core_req_type stop_req;
+			stop_req.op = STOP_OP;
+			m_core_req[m_core_port].write(stop_req);
 #else
 			flush();
 #endif /* __SYNTHESIS__ */
 		}
 
+#ifdef __SYNTHESIS__
 		bool write_req(const core_req_type req, const unsigned int port) {
 #pragma HLS function_instantiate variable=port
 			return m_core_req[port].write_dep(req, false);
@@ -199,6 +220,7 @@ class cache {
 #pragma HLS function_instantiate variable=port
 			m_core_resp[port].read_dep(line, dep);
 		}
+#endif /* __SYNTHESIS__ */
 
 		/**
 		 * \brief		Request to read a whole cache line.
@@ -208,7 +230,7 @@ class cache {
 		 * \param[in] port	The port from which to read.
 		 * \param[out] line	The buffer to store the read line.
 		 */
-		void get_line(const addr_main_type addr_main,
+		void get_line(const ap_uint<ADDR_SIZE> addr_main,
 				const unsigned int port, line_type &line) {
 #pragma HLS inline
 #ifndef __SYNTHESIS__
@@ -223,10 +245,9 @@ class cache {
 			auto hit_status = L1_HIT;
 #endif /* __SYNTHESIS__ */
 			if (!l1_hit) {
-				core_req_type req = {
-					.op = READ_OP,
-					.addr = addr_main
-				};
+				core_req_type req;
+				req.op = READ_OP;
+				req.addr = addr_main;
 
 #ifdef __SYNTHESIS__
 				// send read request to cache
@@ -239,7 +260,7 @@ class cache {
 				// read response from cache
 				read_resp(line, dep, port);
 #else
-				hit_status = exec_core_req(req, port, line);
+				hit_status = exec_core_req(req, line);
 #endif /* __SYNTHESIS__ */
 
 				if (L1_CACHE) {
@@ -263,10 +284,11 @@ class cache {
 		 *
 		 * \return		The read data element.
 		 */
-		T get(const addr_main_type addr_main, const unsigned int port) {
+		T get(const ap_uint<ADDR_SIZE> addr_main, const unsigned int port) {
 #pragma HLS inline
 			line_type line;
 #pragma HLS array_partition variable=line type=complete dim=0
+
 			// get the whole cache line
 			get_line(addr_main, port, line);
 
@@ -284,7 +306,7 @@ class cache {
 		 *
 		 * \return		The read data element.
 		 */
-		T get(const addr_main_type addr_main) {
+		T get(const ap_uint<ADDR_SIZE> addr_main) {
 #pragma HLS inline
 			const auto data = get(addr_main, m_core_port);
 			m_core_port = ((m_core_port + 1) % PORTS);
@@ -299,7 +321,7 @@ class cache {
 		 * 			the data element to be written.
 		 * \param[in] data	The data to be written.
 		 */
-		void set(const addr_main_type addr_main, const T data) {
+		void set(const ap_uint<ADDR_SIZE> addr_main, const T data) {
 #pragma HLS inline
 #ifndef __SYNTHESIS__
 			assert(addr_main < MAIN_SIZE);
@@ -317,7 +339,7 @@ class cache {
 			m_core_req[0].write(req);
 #else
 			line_type dummy;
-			const auto hit_status = exec_core_req(req, 0, dummy);
+			const auto hit_status = exec_core_req(req, dummy);
 			update_profiling(hit_status, 0);
 #endif /* __SYNTHESIS__ */
 		}
@@ -351,11 +373,9 @@ class cache {
 
 	private:
 #ifdef __SYNTHESIS__
-		void exec_core_req(core_req_type &req,
-				const unsigned int port, line_type &line) {
+		void exec_core_req(core_req_type &req, line_type &line) {
 #else
-		hit_status_type exec_core_req(core_req_type &req,
-				const unsigned int port, line_type &line) {
+		hit_status_type exec_core_req(core_req_type &req, line_type &line) {
 #endif /* __SYNTHESIS__ */
 #pragma HLS inline
 			// check the request type
@@ -375,7 +395,8 @@ class cache {
 			m_replacer.notify_use(addr);
 
 			mem_req_type mem_req;
-			address_type *wb_addr_ptr;
+			mem_st_req_type mem_st_req;
+			typename address_type::addr_line_type addr_cache_rd = addr.m_addr_line;
 			if (!is_hit) {
 				// read from main memory
 				mem_req.op = READ_OP;
@@ -387,17 +408,27 @@ class cache {
 					// build write-back address
 					address_type write_back_addr(m_tag[addr.m_addr_line],
 							addr.m_set, 0, addr.m_way);
-					wb_addr_ptr = &write_back_addr;
+					addr_cache_rd = write_back_addr.m_addr_line;
 					mem_req.op = READ_WRITE_OP;
-					mem_req.write_back_addr = write_back_addr.m_addr_main;
+					mem_st_req.write_back_addr = write_back_addr.m_addr_main;
 				}
 			}
 
+			// mem_req.op is READ_WRITE_OP only in case of write back
 			if (is_hit || (mem_req.op == READ_WRITE_OP)) {
 				// read from cache memory
-				m_raw_cache_core.get_line(m_cache_mem,
-						is_hit ? addr.m_addr_line : wb_addr_ptr->m_addr_line,
-						is_hit ? line : mem_req.line);
+				if (RAW_CACHE) {
+					m_raw_cache_core.get_line(m_cache_mem,
+							addr_cache_rd,
+							is_hit ? line : mem_st_req.line);
+				} else {
+					if (is_hit) {
+						line = m_cache_mem[addr_cache_rd];
+					} else {
+						mem_st_req.line =
+							m_cache_mem[addr_cache_rd];
+					}
+				}
 			}
 	
 			if (!is_hit) {
@@ -407,6 +438,8 @@ class cache {
 				// write request if
 				// write-back is necessary
 				m_mem_req.write(mem_req);
+				if (WR_ENABLED)
+					m_mem_st_req.write(mem_st_req);
 
 				// force FIFO write and
 				// FIFO read to separate
@@ -417,9 +450,9 @@ class cache {
 
 				// read response from
 				// memory interface
-				m_mem_resp.read(line);
+				line = m_mem_resp.read();
 #else
-				exec_mem_req(m_main_mem, mem_req, line);
+				exec_mem_req(m_main_mem, mem_req, mem_st_req, line);
 #endif /* __SYNTHESIS__ */
 
 				m_tag[addr.m_addr_line] = addr.m_tag;
@@ -430,18 +463,30 @@ class cache {
 
 				if (read) {
 					// store loaded line to cache
-					m_raw_cache_core.set_line(m_cache_mem,
-							addr.m_addr_line, line);
+					if (RAW_CACHE) {
+						m_raw_cache_core.set_line(
+								m_cache_mem,
+								addr.m_addr_line,
+								line);
+					} else {
+						m_cache_mem[addr.m_addr_line] =
+							line;
+					}
 				}
 			}
 
 			if (!read) {
-				// modify the line
-				line[addr.m_off] = req.data;
+				if (RAW_CACHE) {
+					// modify the line
+					line[addr.m_off] = req.data;
 
-				// store the modified line to cache
-				m_raw_cache_core.set_line(m_cache_mem,
-						addr.m_addr_line, line);
+					// store the modified line to cache
+					m_raw_cache_core.set_line(m_cache_mem,
+							addr.m_addr_line, line);
+				} else {
+					m_cache_mem[addr.m_addr_line][addr.m_off] =
+						req.data;
+				}
 
 
 				m_dirty[addr.m_addr_line] = true;
@@ -453,7 +498,7 @@ class cache {
 		}
 
 		void exec_mem_req(T * const main_mem, mem_req_type &req,
-				line_type &line) {
+				mem_st_req_type &st_req, line_type &line) {
 #pragma HLS inline
 			if ((req.op == READ_OP) || (req.op == READ_WRITE_OP)) {
 				// read line from main memory
@@ -463,11 +508,12 @@ class cache {
 			if (WR_ENABLED && ((req.op == WRITE_OP) ||
 						(req.op == READ_WRITE_OP))) {
 				// write line to main memory
-				set_line(main_mem, req.write_back_addr,
-						req.line);
+				set_line(main_mem, st_req.write_back_addr,
+						st_req.line);
 			}
 		}
 
+#ifdef __SYNTHESIS__
 		/**
 		 * \brief		Infinite loop managing the cache access
 		 * 			requests (sent from the outside).
@@ -479,14 +525,17 @@ class cache {
 		void run_core() {
 #pragma HLS inline off
 			// invalidate all cache lines
-			m_valid = {0};
+			m_valid = 0;
 
 			m_replacer.init();
-			m_raw_cache_core.init();
+			if (RAW_CACHE)
+				m_raw_cache_core.init();
 
-CORE_LOOP:		for (auto port = 0; ; port = ((port + 1) % PORTS)) {
+CORE_LOOP:		for (size_t port = 0; ; port = ((port + 1) % PORTS)) {
 #pragma HLS pipeline II=1 style=flp
+				if (RAW_CACHE) {
 #pragma HLS dependence variable=m_cache_mem inter RAW distance=3 true
+				}
 				core_req_type req;
 				// get request and
 				// make pipeline flushable (to avoid deadlock)
@@ -496,7 +545,8 @@ CORE_LOOP:		for (auto port = 0; ; port = ((port + 1) % PORTS)) {
 						break;
 
 					line_type line;
-					exec_core_req(req, port, line);
+#pragma HLS array_partition variable=line type=complete dim=0
+					exec_core_req(req, line);
 
 					if ((RD_ENABLED && (req.op == READ_OP)) ||
 							(!WR_ENABLED)) {
@@ -510,10 +560,10 @@ CORE_LOOP:		for (auto port = 0; ; port = ((port + 1) % PORTS)) {
 			if (WR_ENABLED)
 				flush();
 
-#ifdef __SYNTHESIS__
 			// stop memory interface
-			m_mem_req.write((mem_req_type){.op = STOP_OP});
-#endif /* __SYNTHESIS__ */
+			mem_req_type stop_req;
+			stop_req.op = STOP_OP;
+			m_mem_req.write(stop_req);
 		}
 
 		/**
@@ -534,6 +584,7 @@ CORE_LOOP:		for (auto port = 0; ; port = ((port + 1) % PORTS)) {
 MEM_IF_LOOP:		while (1) {
 #pragma HLS pipeline off
 				mem_req_type req;
+				mem_st_req_type st_req;
 				// get request
 				m_mem_req.read(req);
 
@@ -541,16 +592,22 @@ MEM_IF_LOOP:		while (1) {
 				if (req.op == STOP_OP)
 					break;
 
-				line_type line;
-				exec_mem_req(main_mem, req, line);
+				if (WR_ENABLED)
+					m_mem_st_req.read(st_req);
 
-				if ((req.op == READ_OP) || (req.op == READ_WRITE_OP)) {
+				line_type line;
+#pragma HLS array_partition variable=line type=complete dim=0
+				exec_mem_req(main_mem, req, st_req, line);
+
+				if ((req.op == READ_OP) ||
+						(req.op == READ_WRITE_OP)) {
 					// send the response to the read request
 					m_mem_resp.write(line);
 				}
 			}
 
 		}
+#endif /* __SYNTHESIS__ */
 
 		/**
 		 * \brief		Check if \p addr causes an HIT or a MISS.
@@ -564,7 +621,7 @@ MEM_IF_LOOP:		while (1) {
 #pragma HLS inline
 			auto addr_tmp = addr;
 			auto hit_way = -1;
-			for (auto way = 0; way < N_WAYS; way++) {
+			for (size_t way = 0; way < N_WAYS; way++) {
 				addr_tmp.set_way(way);
 				if (m_valid[addr_tmp.m_addr_line] &&
 						(addr_tmp.m_tag == m_tag[addr_tmp.m_addr_line])) {
@@ -580,8 +637,8 @@ MEM_IF_LOOP:		while (1) {
 		 */
 		void flush() {
 #pragma HLS inline
-			for (auto set = 0; set < N_SETS; set++) {
-				for (auto way = 0; way < N_WAYS; way++) {
+			for (size_t set = 0; set < N_SETS; set++) {
+				for (size_t way = 0; way < N_WAYS; way++) {
 					const address_type addr(
 							m_tag[set * N_WAYS + way],
 							set, 0, way);
@@ -594,15 +651,20 @@ MEM_IF_LOOP:		while (1) {
 						// read line
 						line = m_cache_mem[addr.m_addr_line];
 
-						mem_req_type req = {WRITE_OP, 0,
+						mem_req_type req = {
+							WRITE_OP, 0};
+						mem_st_req_type st_req = {
 							addr.m_addr_main, line};
 #ifdef __SYNTHESIS__
 						// send write request to memory
 						// interface
 						m_mem_req.write(req);
+						m_mem_st_req.write(st_req);
 #else
 						line_type dummy;
-						exec_mem_req(m_main_mem, req, dummy);
+						exec_mem_req(m_main_mem,
+								req, st_req,
+								dummy);
 #endif /* __SYNTHESIS__ */
 
 						m_dirty[addr.m_addr_line] = false;
@@ -611,23 +673,25 @@ MEM_IF_LOOP:		while (1) {
 			}
 		}
 
-		void get_line(const T * const mem, const addr_main_type addr,
+		void get_line(const T * const mem,
+				const ap_uint<(ADDR_SIZE > 0) ? ADDR_SIZE : 1> addr,
 				line_type &line) {
 #pragma HLS inline
 			const T * const mem_line = &(mem[addr & (-1U << OFF_SIZE)]);
 
-			for (auto off = 0; off < N_WORDS_PER_LINE; off++) {
+			for (size_t off = 0; off < N_WORDS_PER_LINE; off++) {
 #pragma HLS unroll
 				line[off] = mem_line[off];
 			}
 		}
 
-		void set_line(T * const mem, const addr_main_type addr,
+		void set_line(T * const mem,
+				const ap_uint<(ADDR_SIZE > 0) ? ADDR_SIZE : 1> addr,
 				const line_type &line) {
 #pragma HLS inline
 			T * const mem_line = &(mem[addr & (-1U << OFF_SIZE)]);
 
-			for (auto off = 0; off < N_WORDS_PER_LINE; off++) {
+			for (size_t off = 0; off < N_WORDS_PER_LINE; off++) {
 #pragma HLS unroll
 				mem_line[off] = line[off];
 			}
@@ -651,10 +715,10 @@ MEM_IF_LOOP:		while (1) {
 		class square_bracket_proxy {
 			private:
 				cache *m_cache;
-				const addr_main_type m_addr_main;
+				const ap_uint<ADDR_SIZE> m_addr_main;
 			public:
 				square_bracket_proxy(cache *c,
-						const addr_main_type addr_main):
+						const ap_uint<ADDR_SIZE> addr_main):
 					m_cache(c), m_addr_main(addr_main) {
 #pragma HLS inline
 					}
@@ -690,7 +754,7 @@ MEM_IF_LOOP:		while (1) {
 		};
 
 	public:
-		square_bracket_proxy operator[](const addr_main_type addr_main) {
+		square_bracket_proxy operator[](const ap_uint<ADDR_SIZE> addr_main) {
 #pragma HLS inline
 			return square_bracket_proxy(this, addr_main);
 		}
@@ -711,6 +775,7 @@ void init() {}
 template <typename HEAD_TYPE, typename... TAIL_TYPES>
 typename std::enable_if<!is_cache<HEAD_TYPE>::value, void>::type
 init(HEAD_TYPE &&head, TAIL_TYPES&&... tail) {
+	(void) head;
 	init(tail...);
 }
 
@@ -726,6 +791,7 @@ void stop() {}
 template <typename HEAD_TYPE, typename... TAIL_TYPES>
 typename std::enable_if<!is_cache<HEAD_TYPE>::value, void>::type
 stop(HEAD_TYPE &&head, TAIL_TYPES&&... tail) {
+	(void) head;
 	stop(tail...);
 }
 
@@ -743,6 +809,8 @@ void cache_wrapper(T &&fn, ARGS_TYPES&&... args) {
 	fn(args...);
 	stop(args...);
 }
+
+#pragma GCC diagnostic pop
 
 #endif /* CACHE_H */
 
