@@ -39,7 +39,7 @@
 
 #define MAX_COLLISIONS      (1UL << 5)
 
-#define STREAM_DEPTH        10
+#define SUB_STREAM_DEPTH        10
 
 #define S_DEPTH             32
 #define BURST_S             32

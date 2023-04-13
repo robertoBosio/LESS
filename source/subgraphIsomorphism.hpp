@@ -32,13 +32,13 @@
 #define H_W_2       HASH_WIDTH_SECOND
 #define C_W         COUNTER_WIDTH
 #define E_W         EDGE_WIDTH
-#define S_D         STREAM_DEPTH    
+#define S_D         SUB_STREAM_DEPTH    
 #define DDR_WORDS   RES_WIDTH
 #define DDR_W       DDR_WORD
 
 #if VERIFY_CACHE
 typedef cache< ap_uint<DDR_W>, true, false, 2,
-        HASHTABLES_SPACE, 1, 1, 16, false, 1, 1,
+        HASHTABLES_SPACE, 1, 1, 8, false, 1, 1,
         false, 2> cache_type;
 #endif /* VERIFY_CACHE */
 
@@ -1651,7 +1651,7 @@ void subgraphIsomorphism(
         LABEL_WIDTH,
         HASH_WIDTH_FIRST,
         HASH_WIDTH_SECOND,
-        STREAM_DEPTH,
+        SUB_STREAM_DEPTH,
         HASHTABLES_SPACE,
         MAX_QUERY_VERTICES,
         MAX_TABLES>(

@@ -10,7 +10,8 @@
 #pragma GCC diagnostic error "-Wextra"
 #pragma GCC diagnostic ignored "-Wunused-label"
 
-template <typename DATA_TYPE, size_t LINE_SIZE, size_t mySTREAM_DEPTH, size_t MAX_SLICE_BW = 4096>
+template <typename DATA_TYPE, size_t LINE_SIZE, size_t STREAM_DEPTH,
+	 size_t MAX_SLICE_BW = 4096>
 class sliced_stream {
 	private:
 		static const size_t MAX_SLICE_SIZE =
@@ -25,7 +26,7 @@ class sliced_stream {
 		typedef std::array<DATA_TYPE, LINE_SIZE> line_type;
 		typedef std::array<DATA_TYPE, SLICE_SIZE> slice_type;
 
-		hls::stream<slice_type, mySTREAM_DEPTH> m_stream[N_SLICES];
+		hls::stream<slice_type, STREAM_DEPTH> m_stream[N_SLICES];
 
 	public:
 		sliced_stream() {
@@ -44,6 +45,7 @@ class sliced_stream {
 			for (size_t slice = 0; slice < N_SLICES; slice++) {
 				slice_type slice_buff = m_stream[slice].read();
 				for (size_t off = 0; off < SLICE_SIZE; off++) {
+#pragma HLS unroll
 					line[(slice * SLICE_SIZE) + off] =
 						slice_buff[off];
 				}
@@ -63,6 +65,7 @@ class sliced_stream {
 			for (size_t slice = 0; slice < N_SLICES; slice++) {
 				slice_type slice_buff;
 				for (size_t off = 0; off < SLICE_SIZE; off++) {
+#pragma HLS unroll
 					slice_buff[off] =
 						line[(slice * SLICE_SIZE) + off];
 				}
