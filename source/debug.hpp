@@ -14,14 +14,9 @@ namespace debug {
     unsigned long solution_correct {0};
     unsigned long solution_wrong {0};
 
-    unsigned long intersect_sol_truepositive {0};
-    unsigned long intersect_sol_truenegative {0};
-    unsigned long intersect_sol_falsepositive {0};
-    unsigned long intersect_sol_falsenegative {0};
+    unsigned long intersect_filter {0};
     unsigned long intersect_bit_truepositive {0};
-    unsigned long intersect_bit_truenegative {0};
     unsigned long intersect_bit_falsepositive {0};
-    unsigned long intersect_bit_falsenegative {0};
     
     unsigned long empty_sol {0};
     unsigned long embeddings {0};
@@ -47,14 +42,9 @@ namespace debug {
         embeddings = 0;
         max_collisions = 0;
         avg_collisions = 0;
-        intersect_sol_truepositive = 0;
-        intersect_sol_truenegative = 0;
-        intersect_sol_falsepositive = 0;
-        intersect_sol_falsenegative = 0;
+        intersect_filter = 0;
         intersect_bit_truepositive = 0;
-        intersect_bit_truenegative = 0;
         intersect_bit_falsepositive = 0;
-        intersect_bit_falsenegative = 0;
         empty_sol = 0;
         cache_hit_0 = 0;
         cache_hit_1 = 0;

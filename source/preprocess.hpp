@@ -213,7 +213,7 @@ COUNTER_TO_OFFSET_ROW_LOOP:
                 row >>= (1UL << CNT_LOG);
 
 #ifndef __SYNTHESIS__
-                assert(base_addr < (1UL << (1UL << (CNT_LOG)) - 1));
+                assert(base_addr < (1UL << (1UL << CNT_LOG)));
 #endif /* __SYNTHESIS__ */
 #ifdef DEBUG_STATS
                 if (counter > debug::max_collisions) 
@@ -223,11 +223,6 @@ COUNTER_TO_OFFSET_ROW_LOOP:
 
                 row_new.range((CNT_ROW << CNT_LOG) - 1, (CNT_ROW - 1) << CNT_LOG) = base_addr;
                 base_addr += counter;
-
-                /* Store used bit */
-                if (counter > 0){
-                    row_new.set((CNT_ROW << CNT_LOG) - 1);
-                }
 
                 /* Check if an hash is used */
                 if (((start << (ROW_LOG - CNT_LOG)) + g) % (1UL << HASH2_W) == 0){
@@ -252,20 +247,20 @@ template <typename T_DDR,
          size_t HASH1_W,
          size_t HASH2_W>
 void storeEdges(
-        hls::stream<ap_uint<(1UL << EDGE_LOG)>> &stream_edge,
-        hls::stream<ap_uint<HASH1_W>> &stream_index1,
-        hls::stream<ap_uint<HASH2_W>> &stream_index2,
-        hls::stream<unsigned short> &stream_ntable,
-        hls::stream<bool> &stream_end,
-        AdjHT *hTables,
-        T_DDR *htb_buf)
+        AdjHT                                       *hTables,
+        T_DDR                                       *htb_buf,
+        hls::stream<ap_uint<(1UL << EDGE_LOG)>>     &stream_edge,
+        hls::stream<ap_uint<HASH1_W>>               &stream_index1,
+        hls::stream<ap_uint<HASH2_W>>               &stream_index2,
+        hls::stream<unsigned short>                 &stream_ntable,
+        hls::stream<bool>                           &stream_end)
 {
     const size_t CNT_ROW = 1UL << (ROW_LOG - CNT_LOG);
     T_DDR row, mask;
     ap_uint<HASH1_W> index1;
     ap_uint<HASH2_W> index2;
     ap_uint<(1UL << EDGE_LOG)> edge;
-    ap_uint<(1UL << CNT_LOG) - 1> offset;
+    ap_uint<(1UL << CNT_LOG)> offset;
     unsigned short ntb;
     ap_uint<64> addr_outrow;
     ap_uint<64> addr_inrow;
@@ -290,11 +285,16 @@ INCREASE_COUNTER_DDR_LOOP:
         /* Compute address of offset inside the row */
         addr_inrow = addr_offset.range((ROW_LOG - CNT_LOG) - 1, 0);
 
-        /* Read, modify and write the offset */
+        // Select the correct offset from the word by shifting
+        // to the right and masking instead of using range().
         row = htb_buf[addr_outrow];
         mask = row >> (addr_inrow << CNT_LOG);
         offset = mask & ((1UL << (1UL << CNT_LOG)) - 1);
+
+        // Add 1 to the offset to move it forward
         mask += 1;
+
+        // Rewrite the offset in the word
         mask <<= (addr_inrow << CNT_LOG);
         row <<= ((CNT_ROW - addr_inrow) << CNT_LOG);
         row >>= ((CNT_ROW - addr_inrow) << CNT_LOG);
@@ -533,13 +533,13 @@ void writeEdges(
         NODE_W,
         HASH1_W,
         HASH2_W>(
+            hTables,
+            htb_buf,
             stream_edge,
             stream_o_index1,
             stream_o_index2,
             stream_o_ntable,
-            stream_end_offset,
-            hTables,
-            htb_buf);
+            stream_end_offset);
 }
 
 /* Reads two times the data graph and fills the data stuctures */

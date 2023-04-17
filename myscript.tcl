@@ -22,7 +22,7 @@ set_top subgraphIsomorphism
 
 open_solution "solution1" -flow_target vivado
 set_part {xczu3eg-sbva484-1-e}
-create_clock -period 5 -name default
+create_clock -period 300MHz -name default
 #source "./solution1/directives.tcl"
 #csim_design -clean
 #csynth_design

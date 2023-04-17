@@ -58,7 +58,7 @@
 #define INTERSECT_INDEXING_LOOP 0
 #define VERIFY_CACHE 1
 #define START_BATCH_SIZE 512
-#define PROPOSE_BATCH_SIZE 64
+#define PROPOSE_BATCH_LOG 6
 #define SET_INFO_WIDTH 16
 #define MERGE_IN_STREAMS 2
 #include <ap_axi_sdata.h>
