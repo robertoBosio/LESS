@@ -1,4 +1,49 @@
 
+template <size_t LOCK_WORD_LOG>
+bool checknlock(
+        ap_uint<(1UL << LOCK_WORD_LOG)> &locks,
+        ap_uint<LOCK_WORD_LOG> idx_lock){
+#pragma HLS inline
+    bool test = locks.test(idx_lock);
+    if (!test){
+        locks[idx_lock] = 1;
+    }
+    return test;
+}
+
+template <size_t LOCK_WORD_LOG>
+void slowMutex(
+        hls::stream<ap_uint<LOCK_WORD_LOG>> &checknlock_stream,
+        hls::stream<bool> &sem_stream,
+        hls::stream<ap_uint<LOCK_WORD_LOG>> &unlock_stream
+        ){
+    static ap_uint<LOCK_WORD_LOG> checknlock_mutex;
+    static ap_uint<(1UL << LOCK_WORD_LOG)> locks = 0;
+    static bool checknlock_flag {false};
+
+    ap_uint<LOCK_WORD_LOG> unlock_mutex;
+    bool test {true};
+
+#pragma HLS pipeline II=1
+    bool unlock_flag = unlock_stream.read_nb(unlock_mutex);
+    if (!checknlock_flag){
+        checknlock_flag = checknlock_stream.read_nb(checknlock_mutex);
+    }
+
+    if (checknlock_flag)
+        test = checknlock<LOCK_WORD_LOG>(locks, checknlock_mutex);
+    
+    if (unlock_flag)
+        locks[unlock_mutex] = 0;
+
+    ap_wait();
+
+    if (!test){
+        sem_stream.write(true);
+        checknlock_flag = false;
+    }
+}
+
 /* Builds the table descriptors based on the information
  * from the query graph. */
 void buildTableDescriptors(

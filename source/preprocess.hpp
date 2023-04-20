@@ -212,9 +212,6 @@ COUNTER_TO_OFFSET_ROW_LOOP:
                 row_new >>= (1UL << CNT_LOG);
                 row >>= (1UL << CNT_LOG);
 
-#ifndef __SYNTHESIS__
-                assert(base_addr < (1UL << (1UL << CNT_LOG)));
-#endif /* __SYNTHESIS__ */
 #ifdef DEBUG_STATS
                 if (counter > debug::max_collisions) 
                     debug::max_collisions = counter;
@@ -645,7 +642,7 @@ STORE_EDGES_POINTER_LOOP:
         " words." << std::endl;
 #endif
 
-    /*
+   /* 
     const size_t CNT_ROW = 1UL << (ROW_LOG - CNT_LOG);
     std::ofstream f("CHECK.txt");
     for(unsigned short tab = 0; tab < numTables; tab++){
@@ -663,8 +660,7 @@ STORE_EDGES_POINTER_LOOP:
                 }
 
                 ap_uint<(1UL << CNT_LOG)> edge = row.range(((g+1)<<CNT_LOG)-1, g<<CNT_LOG);
-                f << "\t" << edge.range((1UL << CNT_LOG)-2, 0) << " -> "
-                    << edge.test((1UL << CNT_LOG)-1) << std::endl;
+                f << "\t" << edge.range((1UL << CNT_LOG) - 1, 0) << std::endl;
 
             }
         }
@@ -685,7 +681,7 @@ STORE_EDGES_POINTER_LOOP:
         }
     }
     f.close();
-    */   
+    */      
 }
 
 template <typename T_DDR,

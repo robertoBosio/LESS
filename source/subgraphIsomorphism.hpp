@@ -38,7 +38,7 @@
 
 #if VERIFY_CACHE
 typedef cache< ap_uint<DDR_W>, true, false, 2,
-        HASHTABLES_SPACE, 1, 1, 8, false, 1, 1,
+        HASHTABLES_SPACE, 1, 1, 16, false, 32, 1,
         false, 2> cache_type;
 #endif /* VERIFY_CACHE */
 
@@ -1069,11 +1069,11 @@ void mwj_Wrapper(
 #endif
 }
 
-template <size_t BATCH_SIZE>
 void mwj_batch(
         AdjHT *hTables,
         QueryVertex *qVertices,
         ap_uint<DDR_W> *htb_buf,
+        unsigned short numBatchSize,
         
         hls::stream<bool> &stream_batch_end,
         hls::stream<bool> &stream_batches_end,
@@ -1090,7 +1090,7 @@ void mwj_batch(
     ap_uint<5> set_counter = 0;
     bool flag_buff = false;
     bool flag_new = true;
-    unsigned int batch_counter = BATCH_SIZE + 1;
+    unsigned int batch_counter = numBatchSize + 1;
 
 PROPOSE_TBINDEXING_LOOP:
     for(int g = 0; g < qVertices[0].numTablesIndexing; g++){
@@ -1147,13 +1147,13 @@ EXTRACT_BAGTOSET_SETCHECKER_LOOP:
                 assert(set_counter < MAX_CL);
 #endif
                 if (flag_new) {
-                    if(batch_counter == BATCH_SIZE){
+                    if(batch_counter == numBatchSize){
                         stream_batches_end.write(false);
                         stream_batch_end.write(true);
                     }
 
                     set[set_counter++] = vertex;
-                    batch_counter = (batch_counter >= BATCH_SIZE)? 1 : batch_counter + 1;
+                    batch_counter = (batch_counter >= numBatchSize)? 1 : batch_counter + 1;
                     stream_batch_end.write(false);
                     stream_batch.write(vertex);
                 }
@@ -1503,6 +1503,7 @@ void multiwayJoin(
 
 }
 
+template <size_t MAX_BATCH_SIZE>
 void multiwayJoinWrap(
         ap_uint<DDR_W> *htb_buf0,
         ap_uint<DDR_W> *htb_buf1,
@@ -1514,6 +1515,7 @@ void multiwayJoinWrap(
         QueryVertex *qVertices0,
         QueryVertex *qVertices1,
         unsigned short nQueryVer,
+        unsigned short numBatchSize,
 
 #ifdef COUNT_ONLY
         long unsigned int &result
@@ -1532,18 +1534,20 @@ void multiwayJoinWrap(
 #pragma HLS STABLE variable=nQueryVer
 #pragma HLS dataflow
 
-    hls::stream<bool, START_BATCH_SIZE> stream_batch_end("Stream batch end");
+    hls::stream<bool, MAX_BATCH_SIZE> stream_batch_end("Stream batch end");
     hls::stream<bool, S_D> stream_batches_end("Stream batches end");
-    hls::stream<ap_uint<V_ID_W>,  START_BATCH_SIZE> stream_batch("Stream batch");
+    hls::stream<ap_uint<V_ID_W>,  MAX_BATCH_SIZE> stream_batch("Stream batch");
 
-    mwj_batch<START_BATCH_SIZE>(
+    mwj_batch(
         hTables0,
         qVertices0,
         htb_buf0,
+        numBatchSize,
         stream_batch_end,
         stream_batches_end,
         stream_batch);
-  
+ 
+MULTIWAYJOIN_LOOP: 
     do {    
         multiwayJoin(
                 htb_buf1,
@@ -1560,7 +1564,6 @@ void multiwayJoinWrap(
 #ifdef DEBUG_STATS
         debug::batches++;
 #endif
-
     } while (!stream_batches_end.read());
 }
 
@@ -1574,6 +1577,7 @@ void subgraphIsomorphism(
         unsigned short numQueryVert,
         unsigned short numQueryEdges,
         unsigned long numDataEdges,
+        unsigned short numBatchSize,
 
 #ifdef DEBUG_INTERFACE
         volatile unsigned int &debif_endpreprocess,
@@ -1588,18 +1592,17 @@ void subgraphIsomorphism(
         )
 {
 
-/* #pragma HLS INTERFACE mode=m_axi port=htb_buf1 bundle=gmem1 depth=DDR_WIDTH */
 #pragma HLS INTERFACE mode=m_axi port=htb_buf0 bundle=batch_prep
 #pragma HLS INTERFACE mode=m_axi port=htb_buf1 bundle=prop
 #pragma HLS INTERFACE mode=m_axi port=htb_buf2 bundle=cache
 #pragma HLS INTERFACE mode=m_axi port=res_buf bundle=fifo
 #pragma HLS INTERFACE mode=m_axi port=edge_buf bundle=graph
-/* #pragma HLS alias ports=htb_buf0,htb_buf2,htb_buf3 distance=0 */
 #pragma HLS alias ports=htb_buf0,htb_buf1,htb_buf2 distance=0
 
 #pragma HLS INTERFACE mode=s_axilite port=numQueryVert
 #pragma HLS INTERFACE mode=s_axilite port=numQueryEdges
 #pragma HLS INTERFACE mode=s_axilite port=numDataEdges
+#pragma HLS INTERFACE mode=s_axilite port=numBatchSize
 #pragma HLS INTERFACE mode=s_axilite port=return
 
 #ifdef DEBUG_INTERFACE
@@ -1618,10 +1621,6 @@ void subgraphIsomorphism(
     debug::init();
 
 #endif /* DEBUG_STATS */
-
-/* #ifdef DEBUG_INTERFACE */
-/* debif_endpreprocess = 0; */
-/* #endif /1* DEBUG_INTERFACE *1/ */
 
     QueryVertex qVertices0[MAX_QV], qVertices1[MAX_QV];
     TableDescriptor tDescriptors[MAX_TB];
@@ -1659,7 +1658,8 @@ void subgraphIsomorphism(
     ap_wait();
 #endif /* DEBUG_INTERFACE */
 
-    multiwayJoinWrap(
+    multiwayJoinWrap<
+        MAX_START_BATCH_SIZE>(
             htb_buf0,
             htb_buf1,
             htb_buf2,
@@ -1669,6 +1669,7 @@ void subgraphIsomorphism(
             qVertices0,
             qVertices1,
             numQueryVert,
+            numBatchSize,
             localResult);
 
     result = localResult;
@@ -1727,15 +1728,6 @@ void subgraphIsomorphism(
             intersect_bit_falsepositive << std::endl <<
             "\t\tTP " << (float)intersect_bit_truepositive / debug_probe << "\t" <<
             intersect_bit_truepositive << std::endl << std::endl;
-/* debof << "\tsolution prob: " << std::setprecision(3) << std::endl << */
-/* "\t\tFP " << (float)intersect_sol_falsepositive / debug_sol << "\t" << */
-/* intersect_sol_falsepositive << std::endl << */
-/* "\t\tTP " << (float)intersect_sol_truepositive / debug_sol << "\t" << */
-/* intersect_sol_truepositive << std::endl << */
-/* "\t\tFN " << (float)intersect_sol_falsenegative / debug_sol << "\t" << */
-/* intersect_sol_falsenegative << std::endl << */
-/* "\t\tTN " << (float)intersect_sol_truenegative / debug_sol << "\t" << */
-/* intersect_sol_truenegative << std::endl << std::endl; */
         debof.close();
     }
 #endif

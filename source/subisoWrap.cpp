@@ -9,6 +9,7 @@ void subisoWrapper(
         unsigned short numQueryVert,
         unsigned short numQueryEdges,
         unsigned long numDataEdges,
+        unsigned short numBatchSize,
 
 #ifdef DEBUG_INTERFACE
         volatile unsigned int &debif_endpreprocess,
@@ -33,6 +34,7 @@ void subisoWrapper(
              numQueryVert,
              numQueryEdges,
              numDataEdges,
+             numBatchSize,
 #ifdef DEBUG_INTERFACE
              debif_endpreprocess,
 #endif
