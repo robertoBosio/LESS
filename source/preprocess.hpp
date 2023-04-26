@@ -716,7 +716,7 @@ void preprocess(
         MAX_TB,
         NODE_W,
         LAB_W>(
-            edge_buf,
+            &edge_buf[numDataEdges],
             qVertices0,
             qVertices1,
             tDescriptors,
@@ -735,7 +735,7 @@ void preprocess(
          HASH2_W,
          STREAM_D,
          HTB_SPACE>(
-            &edge_buf[numQueryVert + numQueryEdges],
+            edge_buf,
             hTables0,
             hTables1,
             htb_buf,

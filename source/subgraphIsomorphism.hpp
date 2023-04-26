@@ -236,10 +236,14 @@ PROPOSE_READ_MIN_INDEXED_LOOP:
                     row >>= (1UL << E_W);
                 }
 #ifdef DEBUG_STATS
+                debug::set++;
                 debug::readmin_reads++;
 #endif
             }
             stream_end_out.write(true);
+#ifdef DEBUG_STATS
+            debug::n_sets++;
+#endif
         }
 
         if (stream_stop.read_nb(stop))
@@ -392,10 +396,13 @@ void mwj_tuplebuild(
     unsigned char curQV {0};
     bool stop, last;
 #pragma HLS bind_storage variable=buffer type=ram_1p impl=bram
+#pragma HLS bind_storage variable=buffer type=ram_2p
    
     while(true) {
         if (stream_sol_end_in.read_nb(last)){ 
             curQV = 0;
+            buffer_size = 0;
+
 TUPLEBUILD_COPYING_EMBEDDING_LOOP:
             while(!last){
                 curEmb[curQV] = stream_sol_in.read();
@@ -406,30 +413,49 @@ TUPLEBUILD_COPYING_EMBEDDING_LOOP:
             }
             stream_sol_end_out.write(true);
             set_info = stream_set_info_in.read();
+            unsigned char cycles = qVertices[curQV].numTablesIndexed;
 
-TUPLEBUILD_EDGE_LOOP:
-            for (int g = 0; g < qVertices[curQV].numTablesIndexed; g++){
-                buffer_p = 0; 
-                uint8_t tableIndex = qVertices[curQV].tables_indexed[g];
-                uint8_t ivPos = qVertices[curQV].vertex_indexing[g];
-                bool bit_last = (g == qVertices[curQV].numTablesIndexed - 1);
+            if (cycles > 0){
+                uint8_t tableIndex = qVertices[curQV].tables_indexed[0];
+                uint8_t ivPos = qVertices[curQV].vertex_indexing[0];
                 bool bit_min = (set_info.range(7, 0) != tableIndex || 
                         set_info.range(15, 8) != ivPos);
 
-                if (g == 0) {
-                    last = stream_set_end_in.read();
-                } else {
-                    last = (buffer_p == buffer_size);
-                }
+                last = stream_set_end_in.read();
 
-TUPLEBUILD_MAIN_LOOP:
+TUPLEBUILD_MAIN_LOOP_FIRST_IT:
                 while(!last){
 #pragma HLS pipeline II=1 
-                    if (g == 0){
-                        vToVerify = stream_set_in.read();
-                    } else {
-                        vToVerify = buffer[buffer_p];
-                    }
+                    vToVerify = stream_set_in.read();
+
+                    // Building the tuple as 
+                    // (VERTEX_DST, VERTEX_SRC, TABLE, POSITION, BIT_LAST, BIT_MIN)
+                    tuple.range(V_ID_W - 1, 0) = vToVerify;
+                    tuple.range((V_ID_W * 2) - 1, V_ID_W) = curEmb[ivPos];
+                    tuple.range((V_ID_W * 2) + 7, V_ID_W * 2) = tableIndex;
+                    tuple.range(TUPLE_I - 3, V_ID_W * 2 + 8) = buffer_size;
+                    tuple[TUPLE_I - 2] = (qVertices[curQV].numTablesIndexed == 1);
+                    tuple[TUPLE_I - 1] = bit_min;
+                    stream_tuple_out.write(tuple);
+                    stream_tuple_end_out.write(false);
+
+                    buffer[buffer_size++] = vToVerify;
+                    last = stream_set_end_in.read();
+                }
+            }
+
+TUPLEBUILD_EDGE_LOOP_AFTER_IT:
+            for (int g = 1; g < cycles; g++){
+                uint8_t tableIndex = qVertices[curQV].tables_indexed[g];
+                uint8_t ivPos = qVertices[curQV].vertex_indexing[g];
+                bool bit_last = (g == cycles - 1);
+                bool bit_min = (set_info.range(7, 0) != tableIndex || 
+                        set_info.range(15, 8) != ivPos);
+
+TUPLEBUILD_MAIN_LOOP:
+                for (int buffer_p = 0; buffer_p < buffer_size; buffer_p++){
+#pragma HLS pipeline II=1 
+                    vToVerify = buffer[buffer_p];
 
                     // Building the tuple as 
                     // (VERTEX_DST, VERTEX_SRC, TABLE, POSITION, BIT_LAST, BIT_MIN)
@@ -439,25 +465,9 @@ TUPLEBUILD_MAIN_LOOP:
                     tuple.range(TUPLE_I - 3, V_ID_W * 2 + 8) = buffer_p;
                     tuple[TUPLE_I - 2] = bit_last;
                     tuple[TUPLE_I - 1] = bit_min;
-                    buffer[buffer_p++] = vToVerify;
                     stream_tuple_out.write(tuple);
                     stream_tuple_end_out.write(false);
-
-/* std::cout << "( " */
-/* << tuple.range(V_ID_W - 1, 0) << ", " */
-/* << tuple.range((V_ID_W * 2) - 1, V_ID_W) << ", " */
-/* << tuple.range((V_ID_W * 2) + 7, V_ID_W * 2) << ", " */
-/* << tuple.range(TUPLE_I - 3, V_ID_W * 2 + 8) << ", " */
-/* << tuple[TUPLE_I - 2] << ", " */
-/* << tuple[TUPLE_I - 1] << ") " << std::endl; */
-
-                    if (g == 0) {
-                        last = stream_set_end_in.read();
-                    } else {
-                        last = (buffer_p == buffer_size);
-                    }
                 }
-                buffer_size = buffer_p;
             }
             stream_tuple_end_out.write(true);
         }
@@ -493,6 +503,10 @@ void mwj_intersect(
     ap_uint<TUPLE_V> tuple_out;
     ap_uint<SET_INFO_WIDTH> set_info;
     unsigned char tableIndex;
+    ap_uint<DDR_W> ram_row;
+    unsigned long addr_row;
+    unsigned long addr_inrow;
+    ap_uint<64> addr_counter;
     bool stop, last;
 
     while (1) {
@@ -507,6 +521,12 @@ INTERSECT_COPYING_EMBEDDING_LOOP:
 
             bits = ~0;
             last = stream_tuple_end_in.read();
+
+#ifdef DEBUG_STATS
+            if (last)
+                debug::empty_sol++;
+#endif
+
 INTERSECT_LOOP:
             while(!last){
                 tuple_in = stream_tuple_in.read();
@@ -530,31 +550,36 @@ INTERSECT_LOOP:
                     ap_uint<H_W_1> index1 = hash_out.range(H_W_1 - 1, 0);
                     ap_uint<H_W_2> index2 = candidate_hash.range(H_W_2 - 1, 0);
 
-                    if (index2 != 0){
-                        index1_f = index1;
-                        index2_f = index2 - 1;
-                    } else if (index2 == 0 && index1 != 0){
-                        index1_f = index1 - 1;
-                        index2_f = (1UL << H_W_2) - 1;
-                    }
-                    if (!(index2 == 0 && index1 == 0)){
-                        start_off = read_table<H_W_1, H_W_2, H_W_2, 0, C_W>(
-                                index1_f,
-                                index2_f,
-                                htb_buf,
-                                hTables[tableIndex].start_offset);
-                        start_off = start_off.range((1UL << C_W) - 1, 0);
+                    addr_counter = index1;
+                    addr_counter <<= H_W_2;
+                    addr_counter += index2;
+
+                    /* Compute address of row storing the counter */
+                    addr_row = hTables[tableIndex].start_offset + 
+                        (addr_counter >> (DDR_BIT - C_W));
+
+                    /* Compute address of data inside the row */
+                    addr_inrow = addr_counter.range((DDR_BIT - C_W) - 1, 0);
+                    ram_row = htb_buf.get(addr_row, 0);
+                    end_off = ram_row.range(((addr_inrow + 1) << C_W) - 1, 
+                            addr_inrow << C_W);
+                    
+                    if (addr_counter != 0){
+                        addr_counter--;
+
+                        /* Compute address of row storing the counter */
+                        addr_row = hTables[tableIndex].start_offset + 
+                            (addr_counter >> (DDR_BIT - C_W));
+
+                        /* Compute address of data inside the row */
+                        addr_inrow = addr_counter.range((DDR_BIT - C_W) - 1, 0);
+                        ram_row = htb_buf.get(addr_row, 0);
+                        start_off = ram_row.range(((addr_inrow + 1) << C_W) - 1, 
+                                addr_inrow << C_W);
 #ifdef DEBUG_STATS
                         debug::intersect_reads++;
 #endif
                     }
-
-                    end_off = read_table<H_W_1, H_W_2, H_W_2, 0, C_W>(
-                            index1,
-                            index2,
-                            htb_buf,
-                            hTables[tableIndex].start_offset);
-                    end_off = end_off.range((1UL << C_W) - 1, 0);
 
 #ifdef DEBUG_STATS
                     debug::intersect_reads++;
@@ -859,10 +884,6 @@ VERIFY_ADD_COPYING_EMBEDDING_LOOP:
 
             last_set = stream_end_inter_in.read();
 
-#ifdef DEBUG_STATS
-            if (last_set)
-                debug::empty_sol++;
-#endif
             if (!last_set && (curQV != nQueryVer - 1)){
                 stream_partial_out.write((curQV + 1) | (1UL << (V_ID_W - 1)));
                 for (int g = 0; g < curQV; g++){
@@ -922,9 +943,6 @@ VERIFY_WRITE_PARTIAL_LOOP:
     result.write(node);
 #endif
 
-#ifdef DEBUG_STATS
-/* std::cout << debug::empty_sol << std::endl; */
-#endif
 }
 
 template<typename T>
@@ -1730,5 +1748,6 @@ void subgraphIsomorphism(
             intersect_bit_truepositive << std::endl << std::endl;
         debof.close();
     }
+    std::cout << debug::set / (float)debug::n_sets << std::endl;
 #endif
 }

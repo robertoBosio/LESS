@@ -59,24 +59,7 @@ edge_t *load_graphs(
         sscanf(fLine.c_str(), "%*c %lu %lu %*u", &node_t, &label_t);
         vToLabelQuery.insert(std::make_pair(node_t, label_t));
     }
-
-    /* Stream matching order 
-     * RIGHT NOW NUMERICAL ORDERD */
-    for(int count = 0; count < numQueryVertices; count++){ 
-        edge.src = (ap_uint<NODE_W>)count;
-        edge_buf[edge_buf_p++] = edge;
-    }
-
-    /* Stream edges */
-    for(int count = 0; count < numQueryEdges; count++){    
-        unsigned long nodesrc_t, nodedst_t;
-        std::getline(fQuery, fLine);
-        sscanf(fLine.c_str(), "%*c %lu %lu", &nodesrc_t, &nodedst_t);
-        edge.src = (nodesrc_t << LAB_W) | vToLabelQuery.at(nodesrc_t);
-        edge.dst = (nodedst_t << LAB_W) | vToLabelQuery.at(nodedst_t);
-        edge_buf[edge_buf_p++] = edge;
-    }
-
+    
     /* Store data labels */
     for(int count = 0; count < numDataVertices; count++){    
         unsigned long node_t, label_t;
@@ -92,6 +75,23 @@ edge_t *load_graphs(
         sscanf(fLine.c_str(), "%*c %lu %lu", &nodesrc_t, &nodedst_t);
         edge.src = (nodesrc_t << LAB_W) | vToLabelData.at(nodesrc_t);
         edge.dst = (nodedst_t << LAB_W) | vToLabelData.at(nodedst_t);
+        edge_buf[edge_buf_p++] = edge;
+    }
+
+    /* Stream matching order 
+     * RIGHT NOW NUMERICAL ORDERD */
+    for(int count = 0; count < numQueryVertices; count++){ 
+        edge.src = (ap_uint<NODE_W>)count;
+        edge_buf[edge_buf_p++] = edge;
+    }
+
+    /* Stream edges */
+    for(int count = 0; count < numQueryEdges; count++){    
+        unsigned long nodesrc_t, nodedst_t;
+        std::getline(fQuery, fLine);
+        sscanf(fLine.c_str(), "%*c %lu %lu", &nodesrc_t, &nodedst_t);
+        edge.src = (nodesrc_t << LAB_W) | vToLabelQuery.at(nodesrc_t);
+        edge.dst = (nodedst_t << LAB_W) | vToLabelQuery.at(nodedst_t);
         edge_buf[edge_buf_p++] = edge;
     }
 

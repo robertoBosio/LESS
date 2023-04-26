@@ -21,6 +21,8 @@ namespace debug {
     unsigned long empty_sol {0};
     unsigned long embeddings {0};
     unsigned long max_collisions {0};
+    unsigned long n_sets = {0};
+    unsigned long set = {0};
     float avg_collisions {0};
 
     float cache_hit_0 {0};
@@ -51,5 +53,7 @@ namespace debug {
         cache_req_0 = 0;
         cache_req_1 = 0;
         batches = 0;
+        n_sets = 0;
+        set = 0;
     }
 };

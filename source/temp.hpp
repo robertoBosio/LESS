@@ -1,4 +1,143 @@
 
+template <typename T,
+            size_t TUPLE_I,
+            size_t TUPLE_V,
+            size_t BATCH_SIZE_LOG>
+void mwj_intersect(
+        AdjHT                         *hTables,
+        T                             htb_buf,
+        hls::stream<ap_uint<TUPLE_I>> &stream_tuple_in,
+        hls::stream<bool>             &stream_tuple_end_in,
+        hls::stream<ap_uint<V_ID_W>>  &stream_sol_in,
+        hls::stream<bool>             &stream_sol_end_in,
+        hls::stream<bool>             &stream_stop,
+
+        hls::stream<ap_uint<TUPLE_V>> &stream_tuple_out,
+        hls::stream<bool>             &stream_tuple_end_out,
+        hls::stream<ap_uint<V_ID_W>>  &stream_sol_out,
+        hls::stream<bool>             &stream_sol_end_out)
+{
+    ap_uint<64> candidate_hash;
+    ap_uint<(1UL << BATCH_SIZE_LOG)> bits;
+    ap_uint<V_ID_W> candidate_v;
+    ap_uint<V_ID_W> indexing_v;
+    ap_uint<TUPLE_I> tuple_in;
+    ap_uint<TUPLE_V> tuple_out;
+    ap_uint<SET_INFO_WIDTH> set_info;
+    unsigned char tableIndex;
+    ap_uint<DDR_W> ram_row;
+    unsigned long addr_row;
+    unsigned long addr_inrow;
+    ap_uint<64> addr_counter;
+    bool stop, last;
+
+    while (1) {
+        if (stream_sol_end_in.read_nb(last)){
+INTERSECT_COPYING_EMBEDDING_LOOP:
+            while(!last){
+                stream_sol_out.write(stream_sol_in.read());
+                stream_sol_end_out.write(false);
+                last = stream_sol_end_in.read();
+            }
+            stream_sol_end_out.write(true);
+
+            bits = ~0;
+            last = stream_tuple_end_in.read();
+INTERSECT_LOOP:
+            while(!last){
+                tuple_in = stream_tuple_in.read();
+                ap_uint<64> hash_out;
+                ap_uint<(1UL << C_W)> start_off = 0;
+                ap_uint<(1UL << C_W)> end_off = 1;
+                ap_uint<BATCH_SIZE_LOG> pos = tuple_in.range(TUPLE_I - 3, V_ID_W * 2 + 8);
+
+                if (tuple_in.test(TUPLE_I - 1) && bits[pos]){
+
+                    ap_uint<H_W_1> index1_f;
+                    ap_uint<H_W_2> index2_f;
+                    candidate_v = tuple_in.range(V_ID_W - 1, 0);
+                    indexing_v = tuple_in.range((V_ID_W * 2) - 1, V_ID_W);
+                    tableIndex = tuple_in.range((V_ID_W * 2) + 7, V_ID_W * 2);
+
+                    xf::database::details::hashlookup3_core<V_ID_W>(
+                            candidate_v, candidate_hash);
+                    xf::database::details::hashlookup3_core<V_ID_W>(
+                            indexing_v, hash_out);
+                    ap_uint<H_W_1> index1 = hash_out.range(H_W_1 - 1, 0);
+                    ap_uint<H_W_2> index2 = candidate_hash.range(H_W_2 - 1, 0);
+
+                    addr_counter = index1;
+                    addr_counter <<= H_W_2;
+                    addr_counter += index2;
+
+                    /* Compute address of row storing the counter */
+                    addr_row = hTables[tableIndex].start_offset + 
+                        (addr_counter >> (DDR_BIT - C_W));
+
+                    /* Compute address of data inside the row */
+                    addr_inrow = addr_counter.range((DDR_BIT - C_W) - 1, 0);
+                    ram_row = htb_buf.get(addr_row, 0);
+                    end_off = ram_row.range(((addr_inrow + 1) << C_W) - 1, 
+                            addr_inrow << C_W);
+                    
+                    if (addr_counter != 0){
+                        addr_counter--;
+
+                        /* Compute address of row storing the counter */
+                        addr_row = hTables[tableIndex].start_offset + 
+                            (addr_counter >> (DDR_BIT - C_W));
+
+                        /* Compute address of data inside the row */
+                        addr_inrow = addr_counter.range((DDR_BIT - C_W) - 1, 0);
+                        ram_row = htb_buf.get(addr_row, 0);
+                        start_off = ram_row.range(((addr_inrow + 1) << C_W) - 1, 
+                                addr_inrow << C_W);
+#ifdef DEBUG_STATS
+                        debug::intersect_reads++;
+#endif
+                    }
+
+#ifdef DEBUG_STATS
+                    debug::intersect_reads++;
+                    debug::intersect_filter += (start_off < end_off)? 1 : 0;
+#endif
+                }
+
+                // Building the tuple as 
+                // ((TUPLE_I), START, END, INTER_BIT)
+                tuple_out[TUPLE_V - 1] = (start_off < end_off) & bits[pos];
+                tuple_out.range(TUPLE_I - 1, 0) = tuple_in;
+                tuple_out.range(TUPLE_I + (1UL << C_W) - 1, TUPLE_I) = start_off;
+                tuple_out.range(TUPLE_I + 2 * (1UL << C_W) - 1,
+                       TUPLE_I + (1UL << C_W)) = end_off;
+
+                bits[pos] = bits[pos] & (start_off < end_off);
+                stream_tuple_out.write(tuple_out);
+                stream_tuple_end_out.write(false);
+
+/* std::cout << "(( " */
+/* << tuple_out.range(V_ID_W - 1, 0) << ", " */
+/* << tuple_out.range((V_ID_W * 2) - 1, V_ID_W) << ", " */
+/* << tuple_out.range((V_ID_W * 2) + 7, V_ID_W * 2) << ", " */
+/* << tuple_out.range(TUPLE_I - 3, V_ID_W * 2 + 8) << ", " */
+/* << tuple_out[TUPLE_I - 2] << ", " */
+/* << tuple_out[TUPLE_I - 1] << "), " */
+/* << tuple_out.range(TUPLE_I + (1UL << C_W) - 1, TUPLE_I) << ", " */
+/* << tuple_out.range(TUPLE_I + 2 * (1UL << C_W) - 1, */
+/* TUPLE_I + (1UL << C_W)) << ", " */
+/* << tuple_out[TUPLE_V - 1] << ") " */
+/* << bits[pos] << std::endl; */
+
+                last = stream_tuple_end_in.read();
+            }
+            stream_tuple_end_out.write(true);
+        }
+
+        if (stream_stop.read_nb(stop))
+            break;
+    }
+}
+
 template <size_t LOCK_WORD_LOG>
 bool checknlock(
         ap_uint<(1UL << LOCK_WORD_LOG)> &locks,
