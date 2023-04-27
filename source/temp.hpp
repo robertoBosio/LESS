@@ -1,4 +1,330 @@
 
+template <size_t TUPLE_I,
+            size_t TUPLE_V,
+            size_t TUPLE_A,
+            size_t MAX_BATCH_LOG>
+void mwj_Wrapper(
+        AdjHT *hTables,
+        cache_type &htb_buf,
+        hls::stream<ap_uint<TUPLE_I>> &stream_tuple_in,
+        hls::stream<bool>             &stream_tuple_end_in,
+        hls::stream<ap_uint<V_ID_W>>  &stream_sol_in,
+        hls::stream<bool>             &stream_sol_end_in,
+        hls::stream<bool>             &stream_stop_0,
+        hls::stream<bool>             &stream_stop_1,
+        
+        hls::stream<ap_uint<TUPLE_A>> &stream_tuple_out,
+        hls::stream<bool>             &stream_tuple_end_out,
+        hls::stream<ap_uint<V_ID_W>>  &stream_sol_out,
+        hls::stream<bool>             &stream_sol_end_out)
+{
+#pragma HLS dataflow
+    /* Intersect data out */    
+    hls_thread_local hls::stream<ap_uint<V_ID_W>, MAX_QV> i_stream_sol
+        ("Intersect - partial solution");
+    hls_thread_local hls::stream<bool, MAX_QV> i_stream_sol_end
+        ("Intersect - partial solution end flag");
+    hls_thread_local hls::stream<ap_uint<TUPLE_V>, S_D> i_stream_tuple
+        ("Intersect - tuples");
+    hls_thread_local hls::stream<bool, S_D> i_stream_tuple_end
+        ("Intersect - tuples end flag");
+
+    hls_thread_local hls::stream<ap_uint<MAX_BATCH_LOG>, 3> checknlock_stream;
+    hls_thread_local hls::stream<bool, 3> sem_stream;
+    hls_thread_local hls::stream<ap_uint<MAX_BATCH_LOG>, 3> unlock_stream;
+
+    hls_thread_local hls::task slowMutex_t(
+            slowMutex<MAX_BATCH_LOG>,
+            checknlock_stream,
+            sem_stream,
+            unlock_stream);
+
+
+#ifdef __SYNTHESIS__
+    mwj_intersect<cache_type&, 
+        TUPLE_I,
+        TUPLE_V,
+        MAX_BATCH_LOG>(
+                hTables,
+                htb_buf,
+                stream_tuple_in,
+                stream_tuple_end_in,
+                stream_sol_in,
+                stream_sol_end_in,
+                stream_stop_0,
+                sem_stream,
+                checknlock_stream,
+                unlock_stream,
+                i_stream_tuple,
+                i_stream_tuple_end,
+                i_stream_sol,
+                i_stream_sol_end);
+            
+    mwj_verify<cache_type&, 
+        TUPLE_I,
+        TUPLE_V,
+        TUPLE_A,
+        MAX_BATCH_LOG>(
+                hTables,
+                htb_buf,
+                i_stream_tuple,
+                i_stream_tuple_end,
+                i_stream_sol,
+                i_stream_sol_end,
+                stream_stop_1,
+                stream_tuple_out,
+                stream_tuple_end_out,
+                stream_sol_out,
+                stream_sol_end_out);
+#else
+
+    htb_buf.init();
+    std::thread mwj_intersect_t(
+            mwj_intersect<cache_type&, 
+        TUPLE_I,
+        TUPLE_V,
+        PROPOSE_BATCH_LOG>,
+            hTables,
+            std::ref(htb_buf),
+            std::ref(stream_tuple_in),
+            std::ref(stream_tuple_end_in),
+            std::ref(stream_sol_in),
+            std::ref(stream_sol_end_in),
+            std::ref(stream_stop_0),
+            std::ref(sem_stream),
+            std::ref(checknlock_stream),
+            std::ref(unlock_stream),
+            std::ref(i_stream_tuple),
+            std::ref(i_stream_tuple_end),
+            std::ref(i_stream_sol),
+            std::ref(i_stream_sol_end));
+    
+    std::thread mwj_verify_t(
+            mwj_verify<cache_type&, 
+            TUPLE_I,
+            TUPLE_V,
+            TUPLE_A,
+            MAX_BATCH_LOG>,
+            hTables,
+            std::ref(htb_buf),
+            std::ref(i_stream_tuple),
+            std::ref(i_stream_tuple_end),
+            std::ref(i_stream_sol),
+            std::ref(i_stream_sol_end),
+            std::ref(stream_stop_1),
+            std::ref(stream_tuple_out),
+            std::ref(stream_tuple_end_out),
+            std::ref(stream_sol_out),
+            std::ref(stream_sol_end_out));
+    
+    mwj_intersect_t.join();
+    mwj_verify_t.join();
+    htb_buf.stop();
+
+#endif
+}
+template <typename T,
+            size_t TUPLE_I,
+            size_t TUPLE_V,
+            size_t BATCH_SIZE_LOG>
+void mwj_intersect(
+        AdjHT                                   *hTables,
+        T                                       htb_buf,
+        hls::stream<ap_uint<TUPLE_I>>           &stream_tuple_in,
+        hls::stream<bool>                       &stream_tuple_end_in,
+        hls::stream<ap_uint<V_ID_W>>            &stream_sol_in,
+        hls::stream<bool>                       &stream_sol_end_in,
+        hls::stream<bool>                       &stream_stop,
+        hls::stream<bool>                       &sem_stream,
+
+        hls::stream<ap_uint<BATCH_SIZE_LOG>>    &checknlock_stream,
+        hls::stream<ap_uint<BATCH_SIZE_LOG>>    &unlock_stream,
+        hls::stream<ap_uint<TUPLE_V>>           &stream_tuple_out,
+        hls::stream<bool>                       &stream_tuple_end_out,
+        hls::stream<ap_uint<V_ID_W>>            &stream_sol_out,
+        hls::stream<bool>                       &stream_sol_end_out)
+{
+    ap_uint<64> candidate_hash;
+/* ap_uint<(1UL << BATCH_SIZE_LOG)> bits; */
+    bool bits[(1UL << BATCH_SIZE_LOG)];
+    ap_uint<V_ID_W> candidate_v;
+    ap_uint<V_ID_W> indexing_v;
+    ap_uint<TUPLE_I> tuple_in;
+    ap_uint<TUPLE_V> tuple_out;
+    ap_uint<SET_INFO_WIDTH> set_info;
+    unsigned char tableIndex;
+    ap_uint<DDR_W> ram_row;
+    unsigned long addr_row;
+    unsigned long addr_inrow;
+    ap_uint<64> addr_counter;
+    bool stop, last;
+
+    while (1) {
+        if (stream_sol_end_in.read_nb(last)){
+INTERSECT_COPYING_EMBEDDING_LOOP:
+            while(!last){
+                stream_sol_out.write(stream_sol_in.read());
+                stream_sol_end_out.write(false);
+                last = stream_sol_end_in.read();
+            }
+            stream_sol_end_out.write(true);
+
+INTERSECT_BITS_INITIALIZE:
+            for (int g = 0; g < (1UL << BATCH_SIZE_LOG); g++){
+#pragma HLS unroll
+                bits[g] = true;
+            }
+/* bits = ~0; */
+            last = stream_tuple_end_in.read();
+
+INTERSECT_LOOP:
+            while(!last){
+#pragma HLS dependence variable=bits direction=RAW type=inter false
+                tuple_in = stream_tuple_in.read();
+                ap_uint<64> hash_out;
+                ap_uint<(1UL << C_W)> start_off = 0;
+                ap_uint<(1UL << C_W)> end_off = 1;
+                ap_uint<BATCH_SIZE_LOG> pos = tuple_in.range(TUPLE_I - 3, V_ID_W * 2 + 8);
+                
+                checknlock_stream.write(pos);
+                ap_wait();
+                ap_wait();
+                ap_wait();
+                sem_stream.read();
+                ap_wait();
+
+                if (tuple_in.test(TUPLE_I - 1) && bits[pos]){
+
+                    ap_uint<H_W_1> index1_f;
+                    ap_uint<H_W_2> index2_f;
+                    candidate_v = tuple_in.range(V_ID_W - 1, 0);
+                    indexing_v = tuple_in.range((V_ID_W * 2) - 1, V_ID_W);
+                    tableIndex = tuple_in.range((V_ID_W * 2) + 7, V_ID_W * 2);
+
+                    xf::database::details::hashlookup3_core<V_ID_W>(
+                            candidate_v, candidate_hash);
+                    xf::database::details::hashlookup3_core<V_ID_W>(
+                            indexing_v, hash_out);
+                    ap_uint<H_W_1> index1 = hash_out.range(H_W_1 - 1, 0);
+                    ap_uint<H_W_2> index2 = candidate_hash.range(H_W_2 - 1, 0);
+
+                    addr_counter = index1;
+                    addr_counter <<= H_W_2;
+                    addr_counter += index2;
+
+                    /* Compute address of row storing the counter */
+                    addr_row = hTables[tableIndex].start_offset + 
+                        (addr_counter >> (DDR_BIT - C_W));
+
+                    /* Compute address of data inside the row */
+                    addr_inrow = addr_counter.range((DDR_BIT - C_W) - 1, 0);
+                    ram_row = htb_buf.get(addr_row, 0);
+                    end_off = ram_row.range(((addr_inrow + 1) << C_W) - 1, 
+                            addr_inrow << C_W);
+                    
+                    if (addr_counter != 0){
+                        addr_counter--;
+
+                        /* Compute address of row storing the counter */
+                        addr_row = hTables[tableIndex].start_offset + 
+                            (addr_counter >> (DDR_BIT - C_W));
+
+                        /* Compute address of data inside the row */
+                        addr_inrow = addr_counter.range((DDR_BIT - C_W) - 1, 0);
+                        ram_row = htb_buf.get(addr_row, 0);
+                        start_off = ram_row.range(((addr_inrow + 1) << C_W) - 1, 
+                                addr_inrow << C_W);
+#ifdef DEBUG_STATS
+                        debug::intersect_reads++;
+#endif
+                    }
+
+#ifdef DEBUG_STATS
+                    debug::intersect_reads++;
+                    debug::intersect_filter += (start_off < end_off)? 1 : 0;
+#endif
+                }
+
+                // Building the tuple as 
+                // ((TUPLE_I), START, END, INTER_BIT)
+                tuple_out[TUPLE_V - 1] = (start_off < end_off) && bits[pos];
+                tuple_out.range(TUPLE_I - 1, 0) = tuple_in;
+                tuple_out.range(TUPLE_I + (1UL << C_W) - 1, TUPLE_I) = start_off;
+                tuple_out.range(TUPLE_I + 2 * (1UL << C_W) - 1,
+                       TUPLE_I + (1UL << C_W)) = end_off;
+
+                bits[pos] = bits[pos] && (start_off < end_off);
+                unlock_stream.write(pos);
+                stream_tuple_out.write(tuple_out);
+                stream_tuple_end_out.write(false);
+
+/* std::cout << "(( " */
+/* << tuple_out.range(V_ID_W - 1, 0) << ", " */
+/* << tuple_out.range((V_ID_W * 2) - 1, V_ID_W) << ", " */
+/* << tuple_out.range((V_ID_W * 2) + 7, V_ID_W * 2) << ", " */
+/* << tuple_out.range(TUPLE_I - 3, V_ID_W * 2 + 8) << ", " */
+/* << tuple_out[TUPLE_I - 2] << ", " */
+/* << tuple_out[TUPLE_I - 1] << "), " */
+/* << tuple_out.range(TUPLE_I + (1UL << C_W) - 1, TUPLE_I) << ", " */
+/* << tuple_out.range(TUPLE_I + 2 * (1UL << C_W) - 1, */
+/* TUPLE_I + (1UL << C_W)) << ", " */
+/* << tuple_out[TUPLE_V - 1] << ") " */
+/* << bits[pos] << std::endl; */
+
+                last = stream_tuple_end_in.read();
+            }
+            stream_tuple_end_out.write(true);
+        }
+
+        if (stream_stop.read_nb(stop))
+            break;
+    }
+}
+
+template <size_t LOCK_WORD_LOG>
+bool checknlock(
+        ap_uint<(1UL << LOCK_WORD_LOG)> &locks,
+        ap_uint<LOCK_WORD_LOG> idx_lock){
+#pragma HLS inline
+    bool test = locks.test(idx_lock);
+    if (!test){
+        locks[idx_lock] = 1;
+    }
+    return test;
+}
+
+template <size_t LOCK_WORD_LOG>
+void slowMutex(
+        hls::stream<ap_uint<LOCK_WORD_LOG>> &checknlock_stream,
+        hls::stream<bool> &sem_stream,
+        hls::stream<ap_uint<LOCK_WORD_LOG>> &unlock_stream
+        ){
+    static ap_uint<LOCK_WORD_LOG> checknlock_mutex;
+    static ap_uint<(1UL << LOCK_WORD_LOG)> locks = 0;
+    static bool checknlock_flag {false};
+
+    ap_uint<LOCK_WORD_LOG> unlock_mutex;
+    bool test {true};
+
+#pragma HLS pipeline II=1
+    bool unlock_flag = unlock_stream.read_nb(unlock_mutex);
+    if (!checknlock_flag){
+        checknlock_flag = checknlock_stream.read_nb(checknlock_mutex);
+    }
+
+    if (checknlock_flag)
+        test = checknlock<LOCK_WORD_LOG>(locks, checknlock_mutex);
+    
+    if (unlock_flag)
+        locks[unlock_mutex] = 0;
+
+    ap_wait();
+
+    if (!test){
+        sem_stream.write(true);
+        checknlock_flag = false;
+    }
+}
 template <typename T,
             size_t TUPLE_I,
             size_t TUPLE_V,
