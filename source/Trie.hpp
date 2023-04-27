@@ -4,10 +4,11 @@
 #include "types.hpp"
 
 struct AdjHT{
-    ap_uint<32> start_offset;
-    ap_uint<32> start_edges;
-    ap_uint<32> n_edges;
-    ap_uint<32> hash_set;
+    unsigned int start_offset;
+    unsigned int start_bloom;
+    unsigned int start_edges;
+    unsigned int n_edges;
+    unsigned int hash_set;
 };
 
 struct TableDescriptor{

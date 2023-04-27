@@ -1648,6 +1648,7 @@ void subgraphIsomorphism(
     preprocess<row_t,
         EDGE_WIDTH,
         COUNTER_WIDTH,
+        BLOOM_FILTER_WIDTH,
         DDR_BIT,
         VERTEX_WIDTH_BIT,
         LABEL_WIDTH,

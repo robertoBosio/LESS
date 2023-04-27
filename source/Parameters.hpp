@@ -27,6 +27,7 @@
  * The final bitwidth is equal to (2^COUNTER_WIDTH-1).
  * The MSB bit is used to check if that hash is used. */
 #define COUNTER_WIDTH       5
+#define BLOOM_FILTER_WIDTH  7
 
 /* bitwidth of the hash to index source vertices, 1st level. */
 #define HASH_WIDTH_FIRST    11

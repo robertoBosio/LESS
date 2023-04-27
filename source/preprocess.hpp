@@ -325,6 +325,11 @@ void edgeToHash(
         unsigned short numTables,
         unsigned int numDataEdges,
 
+        hls::stream<ap_uint<HASH1_W>> &stream_index1,
+        hls::stream<ap_uint<64>> &stream_index2,
+        hls::stream<unsigned short> &stream_ntable,
+        hls::stream<bool> &stream_end_out,
+
         hls::stream<ap_uint<(1UL << EDGE_LOG)>> &stream_edge,
         hls::stream<ap_uint<HASH1_W>> &stream_index1,
         hls::stream<ap_uint<HASH2_W>> &stream_index2,
@@ -543,6 +548,7 @@ void writeEdges(
 template <typename T_DDR,
          size_t EDGE_LOG,
          size_t CNT_LOG,
+         size_t BLOOM_LOG,
          size_t ROW_LOG,
          size_t NODE_W,
          size_t LAB_W,
@@ -574,6 +580,16 @@ STORE_HASHTABLES_POINTER_LOOP:
         start_addr += HTB_SIZE;
     }
 
+    std::cout << "Start address: " << start_addr << std::endl;
+STORE_BLOOMFILTERS_POINTER_LOOP:
+    for (unsigned int ntb = 0; ntb < numTables; ntb++){
+        hTables0[ntb].start_bloom = start_addr;
+        start_addr += ((1UL << HASH1_W) + 1) >> (ROW_LOG - BLOOM_LOG);
+    }
+    std::cout << "End address: " << start_addr << std::endl;
+    std::cout << "Words for 1 bloom filter: " << (1UL << (ROW_LOG - BLOOM_LOG))
+        << std::endl;
+
     countEdges<
          T_DDR,
          EDGE_LOG,
@@ -601,7 +617,7 @@ STORE_HASHTABLES_POINTER_LOOP:
             hTables0,
             htb_buf);
     
-    start_addr = end_addr;
+/* start_addr = end_addr; */
 STORE_EDGES_POINTER_LOOP:
     for (unsigned short ntb = 0; ntb < numTables; ntb++){
         hTables0[ntb].start_edges = start_addr;
@@ -609,12 +625,9 @@ STORE_EDGES_POINTER_LOOP:
 #ifndef __SYNTHESIS__
         assert(start_addr < HTB_SPACE);
 #endif
-        /* Fill the last row of tables's edges of 1s.
-         * Because while reading the minimum set it is
-         * read the entire line, and must be possible
-         * to recognize which are real edges and which no */
         hTables1[ntb].start_offset = hTables0[ntb].start_offset;
         hTables1[ntb].start_edges = hTables0[ntb].start_edges;
+        hTables1[ntb].start_bloom = hTables0[ntb].start_bloom;
         hTables1[ntb].n_edges = hTables0[ntb].n_edges;
         hTables1[ntb].hash_set = hTables0[ntb].hash_set;
     }
@@ -638,8 +651,9 @@ STORE_EDGES_POINTER_LOOP:
 
 #ifndef __SYNTHESIS__
     end_addr = start_addr;
-    std::cout << "Occupied " << end_addr * 64 << " bytes, " << end_addr <<
-        " words." << std::endl;
+    std::cout << "Occupied " << end_addr * (1UL << (ROW_LOG - 3)) << " bytes, " << 
+        (end_addr * (1UL << (ROW_LOG - 3))) / (float)(1UL << 20) << " MB, " <<
+        end_addr << " words." << std::endl;
 #endif
 
    /* 
@@ -687,6 +701,7 @@ STORE_EDGES_POINTER_LOOP:
 template <typename T_DDR,
          size_t EDGE_LOG,
          size_t CNT_LOG,
+         size_t BLOOM_LOG,
          size_t ROW_LOG,
          size_t NODE_W,
          size_t LAB_W,
@@ -697,7 +712,6 @@ template <typename T_DDR,
          size_t MAX_QV,
          size_t MAX_TB>
 void preprocess(
-
         edge_t *edge_buf,
         T_DDR *htb_buf,
         QueryVertex *qVertices0,
@@ -728,6 +742,7 @@ void preprocess(
          T_DDR,
          EDGE_LOG,
          CNT_LOG,
+         BLOOM_LOG,
          ROW_LOG,
          NODE_W,
          LAB_W,
