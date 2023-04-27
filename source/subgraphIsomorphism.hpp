@@ -396,7 +396,6 @@ void mwj_tuplebuild(
     unsigned char curQV {0};
     bool stop, last;
 #pragma HLS bind_storage variable=buffer type=ram_1p impl=bram
-#pragma HLS bind_storage variable=buffer type=ram_2p
    
     while(true) {
         if (stream_sol_end_in.read_nb(last)){ 
