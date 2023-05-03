@@ -528,9 +528,9 @@ TUPLEBUILD_MAIN_LOOP_FIRST_IT:
 
 TUPLEBUILD_EDGE_LOOP_AFTER_IT:
             for (int g = 0; g < cycles - 1; g++){
-                uint8_t tableIndex = qVertices[curQV].tables_indexed[g];
-                uint8_t ivPos = qVertices[curQV].vertex_indexing[g];
-                bool bit_last = (g == cycles - 1);
+                uint8_t tableIndex = qVertices[curQV].tables_indexed[g + 1];
+                uint8_t ivPos = qVertices[curQV].vertex_indexing[g + 1];
+                bool bit_last = (g == cycles - 2);
                 bool bit_min = (set_info.range(7, 0) != tableIndex || 
                         set_info.range(15, 8) != ivPos);
 
