@@ -162,8 +162,9 @@ int main()
 
 
     std::cout << "Allocating " << 
-        ((unsigned long)(HASHTABLES_SPACE + RESULTS_SPACE) * DDR_WORD / 8 ) +
-        GRAPHS_SPACE * sizeof(edge_t) << " bytes." << std::endl;
+        (unsigned long)((HASHTABLES_SPACE + RESULTS_SPACE) * sizeof(row_t) +
+        BLOOM_SPACE * sizeof(bloom_t) +
+        GRAPHS_SPACE * sizeof(edge_t)) << " bytes." << std::endl;
  
     std::ifstream fTest("data/test.csv");
     std::string fLine{};
@@ -179,6 +180,12 @@ int main()
         sscanf(fLine.c_str(), "%s %s %u", datagraph_file, querygraph_file, &res_expected);	
         row_t *htb_buf = (row_t*)calloc(HASHTABLES_SPACE, sizeof(row_t));
         if (!htb_buf){
+            std::cout << "Allocation failed." << std::endl;
+            return -1;
+        }
+
+        bloom_t *bloom_p = (bloom_t*)calloc(BLOOM_SPACE, sizeof(bloom_t));
+        if (!bloom_p){
             std::cout << "Allocation failed." << std::endl;
             return -1;
         }
@@ -200,6 +207,7 @@ int main()
                 edge_buf,
                 htb_buf,
 /* hls::burst_maxi<row_t>(htb_buf), */
+                bloom_p,
                 res_buf,
                 nQV,
                 nQE,
@@ -221,6 +229,7 @@ int main()
 
         free(htb_buf);
         free(edge_buf);
+        free(bloom_p);
         std::cout << "Expected: " << res_expected << " actual: " << res_actual << std::endl;
         flag &= (res_actual == res_expected);
         std::getline(fTest, fLine);

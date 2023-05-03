@@ -5,7 +5,6 @@
 
 struct AdjHT{
     unsigned int start_offset;
-    unsigned int start_bloom;
     unsigned int start_edges;
     unsigned int n_edges;
     unsigned int hash_set;

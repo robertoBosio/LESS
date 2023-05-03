@@ -5,6 +5,7 @@ void subisoWrapper(
         edge_t edge_buf[GRAPHS_SPACE],
         row_t htb_buf[HASHTABLES_SPACE],
         /* hls::burst_maxi<row_t> htb_buf1, */
+        bloom_t bloom_p[BLOOM_SPACE],
         row_t res_buf[RESULTS_SPACE],
         unsigned short numQueryVert,
         unsigned short numQueryEdges,
@@ -29,6 +30,7 @@ void subisoWrapper(
              htb_buf,
              htb_buf,
              htb_buf,
+             bloom_p,
              /* htb_buf1, */
              res_buf,
              numQueryVert,
