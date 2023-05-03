@@ -197,6 +197,7 @@ void mwj_propose(
     ap_uint<SET_INFO_WIDTH> setinfo;
     bool stop;
 
+PROPOSE_TASK_LOOP:
     while (1) {
         if (stream_embed_in.read_nb(readv)){
             tableIndex = 0;
@@ -206,7 +207,7 @@ void mwj_propose(
             if (readv.test(V_ID_W - 1)){
                 // Delimiter, new solution
                 curQV = readv.range(V_ID_W - 2, 0);
-PROPOSE_COPYING_EMBEDDING_LOOP:
+PROPOSE_NEW_SOLUTION_LOOP:
                 for (int g = 0; g < curQV; g++){
 #pragma HLS pipeline II=1
                     curEmb[g] = stream_embed_in.read();
@@ -215,6 +216,7 @@ PROPOSE_COPYING_EMBEDDING_LOOP:
                 curEmb[curQV - 1] = readv;
             }
 
+PROPOSE_COPYING_EMBEDDING_LOOP:
             for (int g = 0; g < curQV; g++) {
 #pragma HLS pipeline II=1
                 stream_embed_out.write(curEmb[g]);
@@ -282,6 +284,7 @@ PROPOSE_READ_MIN_INDEXED_LOOP:
             for (int g = rowstart; g <= rowend; g++){
                 row_t row = htb_buf[g];
                 /* row_t row = htb_buf.read(); */
+PROPOSE_READ_MIN_INDEXED_ROW_LOOP:
                 for (int i = 0; i < EDGE_ROW; i++, cnt++){
                     if (cnt >= window_left && cnt < window_right){
                         edge = row.range((1UL << E_W) - 1, 0);
@@ -290,26 +293,26 @@ PROPOSE_READ_MIN_INDEXED_LOOP:
 
                         if (vIndexing == vertexCheck){
                             
-                            /////////////////////////////
                             ap_uint<64> hash_out;
                             xf::database::details::hashlookup3_core<V_ID_W>(vertex, hash_out);
                             bool test = true;
                             constexpr size_t K_FUN = (1UL << K_FUN_LOG);
                             for (int g = 0; g < K_FUN; g++){
+#pragma HLS unroll
                                 ap_uint<BLOOM_LOG - K_FUN_LOG> idx = hash_out.range((64 / K_FUN) * (g + 1) - 1,
                                         (64 / K_FUN) * (g + 1) - (BLOOM_LOG - K_FUN_LOG));
                                 test = test && (filter[idx + (g << (BLOOM_LOG - K_FUN_LOG))] == 1);
                             }
-                            /////////////////////////////
                             
                             if (test){
                                 stream_min_out.write(vertex);
                                 stream_end_out.write(false);
-                            } else {
+                            } 
 #ifdef DEBUG_STATS
+                            else {
                                 debug::bloom_filter++;
-#endif
                             }
+#endif
                         }
                     }
                     row >>= (1UL << E_W);
@@ -524,7 +527,7 @@ TUPLEBUILD_MAIN_LOOP_FIRST_IT:
             }
 
 TUPLEBUILD_EDGE_LOOP_AFTER_IT:
-            for (int g = 1; g < cycles; g++){
+            for (int g = 0; g < cycles - 1; g++){
                 uint8_t tableIndex = qVertices[curQV].tables_indexed[g];
                 uint8_t ivPos = qVertices[curQV].vertex_indexing[g];
                 bool bit_last = (g == cycles - 1);
@@ -1723,6 +1726,7 @@ void subgraphIsomorphism(
 #pragma HLS INTERFACE mode=m_axi port=htb_buf2 bundle=cache
 #pragma HLS INTERFACE mode=m_axi port=res_buf bundle=fifo
 #pragma HLS INTERFACE mode=m_axi port=edge_buf bundle=graph
+#pragma HLS INTERFACE mode=m_axi port=bloom_p bundle=bloom
 #pragma HLS alias ports=htb_buf0,htb_buf1,htb_buf2 distance=0
 
 #pragma HLS INTERFACE mode=s_axilite port=numQueryVert

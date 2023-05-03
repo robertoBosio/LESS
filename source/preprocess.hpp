@@ -204,6 +204,7 @@ COUNTER_TO_OFFSET_TABLE_LOOP:
 
 COUNTER_TO_OFFSET_ROW_LOOP:
             for (int g = 0; g < CNT_ROW; g++){
+#pragma HLS unroll
                 counter = row.range((1UL << CNT_LOG) - 1, 0);
                 row_new >>= (1UL << CNT_LOG);
                 row >>= (1UL << CNT_LOG);
@@ -225,6 +226,7 @@ COUNTER_TO_OFFSET_ROW_LOOP:
                     }
                 }
             }
+
             htb_buf[start + hTables[ntb].start_offset] = row_new;
         }
         hTables[ntb].hash_set = hash_used;
@@ -880,7 +882,6 @@ STORE_EDGES_POINTER_LOOP:
     f.close();
     */      
     
-        constexpr size_t K_FUN = (1UL << K_FUN_LOG);
     /* for (unsigned int tab = 0; tab < numTables; tab++){ */
 /* std::cout << "Table " << tab << " indexing set"; */
 /* ap_uint<1024> row = bloom_indexing[tab]; */
@@ -893,6 +894,8 @@ STORE_EDGES_POINTER_LOOP:
 /* std::cout << std::endl; */
 /* } */
 
+#ifdef DEBUG_STATS
+        constexpr size_t K_FUN = (1UL << K_FUN_LOG);
     for (unsigned int tab = 0; tab < numTables; tab++){
         for(unsigned long addr = 0; addr < (1UL << HASH1_W); addr++){
             T_BLOOM row = bloom_p[addr + tab * (1UL << HASH1_W)];
@@ -908,6 +911,8 @@ STORE_EDGES_POINTER_LOOP:
             }
         }
     }
+#endif /* DEBUG_STATS */
+
 }
 
 template <typename T_DDR,
