@@ -2,10 +2,9 @@
 
 namespace debug {
 
-    unsigned long findmin_reads {0};
-    unsigned long readmin_reads {0};
-    unsigned long intersect_reads {0};
-    unsigned long verify_reads {0};
+    unsigned long hashtable_reads {0};
+    unsigned long edge_reads {0};
+    unsigned long bloom_reads {0};
     
     unsigned long solution_correct {0};
     unsigned long solution_wrong {0};
@@ -31,10 +30,9 @@ namespace debug {
     unsigned long batches {0};
 
     static void init(){
-        findmin_reads  = 0;
-        readmin_reads  = 0;
-        intersect_reads  = 0;
-        verify_reads  = 0;
+        hashtable_reads = 0;
+        bloom_reads = 0;
+        edge_reads = 0;
         solution_correct  = 0;
         solution_wrong  = 0;
         embeddings = 0;
