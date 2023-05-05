@@ -21,7 +21,7 @@
 #include "dynfifo_utils.hpp"
 #include "hls_burst_maxi.h"
 #include "preprocess.hpp"
-#define STOP_S      7
+#define STOP_S      8
     
 #define V_ID_W      VERTEX_WIDTH_BIT
 #define V_L_W       LABEL_WIDTH
@@ -1069,9 +1069,11 @@ void mwj_merge(
 
 void mwj_stop(
         hls::stream<bool> &stream_req,
+        hls::stream<bool> &dynfifo_overflow,
         hls::stream<bool> streams_stop[STOP_S])
 {
     static unsigned long sol {0};
+    bool test {false};
     bool req = stream_req.read();
     
     if (req) {
@@ -1080,7 +1082,9 @@ void mwj_stop(
         sol--;
     }
 
-    if (sol == 0){
+    bool ovf = dynfifo_overflow.read_nb(test);
+
+    if (sol == 0 || ovf == true){
         for (int g = 0; g < STOP_S; g++){
 #pragma HLS unroll
             streams_stop[g].write(true);
@@ -1312,6 +1316,7 @@ void multiwayJoin(
         unsigned short nQueryVer,
         hls::stream<ap_uint<V_ID_W>> &stream_batch,
         hls::stream<bool> &stream_batch_end,
+        unsigned long &dynfifo_diagnostic,
         
 #ifdef COUNT_ONLY
         long unsigned int &result
@@ -1416,6 +1421,8 @@ void multiwayJoin(
     /* Dynamic fifo data out */
     hls_thread_local hls::stream<ap_uint<V_ID_W>, 32> dyn_stream_sol
         ("Dynamic fifo - partial solution");
+    hls_thread_local hls::stream<bool, 1> dyn_stream_ovf
+        ("Dynamic fifo - overflow");
  
     /* Stop signals */
     hls_thread_local hls::stream<bool, 1> streams_stop[STOP_S];
@@ -1443,10 +1450,13 @@ void multiwayJoin(
         DDR_WORD,               /* bitwidth ddr word */
         BURST_S,                /* burst transaction size */
         RESULTS_SPACE>          /* memory words available */
-            (a_stream_sol,
+            (res_buf,   
+             dynfifo_diagnostic,
+             a_stream_sol,
              dyn_stream_sol,
+             streams_stop[STOP_S - 2],
              streams_stop[STOP_S - 1],
-             res_buf);
+             dyn_stream_ovf);
 
     hls_thread_local hls::task mwj_homomorphism_t(
             mwj_homomorphism,
@@ -1571,6 +1581,7 @@ void multiwayJoin(
     hls_thread_local hls::task mwj_stop_t(
             mwj_stop,
             merge_out,
+            dyn_stream_ovf,
             streams_stop);
 
 #else
@@ -1645,6 +1656,7 @@ void multiwayJoin(
     hls_thread_local hls::task mwj_stop_t(
             mwj_stop,
             merge_out,
+            dyn_stream_ovf,
             streams_stop);
 
     mwj_Wrapper<TUPLE_I,
@@ -1697,6 +1709,7 @@ void multiwayJoinWrap(
         QueryVertex *qVertices1,
         unsigned short nQueryVer,
         unsigned short numBatchSize,
+        unsigned long &dynfifo_diagnostic,
 
 #ifdef COUNT_ONLY
         long unsigned int &result
@@ -1743,6 +1756,7 @@ MULTIWAYJOIN_LOOP:
                 nQueryVer,
                 stream_batch,
                 stream_batch_end,
+                dynfifo_diagnostic,
                 result);
    
 #ifdef DEBUG_STATS
@@ -1763,6 +1777,7 @@ void subgraphIsomorphism(
         unsigned short numQueryEdges,
         unsigned long numDataEdges,
         unsigned short numBatchSize,
+        unsigned long &dynfifo_diagnostic,
 
 #ifdef DEBUG_INTERFACE
         volatile unsigned int &debif_endpreprocess,
@@ -1789,6 +1804,7 @@ void subgraphIsomorphism(
 #pragma HLS INTERFACE mode=s_axilite port=numQueryEdges
 #pragma HLS INTERFACE mode=s_axilite port=numDataEdges
 #pragma HLS INTERFACE mode=s_axilite port=numBatchSize
+#pragma HLS INTERFACE mode=s_axilite port=dynfifo_diagnostic
 #pragma HLS INTERFACE mode=s_axilite port=return
 
 #ifdef DEBUG_INTERFACE
@@ -1864,6 +1880,7 @@ void subgraphIsomorphism(
             qVertices1,
             numQueryVert,
             numBatchSize,
+            dynfifo_diagnostic,
             localResult);
 
     result = localResult;

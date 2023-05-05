@@ -19,6 +19,7 @@ void subisoWrapper(
         unsigned short numQueryEdges,
         unsigned long numDataEdges,
         unsigned short numBatchSize,
+        unsigned long &diagnostic,
 
 #ifdef DEBUG_INTERFACE
         volatile unsigned int &debif_endpreprocess,

@@ -11,19 +11,6 @@
 #include <hls_stream.h>
 
 /**
- * Send stop signals to the tasks.
- */
-void MMU_stop(
-        hls::stream<bool> &stop_req,
-        hls::stream<bool> *stop_streams)
-{
-    stop_req.read();
-    for(int g = 0; g < 3; g++){
-        stop_streams[g].write(true);
-    }
-}
-
-/**
  * Pack data in DDR word. 
  */
 template<typename DATA_T,
@@ -78,44 +65,6 @@ void MMU_unpack(
     load_stream.write(word(MEM_WIDTH - 1, (DATA_PER_WORD - 1) * DATA_WIDTH));
     word <<= DATA_WIDTH;
 
-}
-
-template <typename DDR_WORD_T,
-            size_t BURST_SIZE>
-void MMU_burst(
-        DDR_WORD_T* mem,
-        hls::stream<DDR_WORD_T>     &in_stream,
-        hls::stream<DDR_WORD_T>     &out_stream,
-        hls::stream<bool>           &stop_stream,
-        hls::stream<bool>           &req_stream,
-        hls::stream<bool>           &resp_stream,
-        hls::stream<unsigned int>   &p_stream)
-{
-    unsigned int p;
-    bool stop, req;
-
-    while (true){
-        if (req_stream.read_nb(req)){
-            p = p_stream.read();
-            if (req) {
-                for (int g = 0; g < BURST_SIZE; g++){
-#pragma HLS unroll
-                    mem[p + g] = in_stream.read();
-                }
-            } else {
-                for (int g = 0; g < BURST_SIZE; g++){
-#pragma HLS unroll
-                    out_stream.write(mem[p + g]);
-                }
-            }
-            ap_wait();
-            ap_wait();
-            resp_stream.write(req);
-        }
-        
-        if (stop_stream.read_nb(stop))
-            break;
-    }
 }
 
 /** 
@@ -258,12 +207,12 @@ template <typename DDR_WORD_T,
             size_t DDR_WORDS,
             size_t BURST_SIZE>
 void MMU_slow(
+        DDR_WORD_T* mem,
+        unsigned long &diagnostic,
         hls::stream<DDR_WORD_T> &in_stream,
         hls::stream<DDR_WORD_T> &out_stream,
-        hls::stream<unsigned int> &ptr_stream,
-        hls::stream<bool> &req_stream,
-        hls::stream<bool> &resp_stream,
-        hls::stream<bool> &stop_req_stream)
+        hls::stream<bool> &stop_req_stream,
+        hls::stream<bool> &overflow_stream)
 {
 
     enum State_slow { bypass, stall, burst_read, burst_write, stall_ddr };
@@ -273,68 +222,59 @@ void MMU_slow(
     unsigned long space_used {0};
     State_slow state {bypass};
 
-MMU_SLOW_TASK_LOOP:
     while(true) {
+#pragma HLS pipeline II=32 
         switch (state) {
 
-            case bypass:
-                {
-                    if (!in_stream.size()){
-                        if (out_stream.full()){
-                            state = stall;
-                        } else {
-                            out_stream.write(in_stream.read());
-                        }
+            case bypass: 
+                if (!in_stream.empty()){
+                    if (out_stream.full()){
+                        state = stall;
+                    } else {
+                        out_stream.write(in_stream.read());
                     }
-                    break;
                 }
+                break;
 
             case stall:
-                {
-                    if (in_stream.size() < BURST_SIZE){
-                        if (!out_stream.full()){
-                            state = bypass;
-                        }
-                    } else {
-                        state = burst_write;
+                if (in_stream.size() < BURST_SIZE){
+                    if (!out_stream.full()){
+                        state = bypass;
                     }
-                    break;
+                } else {
+                    state = burst_write;
                 }
+                break;
 
             case burst_write:
-                {
-                    bool dep, rsp;
-                    req_stream.write(true);
-                    dep = ptr_stream.write_dep(mem_head, false);
-                    mem_head = (mem_head + BURST_SIZE) % DDR_WORDS;
-                    space_used += BURST_SIZE;
-                    if (space_used > max_space)
-                        max_space = space_used;
-                    state = stall_ddr;
-                    resp_stream.read_dep(rsp, dep);
-                    break;
+                for (int g = 0; g < BURST_SIZE; g++){
+#pragma HLS unroll
+                    mem[mem_head + g] = in_stream.read();
                 }
+                mem_head = (mem_head + BURST_SIZE) % DDR_WORDS;
+                space_used += BURST_SIZE;
+                if (space_used > max_space){
+                    max_space = space_used;
+                }
+                state = stall_ddr;
+                break;
 
             case burst_read:
-                {
-                    bool dep, rsp;
-                    req_stream.write(false);
-                    dep = ptr_stream.write_dep(mem_tail, false);
-                    mem_tail = (mem_tail + BURST_SIZE) % DDR_WORDS;
-                    space_used -= BURST_SIZE;
-                    state = (mem_head == mem_tail)? bypass: stall_ddr;
-                    resp_stream.read_dep(rsp, dep);
-                    break;
+                for (int g = 0; g < BURST_SIZE; g++){
+#pragma HLS unroll
+                    out_stream.write(mem[mem_tail + g]);
                 }
+                mem_tail = (mem_tail + BURST_SIZE) % DDR_WORDS;
+                space_used -= BURST_SIZE;
+                state = (mem_head == mem_tail)? bypass: stall_ddr;
+                break;
 
             case stall_ddr:
-                {
-                    if (in_stream.size() >= BURST_SIZE){
-                        state = burst_write;
-                    } else {
-                        if (out_stream.size() <= (FIFO_SIZE - BURST_SIZE)){
-                            state = burst_read;
-                        }
+                if (in_stream.size() >= BURST_SIZE){
+                    state = burst_write;
+                } else {
+                    if (out_stream.size() <= (FIFO_SIZE - BURST_SIZE)){
+                        state = burst_read;
                     }
                 }
         }
@@ -343,8 +283,13 @@ MMU_SLOW_TASK_LOOP:
         if (stop_req_stream.read_nb(req_s)){
             break;
         }
+
+        if (space_used > DDR_WORDS){
+            overflow_stream.write(true);
+        }
     }
 
+    diagnostic = max_space;
 }
 
 /**
@@ -365,10 +310,14 @@ template<typename DATA_T,
     size_t BURST_SIZE,
     size_t DDR_WORDS>
 void dynfifo_init(
+        DDR_WORD_T mem[DDR_WORDS],
+        unsigned long &diagnostic,
         hls::stream<DATA_T> &in_stream,
         hls::stream<DATA_T> &out_stream,
-        hls::stream<bool> &stop_req_stream,
-        DDR_WORD_T mem[DDR_WORDS]){
+        hls::stream<bool> &stop_req_stream_fast,
+        hls::stream<bool> &stop_req_stream_slow,
+        hls::stream<bool> &overflow)
+{
 
 #pragma HLS inline 
     
@@ -387,12 +336,6 @@ void dynfifo_init(
     hls_thread_local hls::stream<DDR_WORD_T, FIFO_SIZE_P> store_p_stream;
     hls_thread_local hls::stream<DDR_WORD_T, FIFO_SIZE_P> load_p_stream;
 
-    hls_thread_local hls::stream<unsigned int, 2> ptr_stream;
-    hls_thread_local hls::stream<bool, 2> req_stream;
-    hls_thread_local hls::stream<bool, 2> resp_stream;
-    
-    hls_thread_local hls::stream<bool, 1> streams_stop[3];
-
 #ifdef __SYNTHESIS__    
 
     MMU_fast<DATA_T,
@@ -401,32 +344,22 @@ void dynfifo_init(
             out_stream,
             store_stream,
             load_stream,
-            streams_stop[0]); 
+            stop_req_stream_fast); 
 
     MMU_slow<DDR_WORD_T,
             FIFO_SIZE_P,
             DDR_WORDS,
             BURST_SIZE>(
-            store_p_stream,
-            load_p_stream,
-            ptr_stream,
-            req_stream,
-            resp_stream,
-            streams_stop[1]); 
-
-    MMU_burst<DDR_WORD_T,
-            BURST_SIZE>(
             mem,
+            diagnostic,
             store_p_stream,
             load_p_stream,
-            streams_stop[2], 
-            req_stream,
-            resp_stream,
-            ptr_stream);
+            stop_req_stream_slow,
+            overflow);
 
 #else
 
-    for (int g = 0; g < 3; g++) 
+    for (int g = 0; g < 2; g++) 
         hls::stream_globals::incr_task_counter();
 
     std::thread mmu_fast_t(
@@ -436,34 +369,22 @@ void dynfifo_init(
             std::ref(out_stream),
             std::ref(store_stream),
             std::ref(load_stream),
-            std::ref(streams_stop[0])); 
+            std::ref(stop_req_stream_fast)); 
 
     std::thread mmu_slow_t(
             MMU_slow<DDR_WORD_T,
             FIFO_SIZE_P,
             DDR_WORDS,
             BURST_SIZE>,
-            std::ref(store_p_stream),
-            std::ref(load_p_stream),
-            std::ref(ptr_stream),
-            std::ref(req_stream),
-            std::ref(resp_stream),
-            std::ref(streams_stop[1]));
-
-    std::thread mmu_burst_t(
-            MMU_burst<DDR_WORD_T,
-            BURST_SIZE>,
             mem,
+            std::ref(diagnostic),
             std::ref(store_p_stream),
             std::ref(load_p_stream),
-            std::ref(streams_stop[2]),
-            std::ref(req_stream),
-            std::ref(resp_stream),
-            std::ref(ptr_stream));
-    
+            std::ref(stop_req_stream_slow),
+            std::ref(overflow));
+
     mmu_fast_t.detach();
     mmu_slow_t.detach();
-    mmu_burst_t.detach();
 
 #endif /* __SYNTHESIS__ */
     
@@ -485,10 +406,6 @@ void dynfifo_init(
             load_stream,
             load_p_stream);
 
-    hls_thread_local hls::task mmu_stop(
-            MMU_stop,
-            stop_req_stream,
-            streams_stop);
 }
 
 #endif /* DYNFIFO_UTILS_HPP */

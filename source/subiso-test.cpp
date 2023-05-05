@@ -151,6 +151,7 @@ int main()
     unsigned long nDE = 0;
     unsigned int res_actual;
     unsigned int res_expected;
+    unsigned long diagnostic;
     bool flag = true;
 
     row_t *res_buf = (row_t*)malloc(RESULTS_SPACE * sizeof(row_t));
@@ -213,6 +214,7 @@ int main()
                 nQE,
                 nDE,
                 512,
+                diagnostic,
 
 #ifdef DEBUG_INTERFACE
                 debug_endpreprocess_s,
