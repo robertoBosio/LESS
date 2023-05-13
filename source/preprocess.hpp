@@ -330,16 +330,12 @@ void updateBloom(
         unsigned int bloom_a = stream_bloom_a.read();
         ap_uint<HASH_W> hash_v = stream_index.read();
         ap_uint<(1UL << BLOOM_LOG)> set = bloom_p[bloom_a];
-/* std::cout << "Updating set in position " << bloom_a << std::endl; */
 
         for (int g = 0; g < K_FUN; g++){
 #pragma HLS unroll
-/* ap_uint<BLOOM_LOG - K_FUN_LOG> idx = hash_v.range((HASH_W / K_FUN) * (g + 1) - 1, */
-/* (HASH_W / K_FUN) * g); */
-            ap_uint<BLOOM_LOG - K_FUN_LOG> idx = hash_v.range((HASH_W / K_FUN) * (g + 1) - 1,
-                    (HASH_W / K_FUN) * (g + 1) - (BLOOM_LOG - K_FUN_LOG));
-/* std::cout << "\tbit " << idx << ", address: " << idx + (g << (BLOOM_LOG - K_FUN_LOG)) << std::endl; */
-            set[idx + (g << (BLOOM_LOG - K_FUN_LOG))] = 1;
+            ap_uint<BLOOM_LOG> idx = hash_v.range((HASH_W / K_FUN) * (g + 1) - 1,
+                    (HASH_W / K_FUN) * (g + 1) - BLOOM_LOG);
+            set[idx] = 1;
         }
         bloom_p[bloom_a] = set;
         last = stream_end.read();

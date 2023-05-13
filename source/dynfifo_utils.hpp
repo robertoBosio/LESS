@@ -222,6 +222,7 @@ void MMU_slow(
     unsigned long space_used {0};
     State_slow state {bypass};
 
+MMU_SLOW_TASK_LOOP:
     while(true) {
 #pragma HLS pipeline II=32 
         switch (state) {
@@ -255,6 +256,10 @@ void MMU_slow(
                 space_used += BURST_SIZE;
                 if (space_used > max_space){
                     max_space = space_used;
+                    diagnostic = space_used;
+                }
+                if (space_used > DDR_WORDS){
+                    overflow_stream.write(true);
                 }
                 state = stall_ddr;
                 break;
@@ -284,12 +289,7 @@ void MMU_slow(
             break;
         }
 
-        if (space_used > DDR_WORDS){
-            overflow_stream.write(true);
-        }
     }
-
-    diagnostic = max_space;
 }
 
 /**
