@@ -36,13 +36,9 @@
 #define DDR_W       DDR_WORD
 
 #if VERIFY_CACHE
-typedef cache< ap_uint<DDR_W>, true, false, 1,
+typedef cache< ap_uint<DDR_W>, true, false, 2,
         HASHTABLES_SPACE, 1, 1, 16, false, 32, 1,
-        false, 1, AUTO, BRAM> intersect_cache_t;
-
-typedef cache< ap_uint<DDR_W>, true, false, 1,
-        HASHTABLES_SPACE, 1, 1, 16, false, 32, 1,
-        false, 1, AUTO, BRAM> verify_cache_t;
+        false, 1, AUTO, BRAM> cache_type;
 #endif /* VERIFY_CACHE */
 
 #ifndef __SYNTHESIS__
@@ -145,7 +141,7 @@ template <size_t W_1,
 ap_uint<(1UL << T)> read_table(
         ap_uint<W_1> index1,
         ap_uint<W_2> index2,
-        verify_cache_t &htb_buf,
+        cache_type &htb_buf,
         ap_uint<32> start_addr)
 {
 #pragma HLS inline
@@ -690,7 +686,7 @@ void mwj_intersect(
 
 INTERSECT_TASK_LOOP:
     while (1) {
-#pragma HLS pipeline II=2
+#pragma HLS pipeline II=1
         if (stream_tuple_end_in.read_nb(last)){
             /* bits = ~0; */
 
@@ -704,6 +700,8 @@ INTERSECT_TASK_LOOP:
                 ap_uint<64> hash_out;
                 ap_uint<(1UL << C_W)> start_off = 0;
                 ap_uint<(1UL << C_W)> end_off = 1;
+                tuple_out.n_edges = 1;
+                tuple_out.bit_no_edge = false;
                 tableIndex = tuple_in.tb_index;
 
                 addr_counter = tuple_in.indexing_h;
@@ -737,6 +735,12 @@ INTERSECT_TASK_LOOP:
                         start_off = ram_row.range(((addr_inrow + 1) << C_W) - 1,
                                 addr_inrow << C_W);
                     }
+
+                    if (start_off == end_off){
+                        tuple_out.bit_no_edge = true;
+                    } else {
+                        tuple_out.n_edges = end_off - start_off;
+                    }
 #ifdef DEBUG_STATS
                     debug::hashtable_reads += 2;
                     debug::intersect_filter += (start_off < end_off)? 1 : 0;
@@ -744,15 +748,13 @@ INTERSECT_TASK_LOOP:
                 }
 
                 /* tuple_out[TUPLE_V - 1] = (start_off < end_off) & bits[pos]; */
-                tuple_out.indexed_v     = tuple_in.indexed_v;
-                tuple_out.indexing_v    = tuple_in.indexing_v;
-                tuple_out.tb_index      = tuple_in.tb_index;
-                tuple_out.pos           = tuple_in.pos;
-                tuple_out.start_off     = start_off;
-                tuple_out.n_edges       = end_off - start_off;
+                tuple_out.indexed_v = tuple_in.indexed_v;
+                tuple_out.indexing_v = tuple_in.indexing_v;
+                tuple_out.tb_index = tuple_in.tb_index;
+                tuple_out.pos = tuple_in.pos;
                 tuple_out.bit_last_edge = tuple_in.bit_last_edge;
-                tuple_out.bit_min_set   = tuple_in.bit_min_set;
-                tuple_out.bit_no_edge   = (start_off == end_off);
+                tuple_out.bit_min_set = tuple_in.bit_min_set;
+                tuple_out.start_off = start_off;
 
                 /* bits[pos] = bits[pos] & (start_off < end_off); */
                 stream_tuple_out.write(tuple_out);
@@ -780,7 +782,7 @@ void mwj_split(
     last = stream_tuple_end_in.read();
     if (!last){
         tuple_in = stream_tuple_in.read();
-        n_edges = (tuple_in.n_edges == 0)? 1 : tuple_in.n_edges;
+        n_edges = tuple_in.n_edges;
         
         tuple_out.indexing_v = tuple_in.indexing_v;
         tuple_out.indexed_v = tuple_in.indexed_v;
@@ -805,7 +807,6 @@ SPLIT_MAIN_LOOP:
 /* << ", " << tuple_out.address */
 /* << ", " << tuple_out.bit_last_address */
 /* << ", " << tuple_out.bit_last_edge */
-/* << ", " << tuple_out.bit_no_edge */
 /* << ", " << tuple_out.bit_min_set << ")" << std::endl; */
         }
     } else {
@@ -853,7 +854,8 @@ VERIFY_TASK_LOOP:
                 if (tuple_in.bit_min_set && !tuple_in.bit_no_edge){
                     indexing_v = tuple_in.indexing_v;
                     tableIndex = tuple_in.tb_index;
-                    ap_uint<2 * V_ID_W> edge = read_table<32, 1, 0, 0, E_W>(
+                    
+                    ap_uint<2 * V_ID_W> edge = read_table<32, 1, 0, 1, E_W>(
                             tuple_in.address,
                             0,
                             htb_buf,
@@ -1036,11 +1038,13 @@ ASSEMBLY_CHECK_LOOP:
 #else
 ASSEMBLY_WRITE_FINAL_LOOP:
                     for (int g = 0; g < curQV; g++){
+                        std::cout << curEmb[g] << " ";
                         node.data = curEmb[g];
                         node.last = false;
                         node.keep = ~0;
                         result.write(node);
                     }
+                    std::cout << vToVerify << std::endl;
                     node.data = vToVerify;
                     node.last = false;
                     node.keep = ~0;
@@ -1120,8 +1124,7 @@ void mwj_stop(
 template <size_t MAX_BATCH_LOG>
 void mwj_Wrapper(
         AdjHT *hTables,
-        intersect_cache_t &i_cache,
-        verify_cache_t &v_cache,
+        cache_type &htb_buf,
         hls::stream<intersect_tuple_t> &t_stream_tuple,
         hls::stream<bool>              &t_stream_tuple_end,
         hls::stream<verify_tuple_t> &s_stream_tuple,
@@ -1134,15 +1137,37 @@ void mwj_Wrapper(
         hls::stream<compact_tuple_t>  &v_stream_tuple,
         hls::stream<bool>              &v_stream_tuple_end)
 {
+#pragma HLS dataflow
 
-    i_cache.init();
-    v_cache.init();
+#ifdef __SYNTHESIS__
+    mwj_intersect<cache_type&, 
+       MAX_BATCH_LOG>(
+                hTables,
+                htb_buf,
+                t_stream_tuple,
+                t_stream_tuple_end,
+                stream_stop_0,
+                i_stream_tuple,
+                i_stream_tuple_end);
+            
+    mwj_verify<cache_type&, 
+       MAX_BATCH_LOG>(
+                hTables,
+                htb_buf,
+                s_stream_tuple,
+                s_stream_tuple_end,
+                stream_stop_1,
+                v_stream_tuple,
+                v_stream_tuple_end);
+#else
+
+    htb_buf.init();
 
     std::thread mwj_intersect_t(
-            mwj_intersect<intersect_cache_t&, 
-            MAX_BATCH_LOG>,
+            mwj_intersect<cache_type&, 
+            PROPOSE_BATCH_LOG>,
             hTables,
-            std::ref(i_cache),
+            std::ref(htb_buf),
             std::ref(t_stream_tuple),
             std::ref(t_stream_tuple_end),
             std::ref(stream_stop_0),
@@ -1150,10 +1175,10 @@ void mwj_Wrapper(
             std::ref(i_stream_tuple_end));
 
     std::thread mwj_verify_t(
-            mwj_verify<verify_cache_t&, 
+            mwj_verify<cache_type&, 
             MAX_BATCH_LOG>,
             hTables,
-            std::ref(v_cache),
+            std::ref(htb_buf),
             std::ref(s_stream_tuple),
             std::ref(s_stream_tuple_end),
             std::ref(stream_stop_1),
@@ -1162,8 +1187,9 @@ void mwj_Wrapper(
    
     mwj_intersect_t.join(); 
     mwj_verify_t.join();
-    i_cache.stop();
-    v_cache.stop();
+    htb_buf.stop();
+
+#endif
 }
 
 void mwj_batch(
@@ -1274,7 +1300,6 @@ template <typename T_BLOOM,
 void multiwayJoin(
         ap_uint<DDR_W> *htb_buf0,
         ap_uint<DDR_W> *htb_buf1,
-        ap_uint<DDR_W> *htb_buf2,
         T_BLOOM *bloom_p,
         row_t *res_buf,
         AdjHT *hTables0,
@@ -1294,7 +1319,6 @@ void multiwayJoin(
 {
 #pragma HLS STABLE variable=htb_buf0
 #pragma HLS STABLE variable=htb_buf1
-#pragma HLS STABLE variable=htb_buf2
 #pragma HLS STABLE variable=bloom_p
 #pragma HLS STABLE variable=hTables0
 #pragma HLS STABLE variable=hTables1
@@ -1433,8 +1457,7 @@ void multiwayJoin(
 #endif /* __SYNTHESIS__ */
 
 #if VERIFY_CACHE
-    verify_cache_t v_cache(htb_buf2);
-    intersect_cache_t i_cache(htb_buf1);
+    cache_type a_cache(htb_buf1);
 #endif /* VERIFY_CACHE */
 
     dynfifo_init<
@@ -1579,27 +1602,20 @@ void multiwayJoin(
                 t_stream_sol,
                 t_stream_sol_end);
 
-    cache_wrapper(
-            mwj_verify<verify_cache_t&, 
-            PROPOSE_BATCH_LOG>,
+    cache_wrapper (
+            mwj_Wrapper<PROPOSE_BATCH_LOG>,
             hTables1,
-            v_cache,
-            s_stream_tuple,
-            s_stream_tuple_end,
-            streams_stop[4],
-            v_stream_tuple,
-            v_stream_tuple_end);
-    
-    cache_wrapper(
-            mwj_intersect<intersect_cache_t&, 
-            PROPOSE_BATCH_LOG>,
-            hTables1,
-            i_cache,
+            a_cache,
             t_stream_tuple,
             t_stream_tuple_end,
+            s_stream_tuple,
+            s_stream_tuple_end,
             streams_stop[3],
+            streams_stop[4],
             i_stream_tuple,
-            i_stream_tuple_end);
+            i_stream_tuple_end,
+            v_stream_tuple,
+            v_stream_tuple_end);
 
     mwj_assembly(
             nQueryVer,
@@ -1701,8 +1717,7 @@ void multiwayJoin(
 
     mwj_Wrapper<PROPOSE_BATCH_LOG>(
             hTables1,
-            i_cache,
-            v_cache,
+            a_cache,
             t_stream_tuple,
             t_stream_tuple_end,
             s_stream_tuple,
@@ -1720,10 +1735,10 @@ void multiwayJoin(
     mwj_tuplebuild_t.join();
 
 #ifdef DEBUG_STATS
-    debug::cache_hit_0 += i_cache.get_n_l1_hits(0);
-    debug::cache_hit_1 += v_cache.get_n_l1_hits(0);
-    debug::cache_req_0 += i_cache.get_n_l1_reqs(0);
-    debug::cache_req_1 += v_cache.get_n_l1_reqs(0);
+    debug::cache_hit_0 += a_cache.get_n_l1_hits(0);
+    debug::cache_hit_1 += a_cache.get_n_l1_hits(1);
+    debug::cache_req_0 += a_cache.get_n_l1_reqs(0);
+    debug::cache_req_1 += a_cache.get_n_l1_reqs(1);
 #endif /* DEBUG_STATS */
 
 #endif /* __SYNTHESIS__ */
@@ -1739,7 +1754,6 @@ void multiwayJoinWrap(
         ap_uint<DDR_W> *htb_buf1,
 /* hls::burst_maxi<row_t> htb_buf1, */
         ap_uint<DDR_W> *htb_buf2,
-        ap_uint<DDR_W> *htb_buf3,
         T_BLOOM *bloom_p,
         row_t *res_buf,
         AdjHT *hTables0,
@@ -1760,7 +1774,6 @@ void multiwayJoinWrap(
 #pragma HLS STABLE variable=htb_buf0
 #pragma HLS STABLE variable=htb_buf1
 #pragma HLS STABLE variable=htb_buf2
-#pragma HLS STABLE variable=htb_buf3
 #pragma HLS STABLE variable=hTables0
 #pragma HLS STABLE variable=hTables1
 #pragma HLS STABLE variable=qVertices0
@@ -1788,7 +1801,6 @@ MULTIWAYJOIN_LOOP:
         K_FUN_LOG>(
                 htb_buf1,
                 htb_buf2,
-                htb_buf3,
                 bloom_p,
                 res_buf,
                 hTables0,
@@ -1799,7 +1811,7 @@ MULTIWAYJOIN_LOOP:
                 stream_batch_end,
                 dynfifo_diagnostic,
                 result);
-  
+   
 #ifdef DEBUG_STATS
         debug::batches++;
 #endif
@@ -1810,9 +1822,8 @@ void subgraphIsomorphism(
         edge_t edge_buf[GRAPHS_SPACE],
         row_t htb_buf0[HASHTABLES_SPACE],
         row_t htb_buf1[HASHTABLES_SPACE],
-        row_t htb_buf2[HASHTABLES_SPACE],
 /* hls::burst_maxi<row_t> htb_buf1, */
-        row_t htb_buf3[HASHTABLES_SPACE],
+        row_t htb_buf2[HASHTABLES_SPACE],
         bloom_t bloom_p[BLOOM_SPACE],
         row_t res_buf[RESULTS_SPACE],
         unsigned short numQueryVert,
@@ -1836,12 +1847,11 @@ void subgraphIsomorphism(
 
 #pragma HLS INTERFACE mode=m_axi port=htb_buf0 bundle=batch_prep
 #pragma HLS INTERFACE mode=m_axi port=htb_buf1 bundle=prop
-#pragma HLS INTERFACE mode=m_axi port=htb_buf2 bundle=inter
-#pragma HLS INTERFACE mode=m_axi port=htb_buf3 bundle=verify
+#pragma HLS INTERFACE mode=m_axi port=htb_buf2 bundle=cache
 #pragma HLS INTERFACE mode=m_axi port=res_buf bundle=fifo
 #pragma HLS INTERFACE mode=m_axi port=edge_buf bundle=graph
 #pragma HLS INTERFACE mode=m_axi port=bloom_p bundle=bloom
-#pragma HLS alias ports=htb_buf0,htb_buf1,htb_buf2,htb_buf3 distance=0
+#pragma HLS alias ports=htb_buf0,htb_buf1,htb_buf2 distance=0
 
 #pragma HLS INTERFACE mode=s_axilite port=numQueryVert
 #pragma HLS INTERFACE mode=s_axilite port=numQueryEdges
@@ -1915,7 +1925,6 @@ void subgraphIsomorphism(
             htb_buf0,
             htb_buf1,
             htb_buf2,
-            htb_buf3,
             bloom_p,
             res_buf,
             hTables0,

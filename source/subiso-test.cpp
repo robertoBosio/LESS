@@ -213,7 +213,7 @@ int main()
                 nQV,
                 nQE,
                 nDE,
-                512,
+                1,
                 diagnostic,
 
 #ifdef DEBUG_INTERFACE

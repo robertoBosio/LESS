@@ -31,14 +31,14 @@
 #define K_FUNCTIONS         1
 
 /* bitwidth of the hash to index source vertices, 1st level. */
-#define HASH_WIDTH_FIRST    11
+#define HASH_WIDTH_FIRST    7
 
 /* bitwidth of the hash to index a specific edge, 2nd level. */
-#define HASH_WIDTH_SECOND   7
+#define HASH_WIDTH_SECOND   5
 
 #define MAX_COLLISIONS      (1UL << 5)
 
-#define SUB_STREAM_DEPTH        10
+#define SUB_STREAM_DEPTH    10
 
 #define S_DEPTH             64
 #define BURST_S             32

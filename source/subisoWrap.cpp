@@ -31,6 +31,7 @@ void subisoWrapper(
              htb_buf,
              htb_buf,
              htb_buf,
+             htb_buf,
              bloom_p,
              /* htb_buf1, */
              res_buf,
