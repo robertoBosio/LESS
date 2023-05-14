@@ -256,7 +256,6 @@ MMU_SLOW_TASK_LOOP:
                 space_used += BURST_SIZE;
                 if (space_used > max_space){
                     max_space = space_used;
-                    diagnostic = space_used;
                 }
                 if (space_used > DDR_WORDS){
                     overflow_stream.write(true);
@@ -286,6 +285,7 @@ MMU_SLOW_TASK_LOOP:
 
         bool req_s;
         if (stop_req_stream.read_nb(req_s)){
+            diagnostic = max_space;
             break;
         }
 
