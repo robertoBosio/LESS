@@ -31,10 +31,10 @@
 #define K_FUNCTIONS         1
 
 /* bitwidth of the hash to index source vertices, 1st level. */
-#define HASH_WIDTH_FIRST    7
+#define HASH_WIDTH_FIRST    11
 
 /* bitwidth of the hash to index a specific edge, 2nd level. */
-#define HASH_WIDTH_SECOND   5
+#define HASH_WIDTH_SECOND   7
 
 #define MAX_COLLISIONS      (1UL << 5)
 
@@ -56,7 +56,7 @@
 #define UNDIRECTED
 #define DEBUG_INTERFACE
 #define INTERSECT_INDEXING_LOOP 0
-/* #define VERIFY_CACHE 1 */
+#define VERIFY_CACHE 1
 #define MAX_START_BATCH_SIZE 512
 #define PROPOSE_BATCH_LOG 6
 #define SET_INFO_WIDTH 16
