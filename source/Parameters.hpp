@@ -61,7 +61,9 @@
 #define PROPOSE_BATCH_LOG 6
 #define SET_INFO_WIDTH 16
 #define MERGE_IN_STREAMS 2
+#define EDGE_BLOCK 0
 #include <ap_axi_sdata.h>
+
 typedef struct {
     ap_uint<VERTEX_WIDTH_BIT> src, dst;
 } edge_t;
@@ -70,3 +72,4 @@ typedef ap_axiu<VERTEX_WIDTH_BIT, 0, 0, 0> T_NODE;
 typedef ap_axiu<LABEL_WIDTH, 0, 0, 0> T_LABEL;
 typedef ap_uint<DDR_WORD> row_t;
 typedef ap_uint<(1UL << BLOOM_FILTER_WIDTH)> bloom_t;
+typedef ap_uint<(DDR_WORD << EDGE_BLOCK)> edge_block_t;

@@ -5,6 +5,7 @@ namespace debug {
     unsigned long hashtable_reads {0};
     unsigned long edge_reads {0};
     unsigned long bloom_reads {0};
+    unsigned long tuple_ver {0};
     
     unsigned long solution_correct {0};
     unsigned long solution_wrong {0};
@@ -52,5 +53,6 @@ namespace debug {
         batches = 0;
         n_sets = 0;
         set = 0;
+        tuple_ver = 0;
     }
 };

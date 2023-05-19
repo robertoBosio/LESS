@@ -194,9 +194,7 @@ void counterToOffset(
 COUNTER_TO_OFFSET_DDR_LOOP:
     for (unsigned int ntb = 0; ntb < numTables; ntb++){
         ap_uint<(1UL << CNT_LOG)> base_addr = 0;
-        ap_uint<(1UL << CNT_LOG)> prev_addr = 0;
         ap_uint<(1UL << CNT_LOG)> counter;
-        unsigned int hash_used = 0;
 
 COUNTER_TO_OFFSET_TABLE_LOOP:
         for(unsigned int start = 0; start < HTB_SIZE; start++){
@@ -217,19 +215,10 @@ COUNTER_TO_OFFSET_ROW_LOOP:
 
                 row_new.range((CNT_ROW << CNT_LOG) - 1, (CNT_ROW - 1) << CNT_LOG) = base_addr;
                 base_addr += counter;
-
-                /* Check if an hash is used */
-                if (((start << (ROW_LOG - CNT_LOG)) + g) % (1UL << HASH2_W) == 0){
-                    if(prev_addr < base_addr){
-                        hash_used++;
-                        prev_addr = base_addr;
-                    }
-                }
             }
 
             htb_buf[start + hTables[ntb].start_offset] = row_new;
         }
-        hTables[ntb].hash_set = hash_used;
     }       
 }
 
@@ -763,18 +752,18 @@ STORE_HASHTABLES_POINTER_LOOP:
             hTables0,
             htb_buf);
 
-/* start_addr = end_addr; */
+/* start_addr = (start_addr + 8) & ~0x7; */
 STORE_EDGES_POINTER_LOOP:
     for (unsigned short ntb = 0; ntb < numTables; ntb++){
         hTables0[ntb].start_edges = start_addr;
         start_addr += (hTables0[ntb].n_edges >> (ROW_LOG - EDGE_LOG)) + 1;
+/* start_addr = (start_addr + 8) & ~0x7; */
 #ifndef __SYNTHESIS__
         assert(start_addr < HTB_SPACE);
 #endif
         hTables1[ntb].start_offset = hTables0[ntb].start_offset;
         hTables1[ntb].start_edges = hTables0[ntb].start_edges;
         hTables1[ntb].n_edges = hTables0[ntb].n_edges;
-        hTables1[ntb].hash_set = hTables0[ntb].hash_set;
     }
 
     writeEdges<
