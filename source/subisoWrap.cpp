@@ -30,7 +30,7 @@ void subisoWrapper(
              htb_buf,
              htb_buf,
              htb_buf,
-             (edge_block_t*)htb_buf,
+             htb_buf,
              bloom_p,
              res_buf,
              numQueryVert,

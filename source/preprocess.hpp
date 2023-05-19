@@ -752,12 +752,12 @@ STORE_HASHTABLES_POINTER_LOOP:
             hTables0,
             htb_buf);
 
-/* start_addr = (start_addr + 8) & ~0x7; */
+start_addr = (start_addr + 16) & ~0xf;
 STORE_EDGES_POINTER_LOOP:
     for (unsigned short ntb = 0; ntb < numTables; ntb++){
         hTables0[ntb].start_edges = start_addr;
         start_addr += (hTables0[ntb].n_edges >> (ROW_LOG - EDGE_LOG)) + 1;
-/* start_addr = (start_addr + 8) & ~0x7; */
+        start_addr = (start_addr + 16) & ~0xf;
 #ifndef __SYNTHESIS__
         assert(start_addr < HTB_SPACE);
 #endif

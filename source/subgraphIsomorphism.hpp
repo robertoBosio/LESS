@@ -44,7 +44,7 @@ typedef cache< ap_uint<DDR_W>, true, false, 1,
 /* (HASHTABLES_SPACE >> EDGE_BLOCK), 1, 1, 1, false, 32, 1, */
 /* false, 1, AUTO, BRAM> verify_cache_t; */
 
-typedef cache< edge_block_t, true, false, 1,
+typedef cache< ap_uint<DDR_W>, true, false, 1,
         HASHTABLES_SPACE, 1, 1, 16, false, 32, 1,
         false, 1, AUTO, BRAM> verify_cache_t;
 #endif /* VERIFY_CACHE */
@@ -700,7 +700,6 @@ void mwj_intersect(
         hls::stream<bool>              &stream_tuple_end_out)
 {
     ap_uint<64> candidate_hash;
-/* ap_uint<(1UL << BATCH_SIZE_LOG)> bits; */
     ap_uint<V_ID_W> candidate_v;
     ap_uint<V_ID_W> indexing_v;
     intersect_tuple_t tuple_in;
@@ -716,7 +715,6 @@ INTERSECT_TASK_LOOP:
     while (1) {
 #pragma HLS pipeline II=2
         if (stream_tuple_end_in.read_nb(last)){
-            /* bits = ~0; */
 
 #ifdef DEBUG_STATS
             if (last)
@@ -826,20 +824,21 @@ void mwj_split(
         tuple_out.bit_min_set   = tuple_in.bit_min_set;
         tuple_out.bit_no_edge   = tuple_in.bit_no_edge;
 
-        int first_block = tuple_in.start_off >> 1;
-        int end_block = (tuple_in.start_off + n_edges - 1) >> 1;
+        int first_block = tuple_in.start_off >> 5;
+        int end_block = (tuple_in.start_off + n_edges - 1) >> 5;
 SPLIT_MAIN_LOOP:
-        for (int s = 0; first_block <= end_block; first_block++, s += 2){
+        for (int s = 0; first_block <= end_block; first_block++, s += 32){
             tuple_out.address = tuple_in.start_off + s;
             tuple_out.bit_last_address = (first_block == end_block);
             stream_tuple_out.write(tuple_out);
             stream_tuple_end_out.write(false);
 
+/* std::cout << tuple_in.start_off << " " << n_edges << ": "; */
 /* SPLIT_MAIN_LOOP: */
-/* for (int g = 0; g < n_edges; g++){ */
-/* debug::tuple_ver++; */
+/* for (int g = 0; g < n_edges; g += 32){ */
+/* std::cout << tuple_in.start_off + g << " "; */
 /* tuple_out.address = tuple_in.start_off + g; */
-/* tuple_out.bit_last_address = (g == n_edges - 1); */
+/* tuple_out.bit_last_address = (g + 32 >= n_edges); */
 /* stream_tuple_out.write(tuple_out); */
 /* stream_tuple_end_out.write(false); */
 
@@ -914,17 +913,18 @@ VERIFY_TASK_LOOP:
                         (tuple_in.address >> (DDR_BIT - E_W));
 
                     // 2048 bit word address
-                    addr_row >>= EDGE_BLOCK;
+/* addr_row >>= EDGE_BLOCK; */
 
                     // Read the data
-                    edge_block_t edge_block = htb_buf[addr_row];
+                    std::array<ap_uint<128>, 16> edge_block;
+                    htb_buf.get_line(addr_row, 0, edge_block);
                     ap_uint<(1UL << E_W)> edge;
                     edge.range(V_ID_W - 1, 0) = candidate_v;
                     edge.range(2 * V_ID_W - 1, V_ID_W) = indexing_v;
 
-                    for (int g = 0; g < (1UL << (EDGE_BLOCK + 1)); g++){
+                    for (int g = 0; g < (1UL << EDGE_BLOCK); g++){
 #pragma HLS unroll
-                        if (edge == edge_block.range(((g + 1) << E_W) - 1, g << E_W)){
+                        if (edge == edge_block[g].range(127, 64) || edge == edge_block[g].range(63, 0)){
                             tuple_out.bit_equal = true;
                         }
                     }
@@ -1082,6 +1082,7 @@ ASSEMBLY_COPYING_EMBEDDING_LOOP:
 
             last_set = stream_end_inter_in.read();
 
+            //Last bit used to signal new solution
             if (!last_set && (curQV != nQueryVer - 1)){
                 stream_partial_out.write((curQV + 1) | (1UL << (V_ID_W - 1)));
 ASSEMBLY_RADIX_LOOP:
@@ -1823,7 +1824,7 @@ void subgraphIsomorphism(
         row_t htb_buf0[HASHTABLES_SPACE],
         row_t htb_buf1[HASHTABLES_SPACE],
         row_t htb_buf2[HASHTABLES_SPACE],
-        edge_block_t htb_buf3[HASHTABLES_SPACE],
+        row_t htb_buf3[HASHTABLES_SPACE],
         bloom_t bloom_p[BLOOM_SPACE],
         row_t res_buf[RESULTS_SPACE],
         unsigned short numQueryVert,
@@ -1852,7 +1853,7 @@ void subgraphIsomorphism(
 #pragma HLS INTERFACE mode=m_axi port=res_buf bundle=fifo
 #pragma HLS INTERFACE mode=m_axi port=edge_buf bundle=graph
 #pragma HLS INTERFACE mode=m_axi port=bloom_p bundle=bloom
-/* #pragma HLS alias ports=htb_buf0,htb_buf1,htb_buf2,htb_buf3 distance=0 */
+#pragma HLS alias ports=htb_buf0,htb_buf1,htb_buf2,htb_buf3 distance=0
 
 #pragma HLS INTERFACE mode=s_axilite port=numQueryVert
 #pragma HLS INTERFACE mode=s_axilite port=numQueryEdges
@@ -1920,7 +1921,7 @@ void subgraphIsomorphism(
 
     multiwayJoinWrap<
         MAX_START_BATCH_SIZE,
-        edge_block_t,
+        row_t,
         bloom_t,
         BLOOM_FILTER_WIDTH,
         K_FUNCTIONS>(

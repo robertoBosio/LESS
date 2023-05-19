@@ -61,7 +61,7 @@
 #define PROPOSE_BATCH_LOG 6
 #define SET_INFO_WIDTH 16
 #define MERGE_IN_STREAMS 2
-#define EDGE_BLOCK 0
+#define EDGE_BLOCK 4
 #include <ap_axi_sdata.h>
 
 typedef struct {
