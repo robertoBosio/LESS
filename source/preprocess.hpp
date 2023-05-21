@@ -921,14 +921,14 @@ void preprocess(
         T_BLOOM *bloom_p,
         QueryVertex *qVertices0,
         QueryVertex *qVertices1,
-        TableDescriptor *tDescriptors,
         AdjHT *hTables0,
         AdjHT *hTables1,
-        unsigned short &numTables,
         unsigned short numQueryVert,
         unsigned short numQueryEdges,
         unsigned long numDataEdges)
 {
+    TableDescriptor tDescriptors[MAX_TB];
+    unsigned short numTables = 0;
 
     buildTableDescriptors<
         MAX_QV,

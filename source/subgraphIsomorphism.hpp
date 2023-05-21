@@ -1,3 +1,5 @@
+#pragma once
+
 #define HLS_STREAM_THREAD_SAFE
 #include "cache.h"
 #ifndef __SYNTHESIS__
@@ -20,7 +22,7 @@
 #include "dynfifo_utils.hpp"
 #include "hls_burst_maxi.h"
 #include "preprocess.hpp"
-#define STOP_S      8
+#define STOP_S      7
     
 #define V_ID_W      VERTEX_WIDTH_BIT
 #define V_L_W       LABEL_WIDTH
@@ -1039,7 +1041,8 @@ void mwj_assembly(
         hls::stream<ap_uint<V_ID_W>> &stream_batch,
         hls::stream<bool> &stream_batch_end,
        
-        hls::stream<bool> &stream_stop,
+        hls::stream<bool> streams_stop[STOP_S],
+        hls::stream<bool> &stream_sol0,
         hls::stream<bool> &stream_req, 
         hls::stream<ap_uint<V_ID_W>> &stream_partial_out,
 #ifdef COUNT_ONLY
@@ -1054,21 +1057,21 @@ void mwj_assembly(
     ap_uint<SET_INFO_WIDTH> setinfo;
     unsigned long int nPartSol {0};
     bool last_sol, last_set, stop;
+    bool last_start, token_new_start;
     T_NODE node;
 
 #ifdef COUNT_ONLY
     unsigned long int counter {0};
 #endif
 
-    last_sol = stream_batch_end.read();
-    curQV = (1UL << (V_ID_W - 1)) + 1;
-    stream_partial_out.write(curQV);
-    while(!last_sol){
-        stream_partial_out.write(stream_batch.read());
-        stream_req.write(true);
-        last_sol = stream_batch_end.read();
-    }
+    last_start = stream_batch_end.read();
+    last_start = stream_batch_end.read();
+    token_new_start = false;
+    stream_partial_out.write((1UL << (V_ID_W - 1)) + 1);
+    stream_partial_out.write(stream_batch.read());
+    stream_req.write(true);
 
+ASSEMBLY_TASK_LOOP:
     while(1) {
         if (stream_end_embed_in.read_nb(last_sol)){
 
@@ -1097,7 +1100,15 @@ ASSEMBLY_SET_LOOP:
                 /* Write in the correct stream */
                 if (curQV == nQueryVer - 1){
 #ifdef COUNT_ONLY
+                    if (!last_start && token_new_start){
+                        last_start = stream_batch_end.read();
+                        token_new_start = false;
+                        stream_partial_out.write((1UL << (V_ID_W - 1)) + 1);
+                        stream_partial_out.write(stream_batch.read());
+                        stream_req.write(true);
+                    }
                     counter++;
+
 #else
 ASSEMBLY_WRITE_FINAL_LOOP:
                     for (int g = 0; g < curQV; g++){
@@ -1112,6 +1123,7 @@ ASSEMBLY_WRITE_FINAL_LOOP:
                     result.write(node);
 #endif
                 } else {
+                    token_new_start = true;
                     stream_partial_out.write(vToVerify);
                     stream_req.write(true);
                 }
@@ -1126,8 +1138,19 @@ ASSEMBLY_WRITE_FINAL_LOOP:
 
         }
 
-        if (stream_stop.read_nb(stop))
-            break;
+        if (stream_sol0.read_nb(stop)){
+
+            // Test if there are some node from start batch 
+            if (!last_start){
+                last_start = stream_batch_end.read();
+                token_new_start = true;
+                stream_partial_out.write((1UL << (V_ID_W - 1)) + 1);
+                stream_partial_out.write(stream_batch.read());
+                stream_req.write(true);
+            } else {
+                break;
+            }
+        }
     }
 
 #ifdef COUNT_ONLY
@@ -1140,7 +1163,11 @@ ASSEMBLY_WRITE_FINAL_LOOP:
     node.keep = ~0;
     result.write(node);
 #endif
-
+        
+    for (int g = 0; g < STOP_S; g++){
+#pragma HLS unroll
+        streams_stop[g].write(true);
+    }
 }
 
 template<typename T>
@@ -1159,7 +1186,7 @@ void mwj_merge(
 void mwj_stop(
         hls::stream<bool> &stream_req,
         hls::stream<bool> &dynfifo_overflow,
-        hls::stream<bool> streams_stop[STOP_S])
+        hls::stream<bool> &stream_sol0)
 {
     static unsigned long sol {0};
     bool ovf {false};
@@ -1174,10 +1201,7 @@ void mwj_stop(
     bool test = dynfifo_overflow.read_nb(ovf);
 
     if (sol == 0 || ovf == true){
-        for (int g = 0; g < STOP_S; g++){
-#pragma HLS unroll
-            streams_stop[g].write(true);
-        }
+        stream_sol0.write(true);
     }
 }
 
@@ -1188,7 +1212,6 @@ void mwj_batch(
         unsigned short numBatchSize,
         
         hls::stream<bool> &stream_batch_end,
-        hls::stream<bool> &stream_batches_end,
         hls::stream<ap_uint<V_ID_W>> &stream_batch)
 {
     ap_uint<8> tableIndex {0};
@@ -1202,7 +1225,6 @@ void mwj_batch(
     unsigned char set_counter = 0;
     bool flag_buff = false;
     bool flag_new = true;
-    unsigned int batch_counter = numBatchSize + 1;
 
 PROPOSE_TBINDEXING_LOOP:
     for(int g = 0; g < qVertices[0].numTablesIndexing; g++){
@@ -1256,13 +1278,7 @@ EXTRACT_BAGTOSET_SETCHECKER_LOOP:
                 assert(set_counter < MAX_CL);
 #endif
                 if (flag_new) {
-                    if(batch_counter == numBatchSize){
-                        stream_batches_end.write(false);
-                        stream_batch_end.write(true);
-                    }
-
                     set[set_counter++] = vertex;
-                    batch_counter = (batch_counter >= numBatchSize)? 1 : batch_counter + 1;
                     stream_batch_end.write(false);
                     stream_batch.write(vertex);
                 }
@@ -1277,7 +1293,6 @@ EXTRACT_BAGTOSET_SETCHECKER_LOOP:
         }
     }
     stream_batch_end.write(true);
-    stream_batches_end.write(true);
 }
 
 template <typename T_EDGES,
@@ -1435,6 +1450,7 @@ void multiwayJoin(
     hls_thread_local hls::stream<bool, 1> streams_stop[STOP_S];
     hls_thread_local hls::stream<bool, S_D> merge_out;
     hls_thread_local hls::stream<bool, S_D> merge_in[MERGE_IN_STREAMS];
+    hls_thread_local hls::stream<bool, 1> stream_sol0;
 #pragma HLS array_partition variable=merge_in type=complete    
 
 #ifndef __SYNTHESIS__
@@ -1616,7 +1632,8 @@ void multiwayJoin(
             f_stream_sol_end,
             stream_batch,
             stream_batch_end,
-            streams_stop[5],
+            streams_stop,
+            stream_sol0,
             merge_in[1],
             a_stream_sol,
             result);
@@ -1702,7 +1719,8 @@ void multiwayJoin(
             std::ref(f_stream_sol_end),
             std::ref(stream_batch),
             std::ref(stream_batch_end),
-            std::ref(streams_stop[5]),
+            std::ref(streams_stop),
+            std::ref(stream_sol0),
             std::ref(merge_in[0]),
             std::ref(a_stream_sol),
             std::ref(result));
@@ -1718,7 +1736,7 @@ void multiwayJoin(
             mwj_stop,
             merge_out,
             dyn_stream_ovf,
-            streams_stop);
+            stream_sol0);
 
 #ifndef __SYNTHESIS__
     mwj_intersect_t.join(); 
@@ -1780,7 +1798,6 @@ void multiwayJoinWrap(
 #pragma HLS dataflow
 
     hls::stream<bool, MAX_BATCH_SIZE> stream_batch_end("Stream batch end");
-    hls::stream<bool, S_D> stream_batches_end("Stream batches end");
     hls::stream<ap_uint<V_ID_W>,  MAX_BATCH_SIZE> stream_batch("Stream batch");
 
     mwj_batch(
@@ -1789,34 +1806,26 @@ void multiwayJoinWrap(
         htb_buf0,
         numBatchSize,
         stream_batch_end,
-        stream_batches_end,
         stream_batch);
     
-MULTIWAYJOIN_LOOP: 
-    do {    
-        multiwayJoin<
-            T_EDGES,
-            T_BLOOM,
-            BLOOM_LOG,
-            K_FUN_LOG>(
-                    htb_buf1,
-                    htb_buf2,
-                    htb_buf3,
-                    bloom_p,
-                    res_buf,
-                    hTables0,
-                    hTables1,
-                    qVertices1,
-                    nQueryVer,
-                    stream_batch,
-                    stream_batch_end,
-                    dynfifo_diagnostic,
-                    result);
-  
-#ifdef DEBUG_STATS
-        debug::batches++;
-#endif
-    } while (!stream_batches_end.read());
+    multiwayJoin<
+        T_EDGES,
+        T_BLOOM,
+        BLOOM_LOG,
+        K_FUN_LOG>(
+                htb_buf1,
+                htb_buf2,
+                htb_buf3,
+                bloom_p,
+                res_buf,
+                hTables0,
+                hTables1,
+                qVertices1,
+                nQueryVer,
+                stream_batch,
+                stream_batch_end,
+                dynfifo_diagnostic,
+                result);
 }
 
 void subgraphIsomorphism(
@@ -1880,9 +1889,7 @@ void subgraphIsomorphism(
 #endif /* DEBUG_STATS */
 
     QueryVertex qVertices0[MAX_QV], qVertices1[MAX_QV];
-    TableDescriptor tDescriptors[MAX_TB];
     AdjHT hTables0[MAX_TB], hTables1[MAX_TB];
-    unsigned short numTables = 0;
     unsigned long localResult = 0;
 
     preprocess<row_t,
@@ -1905,10 +1912,8 @@ void subgraphIsomorphism(
                 bloom_p,
                 qVertices0,
                 qVertices1,
-                tDescriptors,
                 hTables0,
                 hTables1,
-                numTables,
                 numQueryVert,
                 numQueryEdges,
                 numDataEdges);
@@ -1979,7 +1984,7 @@ void subgraphIsomorphism(
 /* debof << "\tsolution correct:   " << solution_correct << "\t" << */
 /* solution_correct * 100 / debug_verify << "%" << std::endl; */
         debof << "\tmax collisions:   " << max_collisions << std::endl;
-        debof << "\tavg collisions:   " << avg_collisions / numTables << std::endl;
+/* debof << "\tavg collisions:   " << avg_collisions / numTables << std::endl; */
         debof << "\tbloom fullness:   " << bloom_fullness << std::endl;
         debof << "\tbloom filter:   " << bloom_filter << std::endl;
         debof << "\tintersect filter:   " << intersect_filter << std::endl;

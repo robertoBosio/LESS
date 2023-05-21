@@ -2,33 +2,29 @@
 
 namespace debug {
 
-    unsigned long hashtable_reads {0};
-    unsigned long edge_reads {0};
-    unsigned long bloom_reads {0};
-    unsigned long tuple_ver {0};
-    
-    unsigned long solution_correct {0};
-    unsigned long solution_wrong {0};
-
-    unsigned long intersect_filter {0};
-    unsigned long intersect_bit_truepositive {0};
-    unsigned long intersect_bit_falsepositive {0};
-    unsigned long intersect_bit_missindexing {0};
-    
-    unsigned long empty_sol {0};
-    unsigned long embeddings {0};
-    unsigned long max_collisions {0};
-    unsigned long n_sets = {0};
-    unsigned long set = {0};
-    float avg_collisions {0};
-    float bloom_fullness {0};
-    unsigned long bloom_filter {0};
-
-    float cache_hit_0 {0};
-    float cache_hit_1 {0};
-    unsigned long cache_req_0 {0};
-    unsigned long cache_req_1 {0};
-    unsigned long batches {0};
+    static unsigned long hashtable_reads {0};
+    static unsigned long edge_reads {0};
+    static unsigned long bloom_reads {0};
+    static unsigned long tuple_ver {0};
+    static unsigned long solution_correct {0};
+    static unsigned long solution_wrong {0};
+    static unsigned long intersect_filter {0};
+    static unsigned long intersect_bit_truepositive {0};
+    static unsigned long intersect_bit_falsepositive {0};
+    static unsigned long intersect_bit_missindexing {0};
+    static unsigned long empty_sol {0};
+    static unsigned long embeddings {0};
+    static unsigned long max_collisions {0};
+    static unsigned long n_sets = {0};
+    static unsigned long set = {0};
+    static float avg_collisions {0};
+    static float bloom_fullness {0};
+    static unsigned long bloom_filter {0};
+    static float cache_hit_0 {0};
+    static float cache_hit_1 {0};
+    static unsigned long cache_req_0 {0};
+    static unsigned long cache_req_1 {0};
+    static unsigned long batches {0};
 
     static void init(){
         hashtable_reads = 0;

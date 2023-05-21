@@ -38,9 +38,9 @@
 
 #define MAX_COLLISIONS      (1UL << 5)
 
-#define SUB_STREAM_DEPTH    10
+#define SUB_STREAM_DEPTH    32
 
-#define S_DEPTH             64
+#define S_DEPTH             32
 #define BURST_S             32
 #define DDR_BIT             7
 #define DDR_WORD            (1UL << DDR_BIT)
