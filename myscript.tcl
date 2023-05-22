@@ -7,7 +7,7 @@ if { $cosim == 1 } {
     set dir "source-nopreproc"
 }
 
-open_project -reset $proj
+open_project $proj
 
 add_files "$dir/subisoWrap.cpp" -cflags "-I ./$dir"
 add_files -tb "$dir/subiso-test.cpp data dataset" -cflags "-Wno-attributes -Wno-unknown-pragmas" -csimflags "-Wno-unknown-pragmas"

@@ -1857,8 +1857,8 @@ void subgraphIsomorphism(
 
 #pragma HLS INTERFACE mode=m_axi port=htb_buf0 bundle=prop_batch
 #pragma HLS INTERFACE mode=m_axi port=htb_buf1 bundle=prop
-#pragma HLS INTERFACE mode=m_axi port=htb_buf2 bundle=inter
-#pragma HLS INTERFACE mode=m_axi port=htb_buf3 bundle=verify
+#pragma HLS INTERFACE mode=m_axi port=htb_buf2 bundle=inter latency=0
+#pragma HLS INTERFACE mode=m_axi port=htb_buf3 bundle=verify latency=0
 #pragma HLS INTERFACE mode=m_axi port=res_buf bundle=fifo
 #pragma HLS INTERFACE mode=m_axi port=edge_buf bundle=graph
 #pragma HLS INTERFACE mode=m_axi port=bloom_p bundle=bloom
