@@ -27,42 +27,52 @@
  * The final bitwidth is equal to (2^COUNTER_WIDTH-1).
  * The MSB bit is used to check if that hash is used. */
 #define COUNTER_WIDTH       5
+
+/* Bloom filter parameters */
 #define BLOOM_FILTER_WIDTH  8
 #define K_FUNCTIONS         1
 
 /* bitwidth of the hash to index source vertices, 1st level. */
 #define HASH_WIDTH_FIRST    11
-
-/* bitwidth of the hash to index a specific edge, 2nd level. */
 #define HASH_WIDTH_SECOND   7
 
 #define MAX_COLLISIONS      (1UL << 5)
 
-#define SUB_STREAM_DEPTH    32
+/* Depth of streams connecting tasks */
+#define DEFAULT_STREAM_DEPTH 32
 
-#define S_DEPTH             32
-#define BURST_S             32
+/* Dynamic fifo parameters */
+#define DYN_FIFO_DEPTH      32
+#define DYN_FIFO_BURST      32
+
 #define DDR_BIT             7
 #define DDR_WORD            (1UL << DDR_BIT)
+
 #define HASHTABLES_SPACE    ((1UL << 25) / (DDR_WORD / 8))
 #define GRAPHS_SPACE        5000000
 #define BLOOM_SPACE         (1UL << HASH_WIDTH_FIRST) * 32
-#define RESULTS_SPACE		(BURST_S * (1UL << 17))
-
+#define RESULTS_SPACE		(DYN_FIFO_BURST * (1UL << 17))
 #define HTB_SIZE            (1UL << (HASH_WIDTH_FIRST + HASH_WIDTH_SECOND - (DDR_BIT - COUNTER_WIDTH)))
+
 #define EDGE_ROW            (1UL << (DDR_BIT - EDGE_WIDTH))
 
-#define COUNT_ONLY
-#define UNDIRECTED
-#define DEBUG_INTERFACE
-#define INTERSECT_INDEXING_LOOP 0
-#define VERIFY_CACHE 1
-#define MAX_START_BATCH_SIZE 512
-#define PROPOSE_BATCH_LOG 6
-#define SET_INFO_WIDTH 16
-#define MERGE_IN_STREAMS 2
-#define EDGE_BLOCK 4
+#define PROPOSE_BATCH_LOG   6
+#define MERGE_IN_STREAMS    2
+#define EDGE_BLOCK          4
 #include <ap_axi_sdata.h>
+
+/* Functionality definition */
+#define COUNT_ONLY          1
+#define UNDIRECTED          1
+#define DEBUG_INTERFACE     1
+#define SOFTWARE_PREPROC    1
+#define CACHE_ENABLE        1
+
+#ifndef __SYNTHESIS__
+#define DEBUG_STATS         1
+#else
+#define DEBUG_STATS         0
+#endif /*__SYNTHESIS__*/
 
 typedef struct {
     ap_uint<VERTEX_WIDTH_BIT> src, dst;

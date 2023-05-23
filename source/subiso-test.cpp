@@ -4,13 +4,15 @@
 #include <cstdio>
 #include <cassert>
 #include <unordered_map>
-#include <ap_int.h>
-#include "hls_burst_maxi.h"
 
+#include <ap_int.h>
+#include <hls_stream.h>
 #include "subisoWrap.hpp"
 #include "Parameters.hpp"
 
-#include <hls_stream.h>
+#if SOFTWARE_PREPROC
+#include "preprocess.hpp"
+#endif /* SOFTWARE_PREPROC */
 
 template <size_t NODE_W,
          size_t LAB_W,
@@ -135,14 +137,14 @@ unsigned int countSol(
 
 int main()
 {
-#ifdef COUNT_ONLY
+#if COUNT_ONLY
     long unsigned int result;
 #else
     hls::stream<T_NODE> result("results");
 #endif
 
 
-#ifdef DEBUG_INTERFACE
+#if DEBUG_INTERFACE
     unsigned int debug_endpreprocess_s {0};
 #endif
 
@@ -153,6 +155,13 @@ int main()
     unsigned int res_expected;
     unsigned long diagnostic;
     bool flag = true;
+
+#if SOFTWARE_PREPROC 
+    QueryVertex qVertices0[MAX_QUERY_VERTICES]; 
+    QueryVertex qVertices1[MAX_QUERY_VERTICES];
+    AdjHT hTables0[MAX_TABLES];
+    AdjHT hTables1[MAX_TABLES];
+#endif /* SOFTWARE_PREPROC */
 
     row_t *res_buf = (row_t*)malloc(RESULTS_SPACE * sizeof(row_t));
     
@@ -203,11 +212,54 @@ int main()
 
         if (!edge_buf)
             return -1;
+       
+#if SOFTWARE_PREPROC 
+        preprocess<row_t,
+            bloom_t,
+            EDGE_WIDTH,
+            COUNTER_WIDTH,
+            BLOOM_FILTER_WIDTH,
+            K_FUNCTIONS,
+            DDR_BIT,
+            VERTEX_WIDTH_BIT,
+            LABEL_WIDTH,
+            HASH_WIDTH_FIRST,
+            HASH_WIDTH_SECOND,
+            STREAM_DEPTH,
+            HASHTABLES_SPACE,
+            MAX_QUERY_VERTICES,
+            MAX_TABLES>(
+                    edge_buf,
+                    htb_buf,
+                    bloom_p,
+                    qVertices0,
+                    qVertices1,
+                    hTables0,
+                    hTables1,
+                    nQV,
+                    nQE,
+                    nDE);
         
+        subisoWrapper(
+                htb_buf,
+                bloom_p,
+                res_buf,
+                nQV,
+                1,
+                diagnostic,
+                qVertices0,
+                qVertices1,
+                hTables0,
+                hTables1,
+#if DEBUG_INTERFACE
+                debug_endpreprocess_s,
+#endif
+                result);
+
+#else
         subisoWrapper(
                 edge_buf,
                 htb_buf,
-/* hls::burst_maxi<row_t>(htb_buf), */
                 bloom_p,
                 res_buf,
                 nQV,
@@ -215,13 +267,13 @@ int main()
                 nDE,
                 1,
                 diagnostic,
-
-#ifdef DEBUG_INTERFACE
+#if DEBUG_INTERFACE
                 debug_endpreprocess_s,
 #endif
                 result);
-       
-#ifndef COUNT_ONLY
+#endif /* SOFTWARE_PREPROC */
+
+#if !COUNT_ONLY
         res_actual = countSol(
             nQV,
             result);
@@ -232,7 +284,8 @@ int main()
         free(htb_buf);
         free(edge_buf);
         free(bloom_p);
-        std::cout << "Expected: " << res_expected << " actual: " << res_actual << std::endl;
+        std::cout << "Expected: " << res_expected << 
+            " actual: " << res_actual << std::endl;
         flag &= (res_actual == res_expected);
         std::getline(fTest, fLine);
     }

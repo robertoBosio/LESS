@@ -15,11 +15,9 @@
 #include "hash_lookup3.hpp"
 #include "hls_burst_maxi.h"
 
-#ifndef __SYNTHESIS__
-#define DEBUG_STATS
+#if DEBUG_STATS
 #include "debug.hpp"
-#endif /*__SYNTHESIS__*/
-
+#endif /* DEBUG_STATS */
 
 /* Builds the table descriptors based on the information
  * from the query graph. */
@@ -207,7 +205,7 @@ COUNTER_TO_OFFSET_ROW_LOOP:
                 row_new >>= (1UL << CNT_LOG);
                 row >>= (1UL << CNT_LOG);
 
-#ifdef DEBUG_STATS
+#if DEBUG_STATS
                 if (counter > debug::max_collisions) 
                     debug::max_collisions = counter;
                 debug::avg_collisions += (float)counter / (1 << (HASH1_W + HASH2_W));
@@ -398,7 +396,7 @@ COUNT_OCCURENCIES_FIND_TABLE_LOOP:
                 stream_c_end.write(false);
             }
 
-#ifdef UNDIRECTED   
+#if UNDIRECTED   
             if (tDescriptors[g].src_label == labeldst &&
                     tDescriptors[g].dst_label == labelsrc){
 
@@ -583,7 +581,7 @@ COUNT_OCCURENCIES_FIND_TABLE_LOOP:
                 stream_c_end.write(false);
             }
 
-#ifdef UNDIRECTED   
+#if UNDIRECTED   
             if (tDescriptors[g].src_label == labeldst &&
                     tDescriptors[g].dst_label == labelsrc){
 
@@ -879,7 +877,7 @@ STORE_EDGES_POINTER_LOOP:
 /* std::cout << std::endl; */
 /* } */
 
-#ifdef DEBUG_STATS
+#if DEBUG_STATS
         constexpr size_t K_FUN = (1UL << K_FUN_LOG);
     for (unsigned int tab = 0; tab < numTables; tab++){
         for(unsigned long addr = 0; addr < (1UL << HASH1_W); addr++){
@@ -927,6 +925,11 @@ void preprocess(
         unsigned short numQueryEdges,
         unsigned long numDataEdges)
 {
+
+#if DEBUG_STATS
+    debug::init();
+#endif /* DEBUG_STATS */
+
     TableDescriptor tDescriptors[MAX_TB];
     unsigned short numTables = 0;
 
