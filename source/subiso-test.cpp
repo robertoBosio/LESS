@@ -9,6 +9,7 @@
 #include <hls_stream.h>
 #include "subisoWrap.hpp"
 #include "Parameters.hpp"
+#include "debug.hpp"
 
 #if SOFTWARE_PREPROC
 #include "preprocess.hpp"
@@ -156,12 +157,6 @@ int main()
     unsigned long diagnostic;
     bool flag = true;
 
-#if SOFTWARE_PREPROC 
-    QueryVertex qVertices0[MAX_QUERY_VERTICES]; 
-    QueryVertex qVertices1[MAX_QUERY_VERTICES];
-    AdjHT hTables0[MAX_TABLES];
-    AdjHT hTables1[MAX_TABLES];
-#endif /* SOFTWARE_PREPROC */
 
     row_t *res_buf = (row_t*)malloc(RESULTS_SPACE * sizeof(row_t));
     
@@ -212,8 +207,13 @@ int main()
 
         if (!edge_buf)
             return -1;
-       
+
 #if SOFTWARE_PREPROC 
+        QueryVertex qVertices0[MAX_QUERY_VERTICES]; 
+        QueryVertex qVertices1[MAX_QUERY_VERTICES];
+        AdjHT hTables0[MAX_TABLES];
+        AdjHT hTables1[MAX_TABLES];
+        
         preprocess<row_t,
             bloom_t,
             EDGE_WIDTH,
@@ -225,7 +225,7 @@ int main()
             LABEL_WIDTH,
             HASH_WIDTH_FIRST,
             HASH_WIDTH_SECOND,
-            STREAM_DEPTH,
+            DEFAULT_STREAM_DEPTH,
             HASHTABLES_SPACE,
             MAX_QUERY_VERTICES,
             MAX_TABLES>(
@@ -245,7 +245,6 @@ int main()
                 bloom_p,
                 res_buf,
                 nQV,
-                1,
                 diagnostic,
                 qVertices0,
                 qVertices1,
@@ -265,7 +264,6 @@ int main()
                 nQV,
                 nQE,
                 nDE,
-                1,
                 diagnostic,
 #if DEBUG_INTERFACE
                 debug_endpreprocess_s,

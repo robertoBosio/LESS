@@ -225,7 +225,8 @@ class cache {
 #ifdef __SYNTHESIS__
 			core_req_type stop_req;
 			stop_req.op = STOP_OP;
-			m_core_req[m_core_port].write(stop_req);
+/* m_core_req[m_core_port].write(stop_req); */
+			m_core_req[2].write(stop_req);
 #else
 			flush();
 #endif /* __SYNTHESIS__ */

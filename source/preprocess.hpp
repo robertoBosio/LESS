@@ -925,11 +925,6 @@ void preprocess(
         unsigned short numQueryEdges,
         unsigned long numDataEdges)
 {
-
-#if DEBUG_STATS
-    debug::init();
-#endif /* DEBUG_STATS */
-
     TableDescriptor tDescriptors[MAX_TB];
     unsigned short numTables = 0;
 
