@@ -1,7 +1,7 @@
 set proj "subgraphiso-kria"
 set dir "source"
 
-open_project $proj
+open_project -reset $proj
 
 add_files "$dir/subisoWrap.cpp" -cflags "-I ./$dir"
 add_files -tb "$dir/subiso-test.cpp data dataset" -cflags "-Wno-attributes -Wno-unknown-pragmas" -csimflags "-Wno-unknown-pragmas"
