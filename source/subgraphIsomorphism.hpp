@@ -230,7 +230,7 @@ FINDMIN_TASK_LOOP:
         if (stream_embed_in.read_nb(readv)){
             T_BLOOM filter = ~0;
             minSize = ~0;
-
+            
             if (readv.test(V_ID_W - 1)){
                 // Delimiter, new solution
                 curQV = readv.range(V_ID_W - 2, 0);
@@ -321,32 +321,82 @@ READMIN_TASK_LOOP:
             T_BLOOM filter = stream_filter_in.read();
             ap_uint<64> hash_out;
             xf::database::details::hashlookup3_core<V_ID_W>(tuple_in.indexing_v, hash_out);
-            ap_uint<(1UL << C_W)> start_off = 0;
-            ap_uint<(1UL << C_W)> end_off;
+            volatile unsigned int start_off = 0;
+            volatile unsigned int end_off;
+            ap_uint<2> addr_inrow;
+            ap_uint<DDR_W> ram_row;
+            unsigned long addr_row;
+            ap_uint<64> addr_counter;
             
             if (hash_out.range(H_W_1 - 1, 0) != 0){ 
-                start_off = read_table<htb_cache_t&, H_W_1, H_W_2, H_W_2, C_W, 2>(
-                        hash_out.range(H_W_1 - 1, 0) - 1,
-                        (1UL << H_W_2) - 1,
-                        htb_buf,
-                        hTables[tuple_in.tb_index].start_offset);
+                addr_counter = hash_out.range(H_W_1 - 1, 0) - 1;
+                addr_counter <<= H_W_2;
+                addr_counter += (1UL << H_W_2) - 1;
+
+                /* Compute address of row storing the counter */
+                addr_row = hTables[tuple_in.tb_index].start_offset 
+                    + (addr_counter >> (DDR_BIT - C_W));
+
+                /* Compute address of data inside the row */
+                addr_inrow = addr_counter.range((DDR_BIT - C_W) - 1,0);
+
+                /* Read the data */
+                ram_row = htb_buf.get(addr_row, 2);
+                if (addr_inrow == 0){
+                    start_off = ram_row.range(31, 0);
+                } else if (addr_inrow == 1) {
+                    start_off = ram_row.range(63, 32);
+                } else if (addr_inrow == 2) {
+                    start_off = ram_row.range(95, 64);
+                } else if (addr_inrow == 3) {
+                    start_off = ram_row.range(127, 96);
+                }
+/* start_off = read_table<htb_cache_t&, H_W_1, H_W_2, H_W_2, C_W, 2>( */
+/* hash_out.range(H_W_1 - 1, 0) - 1, */
+/* (1UL << H_W_2) - 1, */
+/* htb_buf, */
+/* hTables[tuple_in.tb_index].start_offset); */
             }
 
-            end_off = read_table<htb_cache_t&, H_W_1, H_W_2, H_W_2, C_W, 2>(
-                    hash_out.range(H_W_1 - 1, 0),
-                    (1UL << H_W_2) - 1,
-                    htb_buf,
-                    hTables[tuple_in.tb_index].start_offset);
+
+            addr_counter = hash_out.range(H_W_1 - 1, 0);
+            addr_counter <<= H_W_2;
+            addr_counter += (1UL << H_W_2) - 1;
+
+            /* Compute address of row storing the counter */
+            addr_row = hTables[tuple_in.tb_index].start_offset 
+                + (addr_counter >> (DDR_BIT - C_W));
+
+            /* Compute address of data inside the row */
+            addr_inrow = addr_counter.range((DDR_BIT - C_W) - 1,0);
+
+            /* Read the data */
+            ram_row = htb_buf.get(addr_row, 2);
+            if (addr_inrow == 0){
+                end_off = ram_row.range(31, 0);
+            } else if (addr_inrow == 1) {
+                end_off = ram_row.range(63, 32);
+            } else if (addr_inrow == 2) {
+                end_off = ram_row.range(95, 64);
+            } else if (addr_inrow == 3) {
+                end_off = ram_row.range(127, 96);
+            }
+
+/* end_off = read_table<htb_cache_t&, H_W_1, H_W_2, H_W_2, C_W, 2>( */
+/* hash_out.range(H_W_1 - 1, 0), */
+/* (1UL << H_W_2) - 1, */
+/* htb_buf, */
+/* hTables[tuple_in.tb_index].start_offset); */
 
 #if DEBUG_STATS
             debug::readmin_reads += 2;
 #endif
-            
+           
             unsigned int rowstart = hTables[tuple_in.tb_index].start_edges + 
                 (start_off >> (DDR_BIT - E_W));
             unsigned int rowend = hTables[tuple_in.tb_index].start_edges + 
                 (end_off >> (DDR_BIT - E_W));
-
+            
 READMIN_EDGES_LOOP:
             for (int g = rowstart; g <= rowend; g++){
                 row_t row = htb_buf.get(g, 2);

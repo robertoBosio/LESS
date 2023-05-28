@@ -103,15 +103,35 @@ FIND_CORRECT_TABLE_LOOP:
 
         /* Linking vertices to tables */
         if (dirEdge){
-            qVertices0[nodeSrcPos].addTableIndexing(g);
-            qVertices1[nodeSrcPos].addTableIndexing(g);
-            qVertices0[nodeDstPos].addTableIndexed(g, nodeSrcPos);
-            qVertices1[nodeDstPos].addTableIndexed(g, nodeSrcPos);
+            unsigned char idx = qVertices0[nodeSrcPos].numTablesIndexing;
+            qVertices0[nodeSrcPos].tables_indexing[idx] = g;
+            qVertices1[nodeSrcPos].tables_indexing[idx] = g;
+            qVertices0[nodeSrcPos].numTablesIndexing++;
+            qVertices1[nodeSrcPos].numTablesIndexing++;
+
+            idx = qVertices0[nodeDstPos].numTablesIndexed;
+            qVertices0[nodeDstPos].tables_indexed[idx] = g;
+            qVertices0[nodeDstPos].vertex_indexing[idx] = nodeSrcPos;
+            qVertices1[nodeDstPos].tables_indexed[idx] = g;
+            qVertices1[nodeDstPos].vertex_indexing[idx] = nodeSrcPos;
+            
+            qVertices0[nodeDstPos].numTablesIndexed++;
+            qVertices1[nodeDstPos].numTablesIndexed++;
         } else {
-            qVertices0[nodeSrcPos].addTableIndexed(g, nodeDstPos);
-            qVertices0[nodeDstPos].addTableIndexing(g);
-            qVertices1[nodeSrcPos].addTableIndexed(g, nodeDstPos);
-            qVertices1[nodeDstPos].addTableIndexing(g);
+            unsigned char idx = qVertices0[nodeDstPos].numTablesIndexing;
+            qVertices0[nodeDstPos].tables_indexing[idx] = g;
+            qVertices1[nodeDstPos].tables_indexing[idx] = g;
+            qVertices0[nodeDstPos].numTablesIndexing++;
+            qVertices1[nodeDstPos].numTablesIndexing++;
+
+            idx = qVertices0[nodeSrcPos].numTablesIndexed;
+            qVertices0[nodeSrcPos].tables_indexed[idx] = g;
+            qVertices0[nodeSrcPos].vertex_indexing[idx] = nodeDstPos;
+            qVertices1[nodeSrcPos].tables_indexed[idx] = g;
+            qVertices1[nodeSrcPos].vertex_indexing[idx] = nodeDstPos;
+            
+            qVertices0[nodeSrcPos].numTablesIndexed++;
+            qVertices1[nodeSrcPos].numTablesIndexed++;
         }
     }
 }
@@ -750,7 +770,7 @@ STORE_HASHTABLES_POINTER_LOOP:
             hTables0,
             htb_buf);
 
-start_addr = (start_addr + 16) & ~0xf;
+    start_addr = (start_addr + 16) & ~0xf;
 STORE_EDGES_POINTER_LOOP:
     for (unsigned short ntb = 0; ntb < numTables; ntb++){
         hTables0[ntb].start_edges = start_addr;
