@@ -10,6 +10,7 @@ namespace debug {
     static unsigned long bloom_filter;
     static unsigned long intersect_reads;
     static unsigned long intersect_filter;
+    static unsigned long verify_filter;
     static unsigned long verify_reads;
     static unsigned long homomo_trashed;
     static unsigned long miss_indexing;
@@ -34,6 +35,7 @@ namespace debug {
         bloom_fullness   = 0;
         intersect_reads  = 0;
         intersect_filter = 0;
+        verify_filter    = 0;
         verify_reads     = 0;
         homomo_trashed   = 0;
         start_set        = 0;
@@ -57,13 +59,15 @@ namespace debug {
         intersect_reads  +
         verify_reads;     
         
-        unsigned int hw1, hw2, cnt;
+        unsigned int hw1, hw2, cnt, k_fun;
         hw1 = HASH_WIDTH_FIRST;
         hw2 = HASH_WIDTH_SECOND; 
         cnt = COUNTER_WIDTH;
+        k_fun = (1UL << K_FUNCTIONS);
+        verify_filter -= intersect_filter;
 
         debof << "DEBUG STATISTICS HW1: " << hw1 << " HW2: " << hw2
-            << " CNT: " << cnt << std::endl << std::endl;
+            << " CNT: " << cnt << " K_FUN: " << k_fun << std::endl << std::endl;
 
         debof << "\tbatch reads:     " << batch_reads << "\t" << 
             batch_reads * 100 / mem_reads << "%"<< std::endl;
@@ -82,8 +86,7 @@ namespace debug {
         mem_reads = mem_reads - cache_hit_verify - cache_hit_inter - cache_hit_prop;
         intersect_reads -= cache_hit_inter;
         verify_reads -= cache_hit_verify;
-        readmin_reads -= cache_hit_prop;
-
+        findmin_reads -= cache_hit_prop;
         debof << "With Caching on:" << std::endl;
         debof << "\tbatch reads:     " << batch_reads << "\t" << 
             batch_reads * 100 / mem_reads << "%"<< std::endl;
@@ -113,6 +116,7 @@ namespace debug {
         debof << "\tbloom fullness:      " << bloom_fullness << std::endl;
         debof << "\tbloom filter:        " << bloom_filter << std::endl;
         debof << "\tintersect filter:    " << intersect_filter << std::endl;
+        debof << "\tverify filter:       " << verify_filter << std::endl;
         debof << "\thomomorphism filter: " << homomo_trashed << std::endl;
         debof << "\tstart_set:           " << start_set << std::endl;
         debof << "\tmiss indexing        " << miss_indexing << std::endl;

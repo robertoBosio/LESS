@@ -29,8 +29,8 @@
 #define COUNTER_WIDTH       5
 
 /* Bloom filter parameters */
-#define BLOOM_FILTER_WIDTH  8
-#define K_FUNCTIONS         1
+#define BLOOM_FILTER_WIDTH  7
+#define K_FUNCTIONS         3
 
 /* bitwidth of the hash to index source vertices, 1st level. */
 #define HASH_WIDTH_FIRST    11
@@ -50,7 +50,7 @@
 
 #define HASHTABLES_SPACE    ((1UL << 25) / (DDR_WORD / 8))
 #define GRAPHS_SPACE        5000000
-#define BLOOM_SPACE         (1UL << HASH_WIDTH_FIRST) * 32
+#define BLOOM_SPACE         (1UL << (HASH_WIDTH_FIRST + K_FUNCTIONS)) * 32
 #define RESULTS_SPACE		(DYN_FIFO_BURST * (1UL << 17))
 #define HTB_SIZE            (1UL << (HASH_WIDTH_FIRST + HASH_WIDTH_SECOND - (DDR_BIT - COUNTER_WIDTH)))
 
@@ -58,14 +58,14 @@
 
 #define PROPOSE_BATCH_LOG   6
 #define MERGE_IN_STREAMS    2
-#define EDGE_BLOCK          4
+#define CACHE_WORDS_PER_LINE 3
 #include <ap_axi_sdata.h>
 
 /* Functionality definition */
 #define COUNT_ONLY          1
 #define UNDIRECTED          1
 #define DEBUG_INTERFACE     1
-#define SOFTWARE_PREPROC    1
+#define SOFTWARE_PREPROC    0
 #define CACHE_ENABLE        1
 
 #ifndef __SYNTHESIS__
@@ -82,4 +82,4 @@ typedef ap_axiu<VERTEX_WIDTH_BIT, 0, 0, 0> T_NODE;
 typedef ap_axiu<LABEL_WIDTH, 0, 0, 0> T_LABEL;
 typedef ap_uint<DDR_WORD> row_t;
 typedef ap_uint<(1UL << BLOOM_FILTER_WIDTH)> bloom_t;
-typedef ap_uint<(DDR_WORD << EDGE_BLOCK)> edge_block_t;
+typedef ap_uint<(DDR_WORD << CACHE_WORDS_PER_LINE)> edge_block_t;

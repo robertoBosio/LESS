@@ -29,6 +29,7 @@ void subisoWrapper(
     subgraphIsomorphism
             (htb_buf,
              htb_buf,
+             htb_buf,
              bloom_p,
              res_buf,
              numQueryVert,
@@ -69,6 +70,7 @@ void subisoWrapper(
 {
     subgraphIsomorphism
             (edge_buf,
+             htb_buf,
              htb_buf,
              htb_buf,
              bloom_p,

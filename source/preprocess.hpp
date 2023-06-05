@@ -320,7 +320,7 @@ INCREASE_COUNTER_DDR_LOOP:
 }
 
 template <typename T_BLOOM,
-        size_t BLOOM_LOG, 
+        size_t BLOOM_LOG,
         size_t HASH_W,
         size_t HASH1_W,
         size_t K_FUN_LOG>
@@ -331,20 +331,24 @@ void updateBloom(
         hls::stream<bool>             &stream_end)
 {
     constexpr size_t K_FUN = (1UL << K_FUN_LOG);
-
+    
     bool last = stream_end.read();
     while (!last) {
         unsigned int bloom_a = stream_bloom_a.read();
         ap_uint<HASH_W> hash_v = stream_index.read();
-        ap_uint<(1UL << BLOOM_LOG)> set = bloom_p[bloom_a];
+
+#ifndef __SYNTHESIS__
+        assert(((bloom_a << K_FUN_LOG ) + K_FUN) < BLOOM_SPACE);
+#endif
 
         for (int g = 0; g < K_FUN; g++){
 #pragma HLS unroll
+            T_BLOOM set = bloom_p[(bloom_a << K_FUN_LOG) + g];
             ap_uint<BLOOM_LOG> idx = hash_v.range((HASH_W / K_FUN) * (g + 1) - 1,
                     (HASH_W / K_FUN) * (g + 1) - BLOOM_LOG);
             set[idx] = 1;
+            bloom_p[(bloom_a << K_FUN_LOG) + g] = set;
         }
-        bloom_p[bloom_a] = set;
         last = stream_end.read();
     }
 }
@@ -474,7 +478,7 @@ template <typename T_DDR,
 void countEdges(
         edge_t          *edge_p,
         T_DDR           *htb_p,
-        T_BLOOM         *bloom_p,
+        T_DDR           *bloom_p,
         TableDescriptor *tDescriptors,
         AdjHT           *hTables,
         unsigned short  numTables,
@@ -718,7 +722,7 @@ template <typename T_DDR,
 void fillTables(
         edge_t  *edge_buf,
         T_DDR   *htb_buf,
-        T_BLOOM *bloom_p,
+        T_DDR   *bloom_p,
         AdjHT   *hTables0,
         AdjHT   *hTables1,
         TableDescriptor *tDescriptors,
@@ -770,12 +774,12 @@ STORE_HASHTABLES_POINTER_LOOP:
             hTables0,
             htb_buf);
 
-    start_addr = (start_addr + 16) & ~0xf;
+    start_addr = (start_addr + (1UL << CACHE_WORDS_PER_LINE)) & ~((1UL << CACHE_WORDS_PER_LINE) - 1);
 STORE_EDGES_POINTER_LOOP:
     for (unsigned short ntb = 0; ntb < numTables; ntb++){
         hTables0[ntb].start_edges = start_addr;
         start_addr += (hTables0[ntb].n_edges >> (ROW_LOG - EDGE_LOG)) + 1;
-        start_addr = (start_addr + 16) & ~0xf;
+        start_addr = (start_addr + (1UL << CACHE_WORDS_PER_LINE)) & ~((1UL << CACHE_WORDS_PER_LINE) - 1);
 #ifndef __SYNTHESIS__
         assert(start_addr < HTB_SPACE);
 #endif
@@ -936,7 +940,7 @@ template <typename T_DDR,
 void preprocess(
         edge_t *edge_buf,
         T_DDR *htb_buf,
-        T_BLOOM *bloom_p,
+        T_DDR *bloom_p,
         QueryVertex *qVertices0,
         QueryVertex *qVertices1,
         AdjHT *hTables0,
