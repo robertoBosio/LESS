@@ -8,6 +8,8 @@ void subisoWrapper(
         bloom_t bloom_p[BLOOM_SPACE],
         row_t res_buf[RESULTS_SPACE],
         unsigned short numQueryVert,
+        const unsigned char hash1_w,
+        const unsigned char hash2_w,
         unsigned long &diagnostic,
         QueryVertex qVertices0[MAX_QUERY_VERTICES], 
         QueryVertex qVertices1[MAX_QUERY_VERTICES],
@@ -33,6 +35,8 @@ void subisoWrapper(
              bloom_p,
              res_buf,
              numQueryVert,
+             hash1_w,
+             hash2_w,
              diagnostic,
              qVertices0,
              qVertices1,
@@ -51,11 +55,13 @@ void subisoWrapper(
         row_t htb_buf[HASHTABLES_SPACE],
         bloom_t bloom_p[BLOOM_SPACE],
         row_t res_buf[RESULTS_SPACE],
-        unsigned short numQueryVert,
-        unsigned short numQueryEdges,
-        unsigned long numDataEdges,
+        const unsigned short numQueryVert,
+        const unsigned short numQueryEdges,
+        const unsigned long numDataEdges,
+        const unsigned char hash1_w,
+        const unsigned char hash2_w,
+        
         unsigned long &diagnostic,
-
 #if DEBUG_INTERFACE
         volatile unsigned int &debif_endpreprocess,
 #endif
@@ -78,6 +84,8 @@ void subisoWrapper(
              numQueryVert,
              numQueryEdges,
              numDataEdges,
+             hash1_w,
+             hash2_w,
              diagnostic,
 #ifdef DEBUG_INTERFACE
              debif_endpreprocess,

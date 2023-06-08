@@ -143,20 +143,21 @@ template <typename T_DDR,
          size_t CNT_LOG,
          size_t ROW_LOG,
          size_t NODE_W,
-         size_t HASH1_W,
-         size_t HASH2_W>
+         size_t HASH_W>
 void increaseCounter(
         T_DDR *htb_buf,
         AdjHT *hTables,
-        hls::stream<ap_uint<HASH1_W>> &stream_index1,
-        hls::stream<ap_uint<HASH2_W>> &stream_index2,
+        const unsigned char hash1_w,
+        const unsigned char hash2_w,
+        hls::stream<ap_uint<HASH_W>> &stream_index1,
+        hls::stream<ap_uint<HASH_W>> &stream_index2,
         hls::stream<unsigned short> &stream_ntable,
         hls::stream<bool> &stream_end)
 {
     const size_t CNT_ROW = 1UL << (ROW_LOG - CNT_LOG);
     T_DDR ram_row, mask;
-    ap_uint<HASH1_W> index1;
-    ap_uint<HASH2_W> index2;
+    ap_uint<HASH_W> index1;
+    ap_uint<HASH_W> index2;
     ap_uint<(1UL << CNT_LOG)> counter;
     unsigned short ntb;
     ap_uint<64> addr_outrow;
@@ -170,9 +171,12 @@ INCREASE_COUNTER_DDR_LOOP:
         index2 = stream_index2.read();
         ntb = stream_ntable.read();
 
+        index1 = index1.range(hash1_w - 1, 0);
+        index2 = index2.range(hash2_w - 1, 0);
+
         /* Address in the matrix [HASH1_W][HASH2_W] */
         addr_counter = index1;
-        addr_counter <<= HASH2_W;
+        addr_counter <<= hash2_w;
         addr_counter += index2;
 
         /* Compute address of row storing the counter */
@@ -199,10 +203,10 @@ INCREASE_COUNTER_DDR_LOOP:
 template <typename T_DDR,
          size_t CNT_LOG,
          size_t ROW_LOG,
-         size_t HASH1_W,
-         size_t HASH2_W>
+         size_t HASH_W>
 void counterToOffset(
-        unsigned short numTables,
+        const unsigned long htb_size,
+        const unsigned short numTables,
         AdjHT *hTables,
         T_DDR *htb_buf)
 {
@@ -215,7 +219,7 @@ COUNTER_TO_OFFSET_DDR_LOOP:
         ap_uint<(1UL << CNT_LOG)> counter;
 
 COUNTER_TO_OFFSET_TABLE_LOOP:
-        for(unsigned int start = 0; start < HTB_SIZE; start++){
+        for(unsigned int start = 0; start < htb_size; start++){
             row = htb_buf[start + hTables[ntb].start_offset];
 
 COUNTER_TO_OFFSET_ROW_LOOP:
@@ -228,7 +232,7 @@ COUNTER_TO_OFFSET_ROW_LOOP:
 #if DEBUG_STATS
                 if (counter > debug::max_collisions) 
                     debug::max_collisions = counter;
-                debug::avg_collisions += (float)counter / (1 << (HASH1_W + HASH2_W));
+                debug::hash_collisions += counter;
 #endif /* DEBUG_STATS */
 
                 row_new.range((CNT_ROW << CNT_LOG) - 1, (CNT_ROW - 1) << CNT_LOG) = base_addr;
@@ -246,21 +250,22 @@ template <typename T_DDR,
          size_t CNT_LOG,
          size_t ROW_LOG,
          size_t NODE_W,
-         size_t HASH1_W,
-         size_t HASH2_W>
+         size_t HASH_W>
 void storeEdges(
         AdjHT                                       *hTables,
         T_DDR                                       *htb_buf,
+        const unsigned char                         hash1_w,
+        const unsigned char                         hash2_w,
         hls::stream<ap_uint<(1UL << EDGE_LOG)>>     &stream_edge,
-        hls::stream<ap_uint<HASH1_W>>               &stream_index1,
-        hls::stream<ap_uint<HASH2_W>>               &stream_index2,
+        hls::stream<ap_uint<HASH_W>>                &stream_index1,
+        hls::stream<ap_uint<HASH_W>>                &stream_index2,
         hls::stream<unsigned short>                 &stream_ntable,
         hls::stream<bool>                           &stream_end)
 {
     const size_t CNT_ROW = 1UL << (ROW_LOG - CNT_LOG);
     T_DDR row, mask;
-    ap_uint<HASH1_W> index1;
-    ap_uint<HASH2_W> index2;
+    ap_uint<HASH_W> index1;
+    ap_uint<HASH_W> index2;
     ap_uint<(1UL << EDGE_LOG)> edge;
     ap_uint<(1UL << CNT_LOG)> offset;
     unsigned short ntb;
@@ -275,10 +280,13 @@ INCREASE_COUNTER_DDR_LOOP:
         index2 = stream_index2.read();
         ntb = stream_ntable.read();
         edge = stream_edge.read();
+        
+        index1 = index1.range(hash1_w - 1, 0);
+        index2 = index2.range(hash2_w - 1, 0);
 
         /* Address in the matrix [HASH1_W][HASH2_W] */
         addr_offset = index1;
-        addr_offset <<= HASH2_W;
+        addr_offset <<= hash2_w;
         addr_offset += index2;
 
         /* Compute address of row storing the offset */
@@ -322,7 +330,6 @@ INCREASE_COUNTER_DDR_LOOP:
 template <typename T_BLOOM,
         size_t BLOOM_LOG,
         size_t HASH_W,
-        size_t HASH1_W,
         size_t K_FUN_LOG>
 void updateBloom(
         T_BLOOM                       *bloom_p,
@@ -338,7 +345,10 @@ void updateBloom(
         ap_uint<HASH_W> hash_v = stream_index.read();
 
 #ifndef __SYNTHESIS__
-        assert(((bloom_a << K_FUN_LOG ) + K_FUN) < BLOOM_SPACE);
+        if (((bloom_a << K_FUN_LOG) + K_FUN) >= BLOOM_SPACE){
+            std::cout << bloom_a << std::endl;
+        }
+        assert(((bloom_a << K_FUN_LOG) + K_FUN) < BLOOM_SPACE);
 #endif
 
         for (int g = 0; g < K_FUN; g++){
@@ -355,8 +365,7 @@ void updateBloom(
 
 template <size_t NODE_W,
          size_t LAB_W,
-         size_t HASH1_W,
-         size_t HASH2_W>
+         size_t HASH_W>
 void edgeToHashFirst(
         edge_t                        *edge_buf,
         TableDescriptor               *tDescriptors,
@@ -366,10 +375,11 @@ void edgeToHashFirst(
         hls::stream<unsigned int>     &stream_b_addr,
         hls::stream<ap_uint<64>>      &stream_b_index,
         hls::stream<bool>             &stream_b_end,
-        hls::stream<ap_uint<HASH1_W>> &stream_c_index1,
-        hls::stream<ap_uint<HASH2_W>> &stream_c_index2,
+        hls::stream<ap_uint<HASH_W>>  &stream_c_index1,
+        hls::stream<ap_uint<HASH_W>>  &stream_c_index2,
         hls::stream<unsigned short>   &stream_c_ntable,
-        hls::stream<bool>             &stream_c_end)
+        hls::stream<bool>             &stream_c_end,
+        const unsigned char           hash1_w)
 {
     
 COUNT_OCCURENCIES_TOP_LOOP:
@@ -402,15 +412,15 @@ COUNT_OCCURENCIES_FIND_TABLE_LOOP:
                         vertexIndexing,
                         hash_out);
 
-                ap_uint<HASH1_W> indexAdj = hash_out.range(HASH1_W - 1, 0); 
+                ap_uint<HASH_W> indexAdj = hash_out.range(HASH_W - 1, 0); 
 
                 xf::database::details::hashlookup3_core<NODE_W>(
                         vertexIndexed,
                         hash_out);
 
-                ap_uint<HASH2_W> indexEdge = hash_out.range(HASH2_W - 1, 0); 
+                ap_uint<HASH_W> indexEdge = hash_out.range(HASH_W - 1, 0); 
 
-                stream_b_addr.write(g * (1 << HASH1_W) + indexAdj);
+                stream_b_addr.write(g * (1UL << hash1_w) + indexAdj.range(hash1_w - 1, 0));
                 stream_b_index.write(hash_out);
                 stream_b_end.write(false);
 
@@ -439,15 +449,15 @@ COUNT_OCCURENCIES_FIND_TABLE_LOOP:
                         vertexIndexing,
                         hash_out);
 
-                ap_uint<HASH1_W> indexAdj = hash_out.range(HASH1_W - 1, 0); 
+                ap_uint<HASH_W> indexAdj = hash_out.range(HASH_W - 1, 0); 
 
                 xf::database::details::hashlookup3_core<NODE_W>(
                         vertexIndexed,
                         hash_out);
 
-                ap_uint<HASH2_W> indexEdge = hash_out.range(HASH2_W - 1, 0); 
+                ap_uint<HASH_W> indexEdge = hash_out.range(HASH_W - 1, 0); 
                 
-                stream_b_addr.write(g * (1 << HASH1_W) + indexAdj);
+                stream_b_addr.write(g * (1UL << hash1_w) + indexAdj.range(hash1_w - 1, 0));
                 stream_b_index.write(hash_out);
                 stream_b_end.write(false);
 
@@ -471,9 +481,8 @@ template <typename T_DDR,
          size_t BLOOM_LOG,
          size_t K_FUN_LOG,
          size_t NODE_W,
+         size_t HASH_W,
          size_t LAB_W,
-         size_t HASH1_W,
-         size_t HASH2_W,
          size_t STREAM_D>
 void countEdges(
         edge_t          *edge_p,
@@ -481,13 +490,15 @@ void countEdges(
         T_DDR           *bloom_p,
         TableDescriptor *tDescriptors,
         AdjHT           *hTables,
-        unsigned short  numTables,
-        unsigned long   numDataEdges)
+        const unsigned short numTables,
+        const unsigned long numDataEdges,
+        const unsigned char hash1_w,
+        const unsigned char hash2_w)
 {
 
 #pragma HLS DATAFLOW
-    hls::stream<ap_uint<HASH1_W>, STREAM_D> stream_c_index1("Counters index 1");
-    hls::stream<ap_uint<HASH2_W>, STREAM_D> stream_c_index2("Counters index 2");
+    hls::stream<ap_uint<HASH_W>, STREAM_D> stream_c_index1("Counters index 1");
+    hls::stream<ap_uint<HASH_W>, STREAM_D> stream_c_index2("Counters index 2");
     hls::stream<unsigned short, STREAM_D> stream_c_ntable("Counters table");
     hls::stream<bool> stream_c_end("Counters end");
 
@@ -499,8 +510,7 @@ void countEdges(
     edgeToHashFirst<
         NODE_W,
         LAB_W,
-        HASH1_W,
-        HASH2_W>(
+        HASH_W>(
             edge_p,
             tDescriptors,
             numTables,
@@ -511,7 +521,8 @@ void countEdges(
             stream_c_index1,
             stream_c_index2,
             stream_c_ntable,
-            stream_c_end);
+            stream_c_end,
+            hash1_w);
 
     // Update specific counter //
     increaseCounter<
@@ -519,10 +530,11 @@ void countEdges(
         CNT_LOG,
         ROW_LOG,
         NODE_W,
-        HASH1_W,
-        HASH2_W>(
+        HASH_W>(
             htb_p,
             hTables,
+            hash1_w,
+            hash2_w,
             stream_c_index1,
             stream_c_index2,
             stream_c_ntable,
@@ -532,8 +544,7 @@ void countEdges(
     updateBloom<
         T_BLOOM,
         BLOOM_LOG,
-        64,
-        HASH1_W,
+        HASH_W,
         K_FUN_LOG>(
         bloom_p,
         stream_b_addr,
@@ -545,17 +556,16 @@ void countEdges(
 template <size_t EDGE_LOG,
          size_t NODE_W,
          size_t LAB_W,
-         size_t HASH1_W,
-         size_t HASH2_W>
+         size_t HASH_W>
 void edgeToHashSecond(
         edge_t                                  *edge_buf,
         TableDescriptor                         *tDescriptors,
-        unsigned short                          numTables,
-        unsigned int                            numDataEdges,
+        const unsigned short                    numTables,
+        const unsigned int                      numDataEdges,
 
         hls::stream<ap_uint<(1UL << EDGE_LOG)>> &stream_c_edge,
-        hls::stream<ap_uint<HASH1_W>>           &stream_c_index1,
-        hls::stream<ap_uint<HASH2_W>>           &stream_c_index2,
+        hls::stream<ap_uint<HASH_W>>           &stream_c_index1,
+        hls::stream<ap_uint<HASH_W>>           &stream_c_index2,
         hls::stream<unsigned short>             &stream_c_ntable,
         hls::stream<bool>                       &stream_c_end)
 {
@@ -590,13 +600,13 @@ COUNT_OCCURENCIES_FIND_TABLE_LOOP:
                         vertexIndexing,
                         hash_out);
 
-                ap_uint<HASH1_W> indexAdj = hash_out.range(HASH1_W - 1, 0); 
+                ap_uint<HASH_W> indexAdj = hash_out.range(HASH_W - 1, 0); 
 
                 xf::database::details::hashlookup3_core<NODE_W>(
                         vertexIndexed,
                         hash_out);
 
-                ap_uint<HASH2_W> indexEdge = hash_out.range(HASH2_W - 1, 0); 
+                ap_uint<HASH_W> indexEdge = hash_out.range(HASH_W - 1, 0); 
 
                 stream_c_index1.write(indexAdj);
                 stream_c_index2.write(indexEdge);
@@ -624,13 +634,13 @@ COUNT_OCCURENCIES_FIND_TABLE_LOOP:
                         vertexIndexing,
                         hash_out);
 
-                ap_uint<HASH1_W> indexAdj = hash_out.range(HASH1_W - 1, 0); 
+                ap_uint<HASH_W> indexAdj = hash_out.range(HASH_W - 1, 0); 
 
                 xf::database::details::hashlookup3_core<NODE_W>(
                         vertexIndexed,
                         hash_out);
 
-                ap_uint<HASH2_W> indexEdge = hash_out.range(HASH2_W - 1, 0); 
+                ap_uint<HASH_W> indexEdge = hash_out.range(HASH_W - 1, 0); 
                 
                 stream_c_index1.write(indexAdj);
                 stream_c_index2.write(indexEdge);
@@ -651,23 +661,24 @@ template <typename T_DDR,
          size_t ROW_LOG,
          size_t NODE_W,
          size_t LAB_W,
-         size_t HASH1_W,
-         size_t HASH2_W,
+         size_t HASH_W,
          size_t STREAM_D>
 void writeEdges(
         edge_t          *edge_p,
         T_DDR           *htb_p,
         TableDescriptor *tDescriptors,
         AdjHT           *hTables,
-        unsigned short  numTables,
-        unsigned long   numDataEdges)
+        const unsigned short numTables,
+        const unsigned long numDataEdges,
+        const unsigned char hash1_w,
+        const unsigned char hash2_w)
 {
 
 #pragma HLS DATAFLOW
 
     hls::stream<ap_uint<(1UL << EDGE_LOG)>, STREAM_D> stream_o_edge("Offset edge");
-    hls::stream<ap_uint<HASH1_W>, STREAM_D> stream_o_index1("Offsets index 1");
-    hls::stream<ap_uint<HASH2_W>, STREAM_D> stream_o_index2("Offsets index 2");
+    hls::stream<ap_uint<HASH_W>, STREAM_D> stream_o_index1("Offsets index 1");
+    hls::stream<ap_uint<HASH_W>, STREAM_D> stream_o_index2("Offsets index 2");
     hls::stream<unsigned short, STREAM_D> stream_o_ntable("Offset table");
     hls::stream<bool> stream_o_end("Offset end");
     
@@ -676,8 +687,7 @@ void writeEdges(
         EDGE_LOG,
         NODE_W,
         LAB_W,
-        HASH1_W,
-        HASH2_W>(
+        HASH_W>(
             edge_p,
             tDescriptors,
             numTables,
@@ -694,10 +704,11 @@ void writeEdges(
         CNT_LOG,
         ROW_LOG,
         NODE_W,
-        HASH1_W,
-        HASH2_W>(
+        HASH_W>(
             hTables,
             htb_p,
+            hash1_w,
+            hash2_w,
             stream_o_edge,
             stream_o_index1,
             stream_o_index2,
@@ -714,9 +725,8 @@ template <typename T_DDR,
          size_t K_FUN_LOG,
          size_t ROW_LOG,
          size_t NODE_W,
+         size_t HASH_W,
          size_t LAB_W,
-         size_t HASH1_W,
-         size_t HASH2_W,
          size_t STREAM_D,
          size_t HTB_SPACE>
 void fillTables(
@@ -726,22 +736,25 @@ void fillTables(
         AdjHT   *hTables0,
         AdjHT   *hTables1,
         TableDescriptor *tDescriptors,
-        unsigned long numDataEdges,
-        unsigned short numTables)
+        const unsigned long numDataEdges,
+        const unsigned short numTables,
+        const unsigned char hash1_w,
+        const unsigned char hash2_w)
 {
 
     /* Resetting portion of memory dedicated to counters 
      * 1 << HASH1_W * HASH2_W is the number of counters needed
      * for each table, then it should be divided by the number
      * of counters stored in each row which is 1 << (ROW_LOG - CNT_LOG)*/
-    unsigned long end_addr = numTables * HTB_SIZE;
+    const unsigned long htb_size = (1UL << (hash1_w + hash2_w - (DDR_BIT - COUNTER_WIDTH)));
+    unsigned long end_addr = numTables * htb_size;
     unsigned long start_addr = 0;
 
 STORE_HASHTABLES_POINTER_LOOP:
     for (unsigned int ntb = 0; ntb < numTables; ntb++){
         hTables0[ntb].start_offset = start_addr;
         hTables0[ntb].n_edges = 0;
-        start_addr += HTB_SIZE;
+        start_addr += htb_size;
     }
 
     countEdges<
@@ -752,9 +765,8 @@ STORE_HASHTABLES_POINTER_LOOP:
          BLOOM_LOG,
          K_FUN_LOG,
          NODE_W,
+         HASH_W,
          LAB_W,
-         HASH1_W,
-         HASH2_W,
          STREAM_D>(
             edge_buf,
             htb_buf,
@@ -762,14 +774,16 @@ STORE_HASHTABLES_POINTER_LOOP:
             tDescriptors,
             hTables0,
             numTables,
-            numDataEdges);
+            numDataEdges,
+            hash1_w,
+            hash2_w);
     
     /* From counts to offsets */
     counterToOffset<T_DDR,
          CNT_LOG,
          ROW_LOG,
-         HASH1_W,
-         HASH2_W>(
+         HASH_W>(
+            htb_size,
             numTables,
             hTables0,
             htb_buf);
@@ -795,18 +809,19 @@ STORE_EDGES_POINTER_LOOP:
          ROW_LOG,
          NODE_W,
          LAB_W,
-         HASH1_W,
-         HASH2_W,
+         HASH_W,
          STREAM_D>(
             edge_buf,
             htb_buf,
             tDescriptors,
             hTables0,
             numTables,
-            numDataEdges);
+            numDataEdges,
+            hash1_w,
+            hash2_w);
 
 #ifndef __SYNTHESIS__
-    end_addr = start_addr * (1UL << (ROW_LOG - 3)) + ((numTables * ((1 << HASH1_W) + 1)) << (BLOOM_LOG - 3));
+    end_addr = start_addr * (1UL << (ROW_LOG - 3)) + ((numTables * ((1 << hash1_w) + 1)) << (BLOOM_LOG - 3));
     std::cout << "Occupied " << end_addr << " bytes, " << 
         end_addr / (float)(1UL << 20) << " MB. " << std::endl;
 #endif
@@ -902,10 +917,10 @@ STORE_EDGES_POINTER_LOOP:
 /* } */
 
 #if DEBUG_STATS
-        constexpr size_t K_FUN = (1UL << K_FUN_LOG);
+    constexpr size_t K_FUN = (1UL << K_FUN_LOG);
     for (unsigned int tab = 0; tab < numTables; tab++){
-        for(unsigned long addr = 0; addr < (1UL << HASH1_W); addr++){
-            T_BLOOM row = bloom_p[addr + tab * (1UL << HASH1_W)];
+        for(unsigned long addr = 0; addr < (1UL << hash1_w); addr++){
+            T_BLOOM row = bloom_p[addr + tab * (1UL << hash1_w)];
             for(int g = 0; g < K_FUN; g++){
                 ap_uint<(1UL << (BLOOM_LOG - K_FUN_LOG)) > bloom_f = 
                     row.range(((g + 1) << (BLOOM_LOG - K_FUN_LOG)) - 1, g << (BLOOM_LOG - K_FUN_LOG));
@@ -914,7 +929,7 @@ STORE_EDGES_POINTER_LOOP:
                     count++;
                     bloom_f = bloom_f & (bloom_f - 1);
                 }
-                debug::bloom_fullness += (float)count / ((1UL << HASH1_W + 1)*numTables);
+                debug::bloom_fullness += (float)count / ((1UL << hash1_w + 1)*numTables);
             }
         }
     }
@@ -930,9 +945,8 @@ template <typename T_DDR,
          size_t K_FUN_LOG,
          size_t ROW_LOG,
          size_t NODE_W,
+         size_t HASH_W,
          size_t LAB_W,
-         size_t HASH1_W,
-         size_t HASH2_W,
          size_t STREAM_D,
          size_t HTB_SPACE,
          size_t MAX_QV,
@@ -947,7 +961,9 @@ void preprocess(
         AdjHT *hTables1,
         unsigned short numQueryVert,
         unsigned short numQueryEdges,
-        unsigned long numDataEdges)
+        unsigned long numDataEdges,
+        const unsigned char hash1_w,
+        const unsigned char hash2_w)
 {
     TableDescriptor tDescriptors[MAX_TB];
     unsigned short numTables = 0;
@@ -974,9 +990,8 @@ void preprocess(
          K_FUN_LOG,
          ROW_LOG,
          NODE_W,
+         HASH_W,
          LAB_W,
-         HASH1_W,
-         HASH2_W,
          STREAM_D,
          HTB_SPACE>(
             edge_buf,
@@ -986,5 +1001,7 @@ void preprocess(
             hTables1,
             tDescriptors,
             numDataEdges,
-            numTables);
+            numTables,
+            hash1_w,
+            hash2_w);
 }

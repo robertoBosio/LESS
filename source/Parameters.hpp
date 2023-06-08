@@ -33,8 +33,8 @@
 #define K_FUNCTIONS         3
 
 /* bitwidth of the hash to index source vertices, 1st level. */
-#define HASH_WIDTH_FIRST    11
-#define HASH_WIDTH_SECOND   7
+// #define HASH_WIDTH_FIRST    11
+// #define HASH_WIDTH_SECOND   7
 
 #define MAX_COLLISIONS      (1UL << 5)
 
@@ -50,9 +50,9 @@
 
 #define HASHTABLES_SPACE    ((1UL << 25) / (DDR_WORD / 8))
 #define GRAPHS_SPACE        5000000
-#define BLOOM_SPACE         (1UL << (HASH_WIDTH_FIRST + K_FUNCTIONS)) * 32
+#define BLOOM_SPACE         (1UL << 23)
 #define RESULTS_SPACE		(DYN_FIFO_BURST * (1UL << 17))
-#define HTB_SIZE            (1UL << (HASH_WIDTH_FIRST + HASH_WIDTH_SECOND - (DDR_BIT - COUNTER_WIDTH)))
+// #define HTB_SIZE            (1UL << (HASH_WIDTH_FIRST + HASH_WIDTH_SECOND - (DDR_BIT - COUNTER_WIDTH)))
 
 #define EDGE_ROW            (1UL << (DDR_BIT - EDGE_WIDTH))
 

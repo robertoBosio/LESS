@@ -149,6 +149,11 @@ int main()
     unsigned int debug_endpreprocess_s {0};
 #endif
 
+    // const unsigned char hash1_w = HASH_WIDTH_FIRST;
+    // const unsigned char hash2_w = HASH_WIDTH_SECOND;
+    const unsigned char hash1_w = 11;
+    const unsigned char hash2_w = 6;
+    const unsigned long htb_size = (1UL << (hash1_w + hash2_w - (DDR_BIT - COUNTER_WIDTH)));
     unsigned short nQV = 0;
     unsigned short nQE = 0;
     unsigned long nDE = 0;
@@ -222,9 +227,8 @@ int main()
             K_FUNCTIONS,
             DDR_BIT,
             VERTEX_WIDTH_BIT,
+            64,
             LABEL_WIDTH,
-            HASH_WIDTH_FIRST,
-            HASH_WIDTH_SECOND,
             DEFAULT_STREAM_DEPTH,
             HASHTABLES_SPACE,
             MAX_QUERY_VERTICES,
@@ -238,13 +242,17 @@ int main()
                     hTables1,
                     nQV,
                     nQE,
-                    nDE);
+                    nDE,
+                    hash1_w,
+                    hash2_w);
         
         subisoWrapper(
                 htb_buf,
                 bloom_p,
                 res_buf,
                 nQV,
+                hash1_w,
+                hash2_w,
                 diagnostic,
                 qVertices0,
                 qVertices1,
@@ -264,6 +272,8 @@ int main()
                 nQV,
                 nQE,
                 nDE,
+                hash1_w,
+                hash2_w,
                 diagnostic,
 #if DEBUG_INTERFACE
                 debug_endpreprocess_s,

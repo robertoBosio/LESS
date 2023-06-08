@@ -19,7 +19,7 @@ namespace debug {
     static unsigned long cache_req_prop;
     static unsigned long cache_req_inter;
     static unsigned long cache_req_verify;
-    static float avg_collisions;
+    static unsigned long hash_collisions;
     static float bloom_fullness;
     static float cache_hit_prop;
     static float cache_hit_inter;
@@ -41,7 +41,7 @@ namespace debug {
         start_set        = 0;
         miss_indexing    = 0;
         max_collisions   = 0;
-        avg_collisions   = 0;
+        hash_collisions  = 0;
         cache_hit_prop   = 0;
         cache_hit_inter  = 0;
         cache_hit_verify = 0;
@@ -50,7 +50,10 @@ namespace debug {
         cache_req_verify = 0;
     }
 
-    static void print(){
+    static void print(
+        const unsigned char hash1_w,
+        const unsigned char hash2_w
+    ){
         std::ofstream debof("../../../../stats.txt", std::ofstream::app);
 
         unsigned long mem_reads =  batch_reads +
@@ -59,14 +62,12 @@ namespace debug {
         intersect_reads  +
         verify_reads;     
         
-        unsigned int hw1, hw2, cnt, k_fun;
-        hw1 = HASH_WIDTH_FIRST;
-        hw2 = HASH_WIDTH_SECOND; 
+        unsigned int cnt, k_fun;
         cnt = COUNTER_WIDTH;
         k_fun = (1UL << K_FUNCTIONS);
         verify_filter -= intersect_filter;
 
-        debof << "DEBUG STATISTICS HW1: " << hw1 << " HW2: " << hw2
+        debof << "DEBUG STATISTICS HW1: " << hash1_w << " HW2: " << hash2_w
             << " CNT: " << cnt << " K_FUN: " << k_fun << std::endl << std::endl;
 
         debof << "\tbatch reads:     " << batch_reads << "\t" << 
@@ -113,6 +114,7 @@ namespace debug {
 #endif
 
         debof << "\tmax collisions:      " << max_collisions << std::endl;
+//        debof << "\tavg collisions:      " << hash_collisions / (float)counters << std::endl;
         debof << "\tbloom fullness:      " << bloom_fullness << std::endl;
         debof << "\tbloom filter:        " << bloom_filter << std::endl;
         debof << "\tintersect filter:    " << intersect_filter << std::endl;
