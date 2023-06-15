@@ -320,6 +320,7 @@ void dynfifo_init(
 {
 
 #pragma HLS inline 
+#pragma HLS dataflow
     
     static_assert((DDR_WORDS % BURST_SIZE) == 0,
             "The number of ddr words must be a multiple of a burst transaction");

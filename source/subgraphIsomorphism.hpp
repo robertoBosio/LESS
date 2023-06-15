@@ -1000,7 +1000,8 @@ void mwj_compact(
             checked = false;
         }
     } else {
-        stream_tuple_end_out.write(true); 
+        stream_tuple_end_out.write(true);
+        checked = false; 
     }
 }
 
@@ -1200,6 +1201,7 @@ void mwj_stop(
     bool test = dynfifo_overflow.read_nb(ovf);
 
     if (sol == 0 || ovf == true){
+        sol = 0;
         stream_sol0.write(true);
     }
 }
@@ -1405,7 +1407,8 @@ void multiwayJoin(
 #pragma HLS STABLE variable=nQueryVer
 #pragma HLS STABLE variable=hash1_w
 #pragma HLS STABLE variable=hash2_w
-#pragma HLS DATAFLOW disable_start_propagation
+
+#pragma HLS DATAFLOW
 
     /* Findmin data out */
     hls_thread_local hls::stream<ap_uint<V_ID_W>, MAX_QV> p_stream_sol

@@ -151,7 +151,7 @@ int main()
 
     // const unsigned char hash1_w = HASH_WIDTH_FIRST;
     // const unsigned char hash2_w = HASH_WIDTH_SECOND;
-    const unsigned char hash1_w = 11;
+    const unsigned char hash1_w = 10;
     const unsigned char hash2_w = 6;
     const unsigned long htb_size = (1UL << (hash1_w + hash2_w - (DDR_BIT - COUNTER_WIDTH)));
     unsigned short nQV = 0;
@@ -180,122 +180,132 @@ int main()
     std::string fLine{};
     char datagraph_file[100], querygraph_file[100];
     std::getline(fTest, fLine);
-    
-    while (!fTest.eof()){
-        if (fLine.c_str()[0] == '#'){
+
+    while (!fTest.eof())
+    {
+        if (fLine.c_str()[0] == '#')
+        {
             std::getline(fTest, fLine);
             continue;
         }
-        
-        sscanf(fLine.c_str(), "%s %s %u", datagraph_file, querygraph_file, &res_expected);	
-        row_t *htb_buf = (row_t*)calloc(HASHTABLES_SPACE, sizeof(row_t));
-        if (!htb_buf){
+
+        row_t *htb_buf = (row_t *)calloc(HASHTABLES_SPACE, sizeof(row_t));
+        if (!htb_buf)
+        {
             std::cout << "Allocation failed." << std::endl;
             return -1;
         }
 
-        bloom_t *bloom_p = (bloom_t*)calloc(BLOOM_SPACE, sizeof(bloom_t));
-        if (!bloom_p){
+        bloom_t *bloom_p = (bloom_t *)calloc(BLOOM_SPACE, sizeof(bloom_t));
+        if (!bloom_p)
+        {
             std::cout << "Allocation failed." << std::endl;
             return -1;
         }
+        sscanf(fLine.c_str(), "%s %s %u", datagraph_file, querygraph_file, &res_expected);
 
         edge_t *edge_buf = load_graphs<
             VERTEX_WIDTH_BIT,
             LABEL_WIDTH,
             GRAPHS_SPACE>(
-                std::string(querygraph_file),
-                std::string(datagraph_file),
-                nQV,
-                nQE,
-                nDE);
+            std::string(querygraph_file),
+            std::string(datagraph_file),
+            nQV,
+            nQE,
+            nDE);
 
         if (!edge_buf)
             return -1;
 
+        for (unsigned char h1 = 10; h1 < 11; h1++){
+            for (unsigned char h2 = 7; h2 < 8; h2++){
 #if SOFTWARE_PREPROC 
-        QueryVertex qVertices0[MAX_QUERY_VERTICES]; 
-        QueryVertex qVertices1[MAX_QUERY_VERTICES];
-        AdjHT hTables0[MAX_TABLES];
-        AdjHT hTables1[MAX_TABLES];
-        
-        preprocess<row_t,
-            bloom_t,
-            EDGE_WIDTH,
-            COUNTER_WIDTH,
-            BLOOM_FILTER_WIDTH,
-            K_FUNCTIONS,
-            DDR_BIT,
-            VERTEX_WIDTH_BIT,
-            64,
-            LABEL_WIDTH,
-            DEFAULT_STREAM_DEPTH,
-            HASHTABLES_SPACE,
-            MAX_QUERY_VERTICES,
-            MAX_TABLES>(
-                    edge_buf,
+                QueryVertex qVertices0[MAX_QUERY_VERTICES]; 
+                QueryVertex qVertices1[MAX_QUERY_VERTICES];
+                AdjHT hTables0[MAX_TABLES];
+                AdjHT hTables1[MAX_TABLES];
+                
+                preprocess<row_t,
+                    bloom_t,
+                    EDGE_WIDTH,
+                    COUNTER_WIDTH,
+                    BLOOM_FILTER_WIDTH,
+                    K_FUNCTIONS,
+                    DDR_BIT,
+                    VERTEX_WIDTH_BIT,
+                    64,
+                    LABEL_WIDTH,
+                    DEFAULT_STREAM_DEPTH,
+                    HASHTABLES_SPACE,
+                    MAX_QUERY_VERTICES,
+                    MAX_TABLES>(
+                            edge_buf,
+                            htb_buf,
+                            bloom_p,
+                            qVertices0,
+                            qVertices1,
+                            hTables0,
+                            hTables1,
+                            nQV,
+                            nQE,
+                            nDE,
+                            h1,
+                            h2);
+
+                subisoWrapper(
                     htb_buf,
                     bloom_p,
+                    res_buf,
+                    nQV,
+                    h1,
+                    h2,
+                    diagnostic,
                     qVertices0,
                     qVertices1,
                     hTables0,
                     hTables1,
+#if DEBUG_INTERFACE
+                    debug_endpreprocess_s,
+#endif
+                    result);
+                
+#else
+                subisoWrapper(
+                    edge_buf,
+                    htb_buf,
+                    bloom_p,
+                    res_buf,
                     nQV,
                     nQE,
                     nDE,
-                    hash1_w,
-                    hash2_w);
-        
-        subisoWrapper(
-                htb_buf,
-                bloom_p,
-                res_buf,
-                nQV,
-                hash1_w,
-                hash2_w,
-                diagnostic,
-                qVertices0,
-                qVertices1,
-                hTables0,
-                hTables1,
+                    h1,
+                    h2,
+                    diagnostic,
 #if DEBUG_INTERFACE
-                debug_endpreprocess_s,
+                    debug_endpreprocess_s,
 #endif
-                result);
-
-#else
-        subisoWrapper(
-                edge_buf,
-                htb_buf,
-                bloom_p,
-                res_buf,
-                nQV,
-                nQE,
-                nDE,
-                hash1_w,
-                hash2_w,
-                diagnostic,
-#if DEBUG_INTERFACE
-                debug_endpreprocess_s,
-#endif
-                result);
+                    result);
 #endif /* SOFTWARE_PREPROC */
 
 #if !COUNT_ONLY
-        res_actual = countSol(
-            nQV,
-            result);
+                res_actual = countSol(
+                    nQV,
+                    result);
 #else
-        res_actual = result;
+                res_actual = result;
 #endif
 
+                std::cout << "Expected: " << res_expected << " actual: " << res_actual << std::endl;
+                flag &= (res_actual == res_expected);
+                std::getline(fTest, fLine);
+                for (int g = 0; g < HASHTABLES_SPACE; htb_buf[g++] = 0);
+                for (int g = 0; g < BLOOM_SPACE; bloom_p[g++] = 0);
+
+            }
+        }
         free(htb_buf);
-        free(edge_buf);
         free(bloom_p);
-        std::cout << "Expected: " << res_expected << 
-            " actual: " << res_actual << std::endl;
-        flag &= (res_actual == res_expected);
-        std::getline(fTest, fLine);
+        free(edge_buf);
     }
 
     free(res_buf);
