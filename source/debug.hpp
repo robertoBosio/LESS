@@ -67,7 +67,7 @@ namespace debug {
         k_fun = (1UL << K_FUNCTIONS);
         verify_filter -= intersect_filter;
 
-        debof << "DEBUG STATISTICS HW1: " << hash1_w << " HW2: " << hash2_w
+        debof << "DEBUG STATISTICS HW1: " << (int)hash1_w << " HW2: " << (int)hash2_w
             << " CNT: " << cnt << " K_FUN: " << k_fun << std::endl << std::endl;
 
         debof << "\tbatch reads:     " << batch_reads << "\t" << 

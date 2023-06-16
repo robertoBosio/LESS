@@ -1,4 +1,4 @@
-#define HLS_STREAM_THREAD_SAFE
+#include "subgraphIsomorphism.hpp"
 #include <fstream>
 #include <iostream>
 #include <cstdio>
@@ -7,13 +7,13 @@
 
 #include <ap_int.h>
 #include <hls_stream.h>
-#include "subisoWrap.hpp"
 #include "Parameters.hpp"
 #include "debug.hpp"
 
 #if SOFTWARE_PREPROC
 #include "preprocess.hpp"
 #endif /* SOFTWARE_PREPROC */
+
 
 template <size_t NODE_W,
          size_t LAB_W,
@@ -217,7 +217,7 @@ int main()
         if (!edge_buf)
             return -1;
 
-        for (unsigned char h1 = 10; h1 < 11; h1++){
+        for (unsigned char h1 = 12; h1 < 13; h1++){
             for (unsigned char h2 = 7; h2 < 8; h2++){
 #if SOFTWARE_PREPROC 
                 QueryVertex qVertices0[MAX_QUERY_VERTICES]; 
@@ -252,7 +252,9 @@ int main()
                             h1,
                             h2);
 
-                subisoWrapper(
+                subgraphIsomorphism(
+                    htb_buf,
+                    htb_buf,
                     htb_buf,
                     bloom_p,
                     res_buf,
@@ -270,8 +272,10 @@ int main()
                     result);
                 
 #else
-                subisoWrapper(
+                subgraphIsomorphism(
                     edge_buf,
+                    htb_buf,
+                    htb_buf,
                     htb_buf,
                     bloom_p,
                     res_buf,
