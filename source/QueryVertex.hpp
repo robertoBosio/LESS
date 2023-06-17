@@ -15,12 +15,6 @@ class QueryVertex {
         unsigned char tables_indexing[MAX_TABLES];   
         unsigned char numTablesIndexing = 0;
 
-        QueryVertex(){
-#pragma HLS array_partition variable=tables_indexed type=complete dim=0
-#pragma HLS array_partition variable=vertex_indexing type=complete dim=0
-#pragma HLS array_partition variable=tables_indexing type=complete dim=0
-        }
-
         void addTableIndexed(unsigned char t, unsigned char v){
             tables_indexed[numTablesIndexed] = t;
             vertex_indexing[numTablesIndexed] = v;
