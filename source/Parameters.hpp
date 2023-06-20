@@ -50,7 +50,7 @@
 
 #define HASHTABLES_SPACE    ((1UL << 25) / (DDR_WORD / 8))
 #define GRAPHS_SPACE        5000000
-#define BLOOM_SPACE         (1UL << 23)
+#define BLOOM_SPACE         (1UL << 25)
 #define RESULTS_SPACE		(DYN_FIFO_BURST * (1UL << 17))
 // #define HTB_SIZE            (1UL << (HASH_WIDTH_FIRST + HASH_WIDTH_SECOND - (DDR_BIT - COUNTER_WIDTH)))
 
@@ -65,7 +65,7 @@
 #define COUNT_ONLY          1
 #define UNDIRECTED          1
 #define DEBUG_INTERFACE     1
-#define SOFTWARE_PREPROC    1
+#define SOFTWARE_PREPROC    0
 #define CACHE_ENABLE        1
 
 #ifndef __SYNTHESIS__

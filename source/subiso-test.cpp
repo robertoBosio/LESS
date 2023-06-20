@@ -217,7 +217,7 @@ int main()
         if (!edge_buf)
             return -1;
 
-        for (unsigned char h1 = 12; h1 < 13; h1++){
+        for (unsigned char h1 = 11; h1 < 12; h1++){
             for (unsigned char h2 = 7; h2 < 8; h2++){
 #if SOFTWARE_PREPROC 
                 QueryVertex qVertices0[MAX_QUERY_VERTICES]; 

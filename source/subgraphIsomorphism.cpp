@@ -13,7 +13,6 @@
 #include <ap_axi_sdata.h>
 #include "hls_task.h"
 #include "hls_print.h"
-
 #include "Parameters.hpp"
 #include "QueryVertex.hpp"
 #include "Trie.hpp"
@@ -59,6 +58,12 @@ typedef cache< ap_uint<DDR_W>, true, false, 1,
 
 
 /******** Tuple definition ********/
+enum edge_flag{
+    MIN_SET = 1,
+    NO_EDGE = 2,
+    CHECK   = 0
+};
+
 typedef struct {
     ap_uint<V_ID_W>         indexing_v;
     unsigned char           tb_index;
@@ -77,19 +82,19 @@ typedef struct {
     unsigned char           tb_index;
     ap_uint<PROPOSE_BATCH_LOG> pos;
     bool                    bit_last_edge;
-    bool                    bit_min_set;
+    edge_flag               flag;
 } intersect_tuple_t;
 
 typedef struct {
     ap_uint<V_ID_W>         indexing_v;
     ap_uint<V_ID_W>         indexed_v;
     unsigned char           tb_index;
-    ap_uint<PROPOSE_BATCH_LOG> pos;
+    unsigned int            first_block;
+    unsigned int            end_block;
     ap_uint<(1UL << C_W)>   start_off;
-    unsigned short          n_edges;
+    ap_uint<PROPOSE_BATCH_LOG> pos;
     bool                    bit_last_edge;
-    bool                    bit_min_set;
-    bool                    bit_no_edge;
+    edge_flag               flag;
 } split_tuple_t;
 
 typedef struct {
@@ -100,8 +105,7 @@ typedef struct {
     ap_uint<(1UL << C_W)>   address;
     bool                    bit_last_address;
     bool                    bit_last_edge;
-    bool                    bit_min_set;
-    bool                    bit_no_edge;
+    edge_flag               flag;
 } verify_tuple_t;
 
 typedef struct {
@@ -635,14 +639,14 @@ TUPLEBUILD_COPYING_EMBEDDING_LOOP:
             if (cycles > 0){
                 uint8_t tableIndex = qVertices[curQV].tables_indexed[0];
                 uint8_t ivPos = qVertices[curQV].vertex_indexing[0];
-                bool bit_min = (tuple_in.tb_index != tableIndex || 
-                        tuple_in.iv_pos != ivPos);
+                bool bit_min = (tuple_in.tb_index == tableIndex && 
+                        tuple_in.iv_pos == ivPos);
 
                 last = stream_set_end_in.read();
 
 TUPLEBUILD_MAIN_LOOP_FIRST_IT:
                 while(!last){
-#pragma HLS pipeline II=1 
+#pragma HLS pipeline II=1
                     vToVerify = stream_set_in.read();
                      
                     hash_in0.write(vToVerify);
@@ -660,19 +664,14 @@ TUPLEBUILD_MAIN_LOOP_FIRST_IT:
                     tuple_out.tb_index = tableIndex;
                     tuple_out.pos = buffer_size;
                     tuple_out.bit_last_edge = (qVertices[curQV].numTablesIndexed == 1);
-                    tuple_out.bit_min_set = bit_min;
+                    tuple_out.flag = (bit_min)? MIN_SET: CHECK;
 
                     stream_tuple_out.write(tuple_out);
                     stream_tuple_end_out.write(false);
-/* std::cout << "( " */
-/* << tuple_out.indexing_v */
-/* << ", " << tuple_out.indexed_v */
-/* << ", " << tuple_out.indexing_h */
-/* << ", " << tuple_out.indexed_h */
-/* << ", " << (int)tuple_out.tb_index */
-/* << ", " << tuple_out.pos */
-/* << ", " << tuple_out.bit_last_edge */
-/* << ", " << tuple_out.bit_min_set << ")" << std::endl; */
+                    
+                    // tuple_out.addr_counter = (addr_counter > 0)? (addr_counter - 1): ~0; 
+                    // stream_tuple_out.write(tuple_out);
+                    // stream_tuple_end_out.write(false);
 
                     buffer[buffer_size++] = vToVerify;
                     last = stream_set_end_in.read();
@@ -681,17 +680,17 @@ TUPLEBUILD_MAIN_LOOP_FIRST_IT:
 
 TUPLEBUILD_EDGE_LOOP_AFTER_IT:
             for (int g = 0; g < cycles - 1; g++){
+#pragma HLS pipeline II=2
                 uint8_t tableIndex = qVertices[curQV].tables_indexed[g + 1];
                 uint8_t ivPos = qVertices[curQV].vertex_indexing[g + 1];
                 bool bit_last = (g == cycles - 2);
-                bool bit_min = (tuple_in.tb_index != tableIndex || 
-                        tuple_in.iv_pos != ivPos);
+                bool bit_min = (tuple_in.tb_index == tableIndex && 
+                        tuple_in.iv_pos == ivPos);
 
-TUPLEBUILD_MAIN_LOOP:
                 for (int buffer_p = 0; buffer_p < buffer_size; buffer_p++){
-#pragma HLS pipeline II=1 
+#pragma HLS loop_flatten
                     vToVerify = buffer[buffer_p];
-                    
+
                     hash_in0.write(vToVerify);
                     hash_in1.write(curEmb[ivPos]);
                     xf::database::hashLookup3<V_ID_W>(hash_in0, hash_out0);
@@ -707,20 +706,23 @@ TUPLEBUILD_MAIN_LOOP:
                     tuple_out.tb_index = tableIndex;
                     tuple_out.pos = buffer_p;
                     tuple_out.bit_last_edge = bit_last;
-                    tuple_out.bit_min_set = bit_min;
+                    tuple_out.flag = (bit_min)? MIN_SET: CHECK;
                     
                     stream_tuple_out.write(tuple_out);
                     stream_tuple_end_out.write(false);
-                
-/* std::cout << "( " */
-/* << tuple_out.indexing_v */
-/* << ", " << tuple_out.indexed_v */
-/* << ", " << tuple_out.indexing_h */
-/* << ", " << tuple_out.indexed_h */
-/* << ", " << (int)tuple_out.tb_index */
-/* << ", " << tuple_out.pos */
-/* << ", " << tuple_out.bit_last_edge */
-/* << ", " << tuple_out.bit_min_set << ")" << std::endl; */
+                    
+                    // tuple_out.addr_counter = (addr_counter > 0)? (addr_counter - 1): ~0; 
+                    // stream_tuple_out.write(tuple_out);
+                    // stream_tuple_end_out.write(false);
+                    // std::cout << "( "
+                    //           << tuple_out.indexing_v
+                    //           << ", " << tuple_out.indexed_v
+                    //           << ", " << tuple_out.addr_counter
+                    //           << ", " << (int)tuple_out.tb_index
+                    //           << ", " << tuple_out.pos
+                    //           << ", " << tuple_out.bit_last_edge
+                    //           << ", " << tuple_out.bit_min_set << ")\n" << std::endl;
+
                 }
             }
             stream_tuple_end_out.write(true);
@@ -759,6 +761,8 @@ void mwj_intersect(
         hls::stream<split_tuple_t>     &stream_tuple_out,
         hls::stream<bool>              &stream_tuple_end_out)
 {
+    constexpr size_t EDGE_BLOCK = (CACHE_WORDS_PER_LINE + DDR_BIT - E_W);
+
     ap_uint<V_ID_W> indexing_v;
     intersect_tuple_t tuple_in;
     split_tuple_t tuple_out;
@@ -781,7 +785,7 @@ INTERSECT_TASK_LOOP:
                 tableIndex = tuple_in.tb_index;
                 addr_counter = tuple_in.addr_counter;
 
-                if (tuple_in.bit_min_set){
+                if (tuple_in.flag != MIN_SET){
                     
                     /* Compute address of row storing the counter */
                     addr_row = hTables[tableIndex].start_offset + 
@@ -810,16 +814,18 @@ INTERSECT_TASK_LOOP:
                     debug::intersect_reads += 2;
 #endif /* DEBUG_STATS */
                 }
-
+ 
                 tuple_out.indexed_v     = tuple_in.indexed_v;
                 tuple_out.indexing_v    = tuple_in.indexing_v;
-                tuple_out.tb_index      = tuple_in.tb_index;
                 tuple_out.pos           = tuple_in.pos;
-                tuple_out.start_off     = start_off;
-                tuple_out.n_edges       = end_off - start_off;
+                tuple_out.tb_index      = tuple_in.tb_index;
                 tuple_out.bit_last_edge = tuple_in.bit_last_edge;
-                tuple_out.bit_min_set   = tuple_in.bit_min_set;
-                tuple_out.bit_no_edge   = (start_off == end_off);
+                tuple_out.start_off     = start_off;
+                tuple_out.first_block   = start_off >> EDGE_BLOCK;
+                tuple_out.end_block     = (start_off == end_off)? (unsigned int)(end_off >> EDGE_BLOCK) : 
+                (unsigned int)((end_off - 1) >> EDGE_BLOCK);
+                tuple_out.flag          = (tuple_in.flag == MIN_SET) ? MIN_SET : 
+                ((start_off == end_off) ? NO_EDGE : CHECK);
 
 #if DEBUG_STATS
                 debug::intersect_filter += (start_off == end_off)? 1 : 0;
@@ -845,6 +851,82 @@ INTERSECT_TASK_LOOP:
     }
 }
 
+// template <size_t BATCH_SIZE_LOG>
+// void mwj_intersect(
+//         AdjHT                          *hTables,
+//         htb_cache_t                    &htb_buf,
+//         hls::stream<intersect_tuple_t> &stream_tuple_in,
+//         hls::stream<bool>              &stream_tuple_end_in,
+//         hls::stream<bool>              &stream_stop,
+
+//         hls::stream<split_tuple_t>     &stream_tuple_out,
+//         hls::stream<bool>              &stream_tuple_end_out)
+// {
+//     ap_uint<V_ID_W> indexing_v;
+//     intersect_tuple_t tuple_in;
+//     split_tuple_t tuple_out;
+//     unsigned char tableIndex;
+//     ap_uint<DDR_W> ram_row;
+//     unsigned long addr_row;
+//     unsigned long addr_inrow;
+//     ap_uint<64> addr_counter;
+//     bool stop, last;
+
+// INTERSECT_TASK_LOOP:
+//     while (1) {
+// #pragma HLS pipeline II=1
+//         if (stream_tuple_end_in.read_nb(last)){
+
+//             if (!last){
+//                 tuple_in = stream_tuple_in.read();
+//                 ap_uint<(1UL << C_W)> offset = 0;
+//                 tableIndex = tuple_in.tb_index;
+//                 addr_counter = tuple_in.addr_counter;
+
+//                 if (tuple_in.flag != MIN_SET && addr_counter != ~0){
+                    
+//                     /* Compute address of row storing the counter */
+//                     addr_row = hTables[tableIndex].start_offset + 
+//                         (addr_counter >> (DDR_BIT - C_W));
+
+//                     /* Compute address of data inside the row */
+//                     addr_inrow = addr_counter.range((DDR_BIT - C_W) - 1, 0);
+//                     ram_row = htb_buf.get(addr_row, 1);
+//                     offset = ram_row.range(((addr_inrow + 1) << C_W) - 1, 
+//                             addr_inrow << C_W);
+
+// #if DEBUG_STATS
+//                     debug::intersect_reads += 1;
+// #endif /* DEBUG_STATS */
+//                 }
+
+//                 tuple_out.indexed_v     = tuple_in.indexed_v;
+//                 tuple_out.indexing_v    = tuple_in.indexing_v;
+//                 tuple_out.tb_index      = tuple_in.tb_index;
+//                 tuple_out.pos           = tuple_in.pos;
+//                 tuple_out.offset        = offset;
+//                 tuple_out.bit_last_edge = tuple_in.bit_last_edge;
+//                 tuple_out.flag          = tuple_in.flag;
+
+//                 // std::cout << "( "
+//                 //           << tuple_out.indexing_v
+//                 //           << ", " << tuple_out.indexed_v
+//                 //           << ", " << (int)tuple_out.tb_index
+//                 //           << ", " << tuple_out.pos
+//                 //           << ", " << tuple_out.offset
+//                 //           << ", " << tuple_out.bit_last_edge
+//                 //           << ", " << tuple_out.bit_min_set << ")" << std::endl;
+//                 /* bits[pos] = bits[pos] & (start_off < end_off); */
+//                 stream_tuple_out.write(tuple_out);
+//             }
+//             stream_tuple_end_out.write(last);
+//         }
+
+//         if (stream_stop.read_nb(stop))
+//             break;
+//     }
+// }
+
 void mwj_split(
         hls::stream<split_tuple_t>  &stream_tuple_in,
         hls::stream<bool>           &stream_tuple_end_in,
@@ -856,41 +938,50 @@ void mwj_split(
     bool last;
     split_tuple_t tuple_in;
     verify_tuple_t tuple_out;
-    unsigned short n_edges;
+    // unsigned short n_edges;
+    // ap_uint<(1UL << C_W)> start_off, end_off;
 
     last = stream_tuple_end_in.read();
     if (!last){
         tuple_in = stream_tuple_in.read();
-        n_edges = (tuple_in.n_edges == 0) ? 1 : tuple_in.n_edges;
+        // end_off = tuple_in.offset;
+
+        // tuple_in = stream_tuple_in.read();
+        // last = stream_tuple_end_in.read();
+        // start_off = tuple_in.offset;
+        // n_edges = (start_off == end_off) ? 1 : (unsigned short)(end_off - start_off);
         
         tuple_out.indexing_v    = tuple_in.indexing_v;
         tuple_out.indexed_v     = tuple_in.indexed_v;
         tuple_out.tb_index      = tuple_in.tb_index;
         tuple_out.pos           = tuple_in.pos;
         tuple_out.bit_last_edge = tuple_in.bit_last_edge;
-        tuple_out.bit_min_set   = tuple_in.bit_min_set;
-        tuple_out.bit_no_edge   = tuple_in.bit_no_edge;
+        tuple_out.flag          = tuple_in.flag;
+        // tuple_out.flag = (tuple_in.flag == MIN_SET) ? MIN_SET : ((start_off == end_off) ? NO_EDGE : CHECK);
 
-        int first_block = tuple_in.start_off >> EDGE_BLOCK ;
-        int end_block = (tuple_in.start_off + n_edges - 1) >> EDGE_BLOCK;
+        // int first_block = start_off >> EDGE_BLOCK ;
+        // int end_block = (start_off + n_edges - 1) >> EDGE_BLOCK;
 SPLIT_MAIN_LOOP:
-        for (int s = 0; first_block <= end_block; first_block++, s += (1UL << EDGE_BLOCK)){
+        for (unsigned short s = 0;
+             tuple_in.first_block <= tuple_in.end_block;
+             tuple_in.first_block++, s += (1UL << EDGE_BLOCK))
+        {
 #pragma HLS pipeline II=1
             tuple_out.address = tuple_in.start_off + s;
-            tuple_out.bit_last_address = (first_block == end_block);
+            tuple_out.bit_last_address = (tuple_in.first_block == tuple_in.end_block);
             stream_tuple_out.write(tuple_out);
             stream_tuple_end_out.write(false);
 
-/* std::cout << "( " */
-/* << tuple_out.indexing_v */
-/* << ", " << tuple_out.indexed_v */
-/* << ", " << (int)tuple_out.tb_index */
-/* << ", " << tuple_out.pos */
-/* << ", " << tuple_out.address */
-/* << ", " << tuple_out.bit_last_address */
-/* << ", " << tuple_out.bit_last_edge */
-/* << ", " << tuple_out.bit_no_edge */
-/* << ", " << tuple_out.bit_min_set << ")" << std::endl; */
+            // std::cout << "( "
+            //           << tuple_out.indexing_v
+            //           << ", " << tuple_out.indexed_v
+            //           << ", " << (int)tuple_out.tb_index
+            //           << ", " << tuple_out.pos
+            //           << ", " << tuple_out.address
+            //           << ", " << tuple_out.bit_last_address
+            //           << ", " << tuple_out.bit_last_edge
+            //           << ", " << tuple_out.bit_no_edge
+            //           << ", " << tuple_out.bit_min_set << ")" << std::endl;
         }
     } else {
         stream_tuple_end_out.write(true);
@@ -928,9 +1019,9 @@ VERIFY_TASK_LOOP:
             if(!last){
                 tuple_in = stream_tuple_in.read();
                 candidate_v = tuple_in.indexed_v;
-                tuple_out.bit_equal = !tuple_in.bit_min_set && !tuple_in.bit_no_edge;
+                tuple_out.bit_equal = (tuple_in.flag == MIN_SET);
 
-                if (tuple_in.bit_min_set && !tuple_in.bit_no_edge){
+                if (tuple_in.flag == CHECK){
                     indexing_v = tuple_in.indexing_v;
                     tableIndex = tuple_in.tb_index;
 
