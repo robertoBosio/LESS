@@ -48,10 +48,10 @@
 #define DDR_BIT             7
 #define DDR_WORD            (1UL << DDR_BIT)
 
-#define HASHTABLES_SPACE    ((1UL << 25) / (DDR_WORD / 8))
-#define GRAPHS_SPACE        5000000
-#define BLOOM_SPACE         (1UL << 25)
-#define RESULTS_SPACE		(DYN_FIFO_BURST * (1UL << 17))
+#define HASHTABLES_SPACE    ((1UL << 26) / (DDR_WORD / 8))  //~ 67 MB
+#define GRAPHS_SPACE        (1UL << 23)                     //~ 8 million edges
+#define BLOOM_SPACE         ((1UL << 26) / (DDR_WORD / 8))  //~ 67 MB
+#define RESULTS_SPACE		(DYN_FIFO_BURST * (1UL << 17))  //~ 67 MB
 // #define HTB_SIZE            (1UL << (HASH_WIDTH_FIRST + HASH_WIDTH_SECOND - (DDR_BIT - COUNTER_WIDTH)))
 
 #define EDGE_ROW            (1UL << (DDR_BIT - EDGE_WIDTH))

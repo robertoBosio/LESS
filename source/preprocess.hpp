@@ -211,35 +211,43 @@ void counterToOffset(
         T_DDR *htb_buf)
 {
     const size_t CNT_ROW = 1UL << (ROW_LOG - CNT_LOG);
-    T_DDR row, row_new;
+    T_DDR row[32];
 
 COUNTER_TO_OFFSET_DDR_LOOP:
     for (unsigned int ntb = 0; ntb < numTables; ntb++){
         ap_uint<(1UL << CNT_LOG)> base_addr = 0;
         ap_uint<(1UL << CNT_LOG)> counter;
 
-COUNTER_TO_OFFSET_TABLE_LOOP:
-        for(unsigned int start = 0; start < htb_size; start++){
-            row = htb_buf[start + hTables[ntb].start_offset];
+COUNTER_TO_OFFSET_BLOCK:
+        for(unsigned int start = 0; start < htb_size ; start += 32){
+            
+            for (unsigned char g = 0; g < 32; g++)
+                row[g] = htb_buf[start + hTables[ntb].start_offset + g];
 
-COUNTER_TO_OFFSET_ROW_LOOP:
-            for (int g = 0; g < CNT_ROW; g++){
-#pragma HLS unroll
-                counter = row.range((1UL << CNT_LOG) - 1, 0);
-                row_new >>= (1UL << CNT_LOG);
-                row >>= (1UL << CNT_LOG);
 
-#if DEBUG_STATS
-                if (counter > debug::max_collisions) 
-                    debug::max_collisions = counter;
-                debug::hash_collisions += counter;
+            for (unsigned char g = 0; g < 32; g++){
+                unsigned int val0 = row[g](31, 0);
+                unsigned int val1 = row[g](63, 32);
+                unsigned int val2 = row[g](95, 64);
+                unsigned int val3 = row[g](127, 96);
+                unsigned int sum0 = val0;
+                unsigned int sum1 = val0 + val1;
+                unsigned int sum2 = val0 + val1 + val2;
+                unsigned int sum3 = val0 + val1 + val2 + val3;
+                row[g](31, 0) = base_addr;
+                row[g](63, 32) = base_addr + sum0;
+                row[g](95, 64) = base_addr + sum1;
+                row[g](127, 96) = base_addr + sum2;
+                base_addr += sum3;
+            }
+#if DEBUG_STAT
+            if (counter > debug::max_collisions)
+                debug::max_collisions = counter;
+            debug::hash_collisions += counter;
 #endif /* DEBUG_STATS */
 
-                row_new.range((CNT_ROW << CNT_LOG) - 1, (CNT_ROW - 1) << CNT_LOG) = base_addr;
-                base_addr += counter;
-            }
-
-            htb_buf[start + hTables[ntb].start_offset] = row_new;
+            for (unsigned char g = 0; g < 32; g++)
+                htb_buf[start + hTables[ntb].start_offset + g] = row[g];
         }
     }       
 }

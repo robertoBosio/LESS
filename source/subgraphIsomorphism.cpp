@@ -52,10 +52,9 @@ typedef cache< ap_uint<DDR_W>, true, false, 2,
         false, 1, AUTO, BRAM> htb_cache_t;
 
 typedef cache< ap_uint<DDR_W>, true, false, 1,
-        HASHTABLES_SPACE, 128, 1, (1UL << K_FUNCTIONS), false, 0, 0,
+        BLOOM_SPACE, 128, 1, (1UL << K_FUNCTIONS), false, 0, 0,
         false, 4, BRAM, AUTO> bloom_cache_t;
 #endif /* CACHE_ENABLE */
-
 
 /******** Tuple definition ********/
 enum edge_flag{
@@ -2185,31 +2184,31 @@ void subgraphIsomorphism(
     unsigned long localResult = 0;
 
     preprocess<row_t,
-        bloom_t,
-        EDGE_WIDTH,
-        COUNTER_WIDTH,
-        BLOOM_FILTER_WIDTH,
-        K_FUNCTIONS,
-        DDR_BIT,
-        VERTEX_WIDTH_BIT,
-        64,
-        LABEL_WIDTH,
-        DEFAULT_STREAM_DEPTH,
-        HASHTABLES_SPACE,
-        MAX_QUERY_VERTICES,
-        MAX_TABLES>(
-                edge_buf,
-                htb_buf0,
-                bloom_p,
-                qVertices0,
-                qVertices1,
-                hTables0,
-                hTables1,
-                numQueryVert,
-                numQueryEdges,
-                numDataEdges,
-                hash1_w,
-                hash2_w);
+               bloom_t,
+               EDGE_WIDTH,
+               COUNTER_WIDTH,
+               BLOOM_FILTER_WIDTH,
+               K_FUNCTIONS,
+               DDR_BIT,
+               VERTEX_WIDTH_BIT,
+               64,
+               LABEL_WIDTH,
+               DEFAULT_STREAM_DEPTH,
+               HASHTABLES_SPACE,
+               MAX_QUERY_VERTICES,
+               MAX_TABLES>(
+        edge_buf,
+        htb_buf0,
+        bloom_p,
+        qVertices0,
+        qVertices1,
+        hTables0,
+        hTables1,
+        numQueryVert,
+        numQueryEdges,
+        numDataEdges,
+        hash1_w,
+        hash2_w);
 
 #if DEBUG_INTERFACE
     ap_wait();
