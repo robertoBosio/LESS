@@ -78,7 +78,6 @@ def subiso(test, path):
     # Clocks.fclk0_mhz = 250
     #print(Clocks._instance.PL_SRC_PLL_CTRLS)
     #print(Clocks._instance.PL_CLK_CTRLS)
-    print(Clocks.fclk0_mhz)
 # FIFO = allocate(shape=(int(68000000/np.dtype(node_t).itemsize),), dtype=node_t)
 # BLOOM = allocate(shape=((1 << 25),), dtype=np.uint8)
 # MEM = allocate(shape=(int((1 << 26)/np.dtype(node_t).itemsize),), dtype=node_t)
@@ -123,6 +122,8 @@ def subiso(test, path):
         del datagraph_la
         
         for querytuple in test[data]:
+            Clocks._instance.PL_CLK_CTRLS[0].DIVISOR0=4
+            print(Clocks.fclk0_mhz)
 
             query = querytuple[0]
             
