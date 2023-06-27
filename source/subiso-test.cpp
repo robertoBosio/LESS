@@ -1,52 +1,91 @@
+#include "subgraphIsomorphism.hpp"
 #include <fstream>
 #include <iostream>
 #include <cstdio>
+#include <cassert>
 #include <unordered_map>
-#include <hls_stream.h>
+
 #include <ap_int.h>
-
-#include "subisoWrap.hpp"
+#include <hls_stream.h>
 #include "Parameters.hpp"
+#include "debug.hpp"
 
-void stream_query(
-		hls::stream<T_NODE> &stream_src,
-		hls::stream<T_NODE> &stream_dst,
-		hls::stream<T_LABEL> &stream_src_l,
-		hls::stream<T_LABEL> &stream_dst_l,
-        unsigned int &numQueryVertices)
+#if SOFTWARE_PREPROC
+#include "preprocess.hpp"
+#endif /* SOFTWARE_PREPROC */
+
+
+template <size_t NODE_W,
+         size_t LAB_W,
+         size_t GRAPH_SPACE>
+edge_t *load_graphs(
+        std::string queryfile,
+        std::string datafile,
+        unsigned short &numQueryVertices,
+        unsigned short &numQueryEdges,
+        unsigned long &numDataEdges)
 {
+    unsigned long numDataVertices;
+    unsigned long edge_buf_p = 0;
+    edge_t edge;
 
-    /* Query data structure */
-    unsigned int numQueryEdges = 0;       
+    /* Query file */
+    std::ifstream fQuery(queryfile);
+    std::ifstream fData(datafile);
+    
+    if (!fQuery.is_open() || !fData.is_open())
+        return (edge_t*)nullptr;
 
-    /* Query files */
-    std::ifstream fQueryOrd("data/queryOrder.txt");
-    std::ifstream fQuery("data/querygraph.csv");
     std::string fLine{};
+    std::unordered_map<unsigned long, unsigned long> vToLabelQuery;
+    std::unordered_map<unsigned long, unsigned long> vToLabelData;
 
-    std::unordered_map<unsigned long, unsigned long> vToLabel;
-
-    /* Store labels */
+    /* Read vertices and edges cardinality */
     std::getline(fQuery, fLine);
-    sscanf(fLine.c_str(), "%*c %u %u", &numQueryVertices, &numQueryEdges);	
+    sscanf(fLine.c_str(), "%*c %hu %hu", &numQueryVertices, &numQueryEdges);	
+    std::getline(fData, fLine);
+    sscanf(fLine.c_str(), "%*c %lu %lu", &numDataVertices, &numDataEdges);
+
+    std::cout << numQueryVertices << " " << numQueryEdges << std::endl;
+    std::cout << numDataVertices << " " << numDataEdges << std::endl;
+    assert(GRAPH_SPACE > numDataEdges + numQueryVertices + numQueryEdges);
+
+    edge_t *edge_buf = (edge_t*)malloc(GRAPH_SPACE * sizeof(edge_t));
+
+    if (!edge_buf)
+        return (edge_t*)nullptr;
+
+    /* Store query labels */
     for(int count = 0; count < numQueryVertices; count++){    
         unsigned long node_t, label_t;
         std::getline(fQuery, fLine);
         sscanf(fLine.c_str(), "%*c %lu %lu %*u", &node_t, &label_t);
-        vToLabel.insert(std::make_pair(node_t, label_t));
+        vToLabelQuery.insert(std::make_pair(node_t, label_t));
+    }
+    
+    /* Store data labels */
+    for(int count = 0; count < numDataVertices; count++){    
+        unsigned long node_t, label_t;
+        std::getline(fData, fLine);
+        sscanf(fLine.c_str(), "%*c %lu %lu %*u", &node_t, &label_t);
+        vToLabelData.insert(std::make_pair(node_t, label_t));
+    }
+    
+    /* Stream edges */
+    for(int count = 0; count < numDataEdges; count++){    
+        unsigned long nodesrc_t, nodedst_t;
+        std::getline(fData, fLine);
+        sscanf(fLine.c_str(), "%*c %lu %lu", &nodesrc_t, &nodedst_t);
+        edge.src = (nodesrc_t << LAB_W) | vToLabelData.at(nodesrc_t);
+        edge.dst = (nodedst_t << LAB_W) | vToLabelData.at(nodedst_t);
+        edge_buf[edge_buf_p++] = edge;
     }
 
-    /* Stream matching order */
+    /* Stream matching order 
+     * RIGHT NOW NUMERICAL ORDERD */
     for(int count = 0; count < numQueryVertices; count++){ 
-        unsigned long node_t;   
-        getline (fQueryOrd, fLine);
-        sscanf(fLine.c_str(), "%lu", &node_t);
-        ap_uint<VERTEX_WIDTH_BIT> node = node_t;
-
-		T_NODE nodesrcif;
-        nodesrcif.data = node;
-        nodesrcif.last = (count == (numQueryVertices - 1));
-        stream_src.write(nodesrcif);
+        edge.src = (ap_uint<NODE_W>)count;
+        edge_buf[edge_buf_p++] = edge;
     }
 
     /* Stream edges */
@@ -54,126 +93,17 @@ void stream_query(
         unsigned long nodesrc_t, nodedst_t;
         std::getline(fQuery, fLine);
         sscanf(fLine.c_str(), "%*c %lu %lu", &nodesrc_t, &nodedst_t);
-        ap_uint<VERTEX_WIDTH_BIT> nodesrc = nodesrc_t;
-        ap_uint<VERTEX_WIDTH_BIT> nodedst = nodedst_t;
-        ap_uint<LABEL_WIDTH> labelsrc = vToLabel.at(nodesrc_t);
-        ap_uint<LABEL_WIDTH> labeldst = vToLabel.at(nodedst_t);
-
-        T_LABEL labeldstif;
-		T_LABEL labelsrcif;
-		T_NODE nodedstif;
-		T_NODE nodesrcif;
-		labeldstif.data = labeldst;
-		labelsrcif.data = labelsrc;
-		nodedstif.data = nodedst;
-		nodesrcif.data = nodesrc;
-		nodesrcif.last = (count == (numQueryEdges - 1));
-
-		stream_dst_l.write(labeldstif);
-		stream_src_l.write(labelsrcif);
-		stream_dst.write(nodedstif);
-		stream_src.write(nodesrcif);
-    }
-
-    fQuery.close();
-    fQueryOrd.close();
-    //return numQueryVertices;
-}
-
-void stream_datagraph(
-		hls::stream<T_NODE> &stream_src,
-		hls::stream<T_NODE> &stream_dst,
-		hls::stream<T_LABEL> &stream_src_l,
-		hls::stream<T_LABEL> &stream_dst_l)
-{
-
-
-    unsigned long numDataVertices = 0;       
-    unsigned long numDataEdges = 0;       
-
-    /* Data graph files */
-    std::ifstream fData("data/datagraph.csv");
-    std::string fLine{};
-
-    std::unordered_map<unsigned long, unsigned long> vToLabel;
-
-    /* Store labels */
-    std::getline(fData, fLine);
-    sscanf(fLine.c_str(), "%*c %lu %lu", &numDataVertices, &numDataEdges);	
-    for(int count = 0; count < numDataVertices; count++){    
-        unsigned long node_t, label_t;
-        std::getline(fData, fLine);
-        sscanf(fLine.c_str(), "%*c %lu %lu %*u", &node_t, &label_t);
-        vToLabel.insert(std::make_pair(node_t, label_t));
-    }
-
-    /* Stream edges */
-    for(int count = 0; count < numDataEdges; count++){    
-        unsigned long nodesrc_t, nodedst_t;
-        std::getline(fData, fLine);
-        sscanf(fLine.c_str(), "%*c %lu %lu", &nodesrc_t, &nodedst_t);
-        ap_uint<VERTEX_WIDTH_BIT> nodesrc = nodesrc_t;
-        ap_uint<VERTEX_WIDTH_BIT> nodedst = nodedst_t;
-        ap_uint<LABEL_WIDTH> labelsrc = vToLabel.at(nodesrc_t);
-        ap_uint<LABEL_WIDTH> labeldst = vToLabel.at(nodedst_t);
-
-        T_LABEL labeldstif;
-		T_LABEL labelsrcif;
-		T_NODE nodedstif;
-		T_NODE nodesrcif;
-        labeldstif.data = labeldst;
-		labelsrcif.data = labelsrc;
-		nodedstif.data = nodedst;
-		nodesrcif.data = nodesrc;
-        nodesrcif.last = (count == (numDataEdges - 1));
-
-		stream_dst_l.write(labeldstif);
-		stream_src_l.write(labelsrcif);
-		stream_dst.write(nodedstif);
-		stream_src.write(nodesrcif);
-
-    }
-
-    /* Rewind the file for 2nd stream */
-    fData.clear();
-    fData.seekg(0);
-
-    /* Skip vertices section */
-    for(int count = 0; count < numDataVertices + 1; count++){    
-        std::getline(fData, fLine);
-    }
-
-    /* Stream edges 2nd time */
-    for(int count = 0; count < numDataEdges; count++){    
-        unsigned long nodesrc_t, nodedst_t;
-        std::getline(fData, fLine);
-        sscanf(fLine.c_str(), "%*c %lu %lu", &nodesrc_t, &nodedst_t);
-        ap_uint<VERTEX_WIDTH_BIT> nodesrc = nodesrc_t;
-        ap_uint<VERTEX_WIDTH_BIT> nodedst = nodedst_t;
-        ap_uint<LABEL_WIDTH> labelsrc = vToLabel.at(nodesrc_t);
-        ap_uint<LABEL_WIDTH> labeldst = vToLabel.at(nodedst_t);
-
-        T_LABEL labeldstif;
-		T_LABEL labelsrcif;
-		T_NODE nodedstif;
-		T_NODE nodesrcif;
-		labeldstif.data = labeldst;
-		labelsrcif.data = labelsrc;
-		nodedstif.data = nodedst;
-		nodesrcif.data = nodesrc;
-		nodesrcif.last = (count == (numDataEdges - 1));
-
-		stream_dst_l.write(labeldstif);
-		stream_src_l.write(labelsrcif);
-		stream_dst.write(nodedstif);
-		stream_src.write(nodesrcif);
+        edge.src = (nodesrc_t << LAB_W) | vToLabelQuery.at(nodesrc_t);
+        edge.dst = (nodedst_t << LAB_W) | vToLabelQuery.at(nodedst_t);
+        edge_buf[edge_buf_p++] = edge;
     }
 
     fData.close();
+    fQuery.close();
+    return edge_buf;
 }
 
 unsigned int subgraphIsomorphism_sw(){
-    
     std::ifstream fGolden("data/golden.txt");
     unsigned int nEmbedd = 0;
     std::string fLine{};
@@ -208,22 +138,32 @@ unsigned int countSol(
 
 int main()
 {
-    hls::stream<T_NODE> stream_src("src nodes");
-    hls::stream<T_NODE> stream_dst("dst nodes");
-    hls::stream<T_NODE> stream_out("result");
-    hls::stream<T_LABEL> stream_src_l("src labels");
-    hls::stream<T_LABEL> stream_dst_l("dst labels");
-
-#ifdef COUNT_ONLY
-        long unsigned int result;
+#if COUNT_ONLY
+    long unsigned int result;
 #else
     hls::stream<T_NODE> result("results");
 #endif
 
-    unsigned int nQV = 0;
-    unsigned int res_actual;
 
-    T_DDR *res_buf = (T_DDR*)malloc(RES_WIDTH * sizeof(T_DDR));
+#if DEBUG_INTERFACE
+    unsigned int debug_endpreprocess_s {0};
+#endif
+
+    // const unsigned char hash1_w = HASH_WIDTH_FIRST;
+    // const unsigned char hash2_w = HASH_WIDTH_SECOND;
+    const unsigned char hash1_w = 10;
+    const unsigned char hash2_w = 6;
+    const unsigned long htb_size = (1UL << (hash1_w + hash2_w - (DDR_BIT - COUNTER_WIDTH)));
+    unsigned short nQV = 0;
+    unsigned short nQE = 0;
+    unsigned long nDE = 0;
+    unsigned int res_actual;
+    unsigned int res_expected;
+    unsigned long diagnostic;
+    bool flag = true;
+
+
+    row_t *res_buf = (row_t*)malloc(RESULTS_SPACE * sizeof(row_t));
     
     if (!res_buf){
 		std::cout << "Allocation failed." << std::endl;
@@ -231,62 +171,147 @@ int main()
 	}
 
 
-    std::cout << "Allocated " << 
-        ((unsigned long)(DDR_WIDTH + RES_WIDTH) * DDR_WORD / 8 ) 
-        << " bytes." << std::endl;
-   
-    for (int g = 0; g < 1; g++){ 
-        
-        ap_uint<DDR_WORD> *htb_buf = (ap_uint<DDR_WORD>*)calloc(DDR_WIDTH, sizeof(ap_uint<DDR_WORD>));
-        if (!htb_buf){
+    std::cout << "Allocating " << 
+        (unsigned long)((HASHTABLES_SPACE + RESULTS_SPACE) * sizeof(row_t) +
+        BLOOM_SPACE * sizeof(bloom_t) +
+        GRAPHS_SPACE * sizeof(edge_t)) << " bytes." << std::endl;
+ 
+    std::ifstream fTest("data/test.csv");
+    std::string fLine{};
+    char datagraph_file[100], querygraph_file[100];
+    std::getline(fTest, fLine);
+
+    while (!fTest.eof())
+    {
+        if (fLine.c_str()[0] == '#')
+        {
+            std::getline(fTest, fLine);
+            continue;
+        }
+
+        row_t *htb_buf = (row_t *)calloc(HASHTABLES_SPACE, sizeof(row_t));
+        if (!htb_buf)
+        {
             std::cout << "Allocation failed." << std::endl;
             return -1;
         }
 
-        stream_query(
-                stream_src,
-                stream_dst,
-                stream_src_l,
-                stream_dst_l,
-                nQV);
+        bloom_t *bloom_p = (bloom_t *)calloc(BLOOM_SPACE, sizeof(bloom_t));
+        if (!bloom_p)
+        {
+            std::cout << "Allocation failed." << std::endl;
+            return -1;
+        }
+        sscanf(fLine.c_str(), "%s %s %u", datagraph_file, querygraph_file, &res_expected);
 
-        stream_datagraph(
-                stream_src,
-                stream_dst,
-                stream_src_l,
-                stream_dst_l);
-
-        subisoWrapper(
-                stream_src,
-                stream_dst,
-                stream_src_l,
-                stream_dst_l,
-                htb_buf,
-                res_buf,
-                result);
-       
-#ifndef COUNT_ONLY 
-        res_actual = countSol(
+        edge_t *edge_buf = load_graphs<
+            VERTEX_WIDTH_BIT,
+            LABEL_WIDTH,
+            GRAPHS_SPACE>(
+            std::string(querygraph_file),
+            std::string(datagraph_file),
             nQV,
-            result);
+            nQE,
+            nDE);
+
+        if (!edge_buf)
+            return -1;
+
+        for (unsigned char h1 = 11; h1 < 12; h1++){
+            for (unsigned char h2 = 7; h2 < 8; h2++){
+#if SOFTWARE_PREPROC 
+                QueryVertex qVertices0[MAX_QUERY_VERTICES]; 
+                QueryVertex qVertices1[MAX_QUERY_VERTICES];
+                AdjHT hTables0[MAX_TABLES];
+                AdjHT hTables1[MAX_TABLES];
+                
+                preprocess<row_t,
+                    bloom_t,
+                    EDGE_WIDTH,
+                    COUNTER_WIDTH,
+                    BLOOM_FILTER_WIDTH,
+                    K_FUNCTIONS,
+                    DDR_BIT,
+                    VERTEX_WIDTH_BIT,
+                    64,
+                    LABEL_WIDTH,
+                    DEFAULT_STREAM_DEPTH,
+                    HASHTABLES_SPACE,
+                    MAX_QUERY_VERTICES,
+                    MAX_TABLES>(
+                            edge_buf,
+                            htb_buf,
+                            bloom_p,
+                            qVertices0,
+                            qVertices1,
+                            hTables0,
+                            hTables1,
+                            nQV,
+                            nQE,
+                            nDE,
+                            h1,
+                            h2);
+
+                subgraphIsomorphism(
+                    htb_buf,
+                    htb_buf,
+                    htb_buf,
+                    bloom_p,
+                    res_buf,
+                    nQV,
+                    h1,
+                    h2,
+                    diagnostic,
+                    qVertices0,
+                    qVertices1,
+                    hTables0,
+                    hTables1,
+#if DEBUG_INTERFACE
+                    debug_endpreprocess_s,
+#endif
+                    result);
+                
 #else
-        res_actual = result;
+                subgraphIsomorphism(
+                    edge_buf,
+                    htb_buf,
+                    htb_buf,
+                    htb_buf,
+                    bloom_p,
+                    res_buf,
+                    nQV,
+                    nQE,
+                    nDE,
+                    h1,
+                    h2,
+                    diagnostic,
+#if DEBUG_INTERFACE
+                    debug_endpreprocess_s,
+#endif
+                    result);
+#endif /* SOFTWARE_PREPROC */
+
+#if !COUNT_ONLY
+                res_actual = countSol(
+                    nQV,
+                    result);
+#else
+                res_actual = result;
 #endif
 
-        free(htb_buf);
-    }
-    unsigned int res_expected = subgraphIsomorphism_sw();
+                std::cout << "Expected: " << res_expected << " actual: " << res_actual << std::endl;
+                flag &= (res_actual == res_expected);
+                std::getline(fTest, fLine);
+                for (int g = 0; g < HASHTABLES_SPACE; htb_buf[g++] = 0);
+                for (int g = 0; g < BLOOM_SPACE; bloom_p[g++] = 0);
 
-    for (int p = 0; p < 4; p++){
-        std::cout << "[";
-        for (int g = 0; g < 32; g++){
-            std::cout << res_buf[p].range(((g + 1) * 16) - 1, g * 16) << " ";
+            }
         }
-        std::cout << "]" << std::endl;
+        free(htb_buf);
+        free(bloom_p);
+        free(edge_buf);
     }
-    std::cout << "Expected: " << res_expected << ", Actual: " <<
-        res_actual << std::endl;
 
     free(res_buf);
-    return (res_actual != res_expected);
+    return !flag;
 }

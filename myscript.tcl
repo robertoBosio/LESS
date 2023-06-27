@@ -1,28 +1,26 @@
-open_project -reset subgraphiso
-#open_project subgraphiso
+set proj "subgraphiso-kria"
+set dir "source"
 
-add_files "source/dynfifo_utils.hpp"
-add_files "source/Parameters.hpp"
-add_files "source/Trie.hpp"
-add_files "source/QueryVertex.hpp"
-add_files "source/subgraphIsomorphism.hpp"
-add_files "source/subisoWrap.hpp"
-add_files "source/subisoWrap.cpp"
+open_project -reset $proj
 
-add_files "source/types.hpp"
-add_files "source/utils.hpp"
-add_files "source/hash_lookup3.hpp"
-
-add_files -tb "source/subiso-test.cpp data" -cflags "-Wno-unknown-pragmas" -csimflags "-Wno-unknown-pragmas"
+add_files "$dir/subgraphIsomorphism.cpp" -cflags "-I ./$dir"
+add_files -tb "$dir/subiso-test.cpp data dataset" -cflags "-Wno-attributes -Wno-unknown-pragmas" -csimflags "-Wno-unknown-pragmas"
 
 set_top subgraphIsomorphism
 
 open_solution "solution1" -flow_target vivado
-set_part {xczu3eg-sbva484-1-e}
-create_clock -period 5 -name default
+config_array_partition -complete_threshold 1
+config_interface -m_axi_latency=1
+# set_part {xczu3eg-sbva484-1-e}
+set_part {xck26-sfvc784-2LV-c}
+# set_part {xczu5eg-sfvc784-1-i}
+create_clock -period 300MHz -name default
 #source "./solution1/directives.tcl"
 #csim_design -clean
+
 #csynth_design
-#cosim_design
+
 #cosim_design -user_stall stall_file.json -disable_deadlock_detection
+#cosim_design -tool xsim -trace_level port -rtl verilog -wave_debug -user_stall my_cosim_stall.json
+
 #export_design -format ip_catalog

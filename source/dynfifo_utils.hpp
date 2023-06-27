@@ -96,11 +96,16 @@ void MMU_fast(
     bool flagbuff_w {false};
     State_fast state {bypass};
 
+/* #ifndef __SYNTHESIS__ */
+/* std::this_thread::sleep_for(std::chrono::milliseconds(100)); */
+/* #endif */
+
     while(true) {
 #pragma HLS pipeline II=1 
         switch (state) {
-
+            
             case bypass: 
+
                 if (in_stream.read_nb(buff_w)){
                     if (!out_stream.write_nb(buff_w)){
                         /* Out stream full and input stream not empty */
@@ -109,6 +114,7 @@ void MMU_fast(
                         ddr_data = 1;
                     }
                 }
+
                 break;
 
             case stall:
@@ -202,18 +208,23 @@ template <typename DDR_WORD_T,
             size_t BURST_SIZE>
 void MMU_slow(
         DDR_WORD_T* mem,
+        unsigned long &diagnostic,
         hls::stream<DDR_WORD_T> &in_stream,
         hls::stream<DDR_WORD_T> &out_stream,
-        hls::stream<bool> &stop_req_stream)
+        hls::stream<bool> &stop_req_stream,
+        hls::stream<bool> &overflow_stream)
 {
 
     enum State_slow { bypass, stall, burst_read, burst_write, stall_ddr };
     unsigned int mem_tail {0};
     unsigned int mem_head {0};
+    unsigned long max_space {0};
+    unsigned long space_used {0};
     State_slow state {bypass};
 
+MMU_SLOW_TASK_LOOP:
     while(true) {
-#pragma HLS pipeline II=1 
+#pragma HLS pipeline II=32 
         switch (state) {
 
             case bypass: 
@@ -242,6 +253,13 @@ void MMU_slow(
                     mem[mem_head + g] = in_stream.read();
                 }
                 mem_head = (mem_head + BURST_SIZE) % DDR_WORDS;
+                space_used += BURST_SIZE;
+                if (space_used > max_space){
+                    max_space = space_used;
+                }
+                if (space_used > DDR_WORDS){
+                    overflow_stream.write(true);
+                }
                 state = stall_ddr;
                 break;
 
@@ -251,6 +269,7 @@ void MMU_slow(
                     out_stream.write(mem[mem_tail + g]);
                 }
                 mem_tail = (mem_tail + BURST_SIZE) % DDR_WORDS;
+                space_used -= BURST_SIZE;
                 state = (mem_head == mem_tail)? bypass: stall_ddr;
                 break;
 
@@ -266,8 +285,10 @@ void MMU_slow(
 
         bool req_s;
         if (stop_req_stream.read_nb(req_s)){
+            diagnostic = max_space;
             break;
         }
+
     }
 }
 
@@ -289,13 +310,17 @@ template<typename DATA_T,
     size_t BURST_SIZE,
     size_t DDR_WORDS>
 void dynfifo_init(
+        DDR_WORD_T mem[DDR_WORDS],
+        unsigned long &diagnostic,
         hls::stream<DATA_T> &in_stream,
         hls::stream<DATA_T> &out_stream,
         hls::stream<bool> &stop_req_stream_fast,
         hls::stream<bool> &stop_req_stream_slow,
-        DDR_WORD_T mem[DDR_WORDS]){
+        hls::stream<bool> &overflow)
+{
 
 #pragma HLS inline 
+#pragma HLS dataflow
     
     static_assert((DDR_WORDS % BURST_SIZE) == 0,
             "The number of ddr words must be a multiple of a burst transaction");
@@ -327,9 +352,11 @@ void dynfifo_init(
             DDR_WORDS,
             BURST_SIZE>(
             mem,
+            diagnostic,
             store_p_stream,
             load_p_stream,
-            stop_req_stream_slow);
+            stop_req_stream_slow,
+            overflow);
 
 #else
 
@@ -351,9 +378,11 @@ void dynfifo_init(
             DDR_WORDS,
             BURST_SIZE>,
             mem,
+            std::ref(diagnostic),
             std::ref(store_p_stream),
             std::ref(load_p_stream),
-            std::ref(stop_req_stream_slow));
+            std::ref(stop_req_stream_slow),
+            std::ref(overflow));
 
     mmu_fast_t.detach();
     mmu_slow_t.detach();
