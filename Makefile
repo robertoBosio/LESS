@@ -58,6 +58,12 @@ ifeq (,$(wildcard $(XILINX_VIVADO)/bin/vivado))
 	@echo "Cannot locate Vivado installation. Please set XILINX_VIVADO variable." && false
 endif
 
+.PHONY: check_hls
+check_hls:
+ifeq (,$(wildcard $(XILINX_HLS)/bin/vitis_hls))
+	@echo "Cannot locate Vitis_hls installation. Please set XILINX_HLS variable." && false
+endif
+
 export PATH := $(XILINX_VIVADO)/bin:$(PATH)
 
 # MK_INC_END vivado.mk
@@ -248,7 +254,7 @@ setup:
 	@echo "----"
 
 HLS ?= vitis_hls
-runhls: data setup
+runhls: data setup | check_hls
 	$(HLS) -f run_hls.tcl;
 
 runimpl: data setup runhls | check_vivado
