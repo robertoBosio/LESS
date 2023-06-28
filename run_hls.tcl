@@ -14,27 +14,32 @@ config_array_partition -complete_threshold 1
 config_interface -m_axi_latency=1
 # set_part {xczu3eg-sbva484-1-e}
 set_part $XPART
-create_clock -period 300MHz -name default
+create_clock -period 333MHz -name default
+set_clock_uncertainty 40%
 
 if {$CSIM == 1} {
-  csim_design
+    csim_design
 }
 
 if {$CSYNTH == 1} {
-  csynth_design
+    csynth_design
 }
 
 if {$COSIM == 1} {
-  cosim_design
+    cosim_design
 }
 
-if {$VIVADO_SYN == 1} {
-  export_design -flow syn -rtl verilog
+if {$EXPORT == 1} {
+    export_design
 }
 
-if {$VIVADO_IMPL == 1} {
-  export_design -flow impl -rtl verilog
-}
+# if {$VIVADO_SYN == 1} {
+# export_design -flow syn -rtl verilog
+# }
+
+# if {$VIVADO_IMPL == 1} {
+# export_design -flow impl -rtl verilog
+# }
 
 exit
 

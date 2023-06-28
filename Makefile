@@ -29,7 +29,8 @@ help::
 	@echo "  make run CSIM=1 CSYNTH=1 COSIM=1 DEVICE=<FPGA platform> PLATFORM_REPO_PATHS=<path to platform directories>"
 	@echo "      Command to run the selected tasks for specified device."
 	@echo ""
-	@echo "      Valid tasks are CSIM, CSYNTH, COSIM, VIVADO_SYN, VIVADO_IMPL"
+# @echo "      Valid tasks are CSIM, CSYNTH, COSIM, VIVADO_SYN, VIVADO_IMPL"
+	@echo "      Valid tasks are CSIM, CSYNTH, COSIM, EXPORT, IMPL"
 	@echo ""
 	@echo "      DEVICE is case-insensitive and support awk regex."
 	@echo "      For example, \`make run DEVICE='u200.*xdma' COSIM=1\`"
@@ -190,6 +191,8 @@ CSYNTH ?= 0
 COSIM ?= 0
 VIVADO_SYN ?= 0
 VIVADO_IMPL ?= 0
+EXPORT ?= 0
+IMPL ?= 0
 QOR_CHECK ?= 0
 
 # at least RTL synthesis before check QoR
@@ -212,13 +215,21 @@ ifeq (1,$(COSIM))
 override CSYNTH := 1
 endif
 
+ifeq (1,$(EXPORT))
+override CSYNTH := 1
+endif
+
+ifeq (1,$(IMPL))
+override CSYNTH := 1
+override EXPORT := 1
+endif
+
 # From testbench.data_recipe of description.json
 data:
 	@true
 
-run: data setup runhls
+run: data setup runhls runimpl
 
-# setup: | check_part
 setup:
 	@rm -f ./settings.tcl
 	@if [ -n "$$CLKP" ]; then echo 'set CLKP $(CLKP)' >> ./settings.tcl ; fi
@@ -228,6 +239,7 @@ setup:
 	@echo 'set COSIM $(COSIM)' >> ./settings.tcl
 	@echo 'set VIVADO_SYN $(VIVADO_SYN)' >> ./settings.tcl
 	@echo 'set VIVADO_IMPL $(VIVADO_IMPL)' >> ./settings.tcl
+	@echo 'set EXPORT $(EXPORT)' >> ./settings.tcl
 	@echo 'set XF_PROJ_ROOT "$(XF_PROJ_ROOT)"' >> ./settings.tcl
 	@echo 'set CUR_DIR "$(CUR_DIR)"' >> ./settings.tcl
 	@echo "Configured: settings.tcl"
@@ -236,11 +248,14 @@ setup:
 	@echo "----"
 
 HLS ?= vitis_hls
-runhls: data setup | check_vivado check_vpp
+runhls: data setup
 	$(HLS) -f run_hls.tcl;
 
+runimpl: data setup runhls | check_vivado
+	vivado -mode tcl -source script_vivado.tcl
+
 clean:
-	rm -rf settings.tcl *_hls.log join_dut.prj
+	rm -rf settings.tcl *_hls.log vivado*.log vivado*.jou
 
 # Used by Jenkins test
 cleanall: clean
