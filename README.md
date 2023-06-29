@@ -5,8 +5,7 @@
 
 ## Introduction
 
-Subgraph isomorphism (or subgraph matching) is a well-known NP-hard problem that consists of searching all the distinct embeddings of a query graph in a large data graph. It has a wide range of applica-
-tions, almost in all the domains in which graph patterns reveal valuable information, especially in social network analysis, chemical compound search, and computer-aided design.
+Subgraph isomorphism (or subgraph matching) is a well-known NP-hard problem that consists of searching all the distinct embeddings of a query graph in a large data graph. It has a wide range of applications, almost in all the domains in which graph patterns reveal valuable information, especially in social network analysis, chemical compound search, and computer-aided design.
 The project aims to shows a all-in-FPGA solution devolped using an High-Level Synthesis approach.
 
 ## Getting Started
@@ -48,7 +47,7 @@ Before running the project, ensure that you have the following prerequisites ins
    ```
 
 ### Input file format
-Both the input query graph and data graph are vertex-labeled. Each graph starts with 't N M' where N is the number of vertices and M is the number of edges. A vertex and an edge are formatted as 'v VertexID LabelId Degree' and 'e VertexId VertexId' respectively. The VertexId should start from 0 and be in the range [0,N - 1]. The following is a correct input sample. Other examples are stored under the folder dataset.
+Both the input query graph and data graph are vertex-labeled. Each graph starts with 't N M' where N is the number of vertices and M is the number of edges. A vertex and an edge are formatted as 'v VertexID LabelId Degree' and 'e VertexId VertexId' respectively. The VertexId should start from 0 and be in the range [0, N - 1]. The following is a correct input sample. Other examples are stored under the dataset folder.
 
 Example:
 ```bash
@@ -65,3 +64,4 @@ e 1 3
 e 2 4
 e 3 4
 ```
+
