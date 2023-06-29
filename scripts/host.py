@@ -46,13 +46,11 @@ def subiso(test, path):
     addr_mem0 = 0x1c
     addr_mem1 = 0x28
     addr_mem2 = 0x34
-# addr_mem3 = 0x40
     addr_bloom = 0x40
     addr_fifo = 0x4c
     addr_qv = 0x58
     addr_qe = 0x60
     addr_de = 0x68
-# addr_batch_size = 0x80
     addr_hash1_w = 0x74
     addr_hash2_w = 0x7c
     addr_dyn_fifo = 0x84
@@ -67,25 +65,13 @@ def subiso(test, path):
     edge_t = np.dtype([('src', node_t), 
                        ('dst', node_t)]) 
 
+    # Load the overlay
     ol = Overlay(path + "design_1.bit")
 
-# print(Clocks.fclk0_mhz)
-# Clocks._instance.PL_SRC_PLL_CTRLS[0].FBDIV=45
-# Clocks._instance.PL_SRC_PLL_CTRLS[0].DIV2=0
-# Clocks.fclk0_mhz = 500
-# Clocks._instance.PL_SRC_PLL_CTRLS[0].FBDIV=60
-    Clocks._instance.PL_CLK_CTRLS[0].DIVISOR0=4
-    # Clocks.fclk0_mhz = 250
-    #print(Clocks._instance.PL_SRC_PLL_CTRLS)
-    #print(Clocks._instance.PL_CLK_CTRLS)
-# FIFO = allocate(shape=(int(68000000/np.dtype(node_t).itemsize),), dtype=node_t)
-# BLOOM = allocate(shape=((1 << 25),), dtype=np.uint8)
-# MEM = allocate(shape=(int((1 << 26)/np.dtype(node_t).itemsize),), dtype=node_t)
+    # Allocate memory buffers
     FIFO = allocate(shape=(int(68000000/np.dtype(node_t).itemsize),), dtype=node_t)
     BLOOM = allocate(shape=((1 << 26),), dtype=np.uint8)
     MEM = allocate(shape=(int((1 << 25)/np.dtype(node_t).itemsize),), dtype=node_t)
-
-    fres = open(path + "results.txt", "a")
 
     for data in test.keys():
         datagraph = path + "data/" + data
@@ -122,8 +108,11 @@ def subiso(test, path):
         del datagraph_la
         
         for querytuple in test[data]:
+
+            # Force the clock at 250MHz given the PLL at 1GHz
+            # There is a discrepancy between the PLL set by Vivado
+            # and the real one on the KRIA
             Clocks._instance.PL_CLK_CTRLS[0].DIVISOR0=4
-            print(Clocks.fclk0_mhz)
 
             query = querytuple[0]
             
@@ -144,7 +133,6 @@ def subiso(test, path):
                 querygraph_la[int(node)] = int(label)
             
             # Streaming the query order
-            # order = [ 3, 4, 0, 1, 2]
             for x in range(querygraph_v):
                 GRAPH_SPACE[counter] = (int(x), 0)
                 counter = counter + 1
@@ -179,14 +167,13 @@ def subiso(test, path):
             BLOOM.flush()
             GRAPH_SPACE.flush()
             
-            hash1_w = int(querytuple[2])
-            hash2_w = int(querytuple[3])
+            hash1_w = 12
+            hash2_w = 5
     
             ol.subgraphIsomorphism_0.write(addr_graph, GRAPH_SPACE.device_address)
             ol.subgraphIsomorphism_0.write(addr_mem0, MEM.device_address)
             ol.subgraphIsomorphism_0.write(addr_mem1, MEM.device_address)
             ol.subgraphIsomorphism_0.write(addr_mem2, MEM.device_address)
-# ol.subgraphIsomorphism_0.write(addr_mem3, MEM.device_address)
             ol.subgraphIsomorphism_0.write(addr_bloom, BLOOM.device_address)
             ol.subgraphIsomorphism_0.write(addr_fifo, FIFO.device_address)
             ol.subgraphIsomorphism_0.write(addr_hash1_w, hash1_w)
@@ -194,8 +181,6 @@ def subiso(test, path):
             ol.subgraphIsomorphism_0.write(addr_qv, querygraph_v)
             ol.subgraphIsomorphism_0.write(addr_qe, querygraph_e)
             ol.subgraphIsomorphism_0.write(addr_de, datagraph_e)
-# ol.subgraphIsomorphism_0.write(addr_batch_size, 2)
-
            
             hashtable_spaceused = len(tablelist) * (2**hash1_w) * (2**hash2_w) * byte_counter
             hashtable_spaceused += datagraph_e * byte_edge
@@ -206,12 +191,6 @@ def subiso(test, path):
             mem_counter += MEM.nbytes
             mem_counter += BLOOM.nbytes
             mem_counter += GRAPH_SPACE.nbytes
-            
-            #Print useful information on memory occupation
-            print(data, querytuple, sep=" ", flush=True)
-            print(f"Allocated {(mem_counter / (2**20))} Mb. Hash tables" 
-                  f" use {((hashtable_spaceused / MEM.nbytes) * 100):.2f}%,"
-                  f" bloom use {((bloom_spaceused / BLOOM.nbytes) * 100):.2f}%.", flush=True)
 
             if (hashtable_spaceused <= MEM.nbytes and bloom_spaceused <= BLOOM.nbytes):
                 start = perf_counter()
@@ -222,13 +201,12 @@ def subiso(test, path):
                     pass
 
                 end_preprocess = perf_counter()
-                print(end_preprocess - start, flush=True)
                 checkpoint = end_preprocess
 
                 while (not (ol.subgraphIsomorphism_0.read(0x00) & 0x2)):
                     curr_time = perf_counter()
                     if (curr_time - end_preprocess) > time_limit:
-                        print("Failed", flush=True)
+                        print("Failed.", flush=True)
                         ol.subgraphIsomorphism_0.write(0x00, 0)
                         break
                     else:
@@ -248,103 +226,34 @@ def subiso(test, path):
                 if (tot_time > time_limit):
                     tot_time = "failed"
 
-                print(f"{os.path.basename(querygraph)}"
-                      f" {os.path.basename(datagraph)}"
-                      f" h1: {hash1_w} h2: {hash2_w}",
-                      file=fres)
-                print(ol.subgraphIsomorphism_0.read(addr_dyn_fifo), file=fres)
-
-    # frame = recorder.frame[recorder.frame['Mark'] == 0]
-    # power = frame["5V_power"].mean()
-    # energy = power * exec_time
-
                 if c == int(querytuple[1]):
-                    print("OK, solutions: ", c, sep="", flush=True)
-                    print(f"{pre_time:.4f}", 
-                          f"{tot_time:.4f}   OK\n",
-                          sep='\n',
-                          file=fres)
+                    print(f"OK: expected {querytuple[1]}, \tfound: {c}", flush=True)
                 else:
-                    print("***** NO *****, expected: ", 
-                          querytuple[1], "\tactual: ", c, sep="",  flush=True)
-                    print(f"{pre_time:.4f}", 
-                          f"{tot_time:.4f} **NO**\n",
-                          sep='\n',
-                          file=fres)
+                    print(f"***** NO *****, expected {querytuple[1]}, \tfound {c}",flush=True)
                 
                 ol.download()
             else :
                 print("Skipped due to memory overflow.", flush=True)
 
-# nfile += 1
-# np.save("/home/ubuntu/" + str(nfile) + ".csv", MEM)
-# print("tot time: " + str(np.mean(tot_time_arr)) +
-# "+-" + str(np.std(tot_time_arr)) + " s", file=fq)
-# print("pre time: " + str(np.mean(pre_time_arr)) +
-# "+-" + str(np.std(pre_time_arr)) + " s", file=fq)
-# print("power: " + str(np.avg(power_arr)) + "+-" + str(np.std(power_arr)) +
-# " (energy: " + str(np.avg(energy_arr)) +
-# "+- " + str(np.std(energy_arr)) + ")")
-# print(FIFO[4194254:4194354], file=fq)
-    
-    print(f"Total test time: {tot_time_bench:.4f}", file=fres)
-    fres.close()
     del FIFO, GRAPH_SPACE, MEM, BLOOM
 
 if __name__ == "__main__":
     args = parse_args()
     test = {}
     prev_datagraph = ""
-    testfile = open(args.path + "test.txt", "r")
+    testfile = open(args.path + "run_list.txt", "r")
 
     for line in testfile:
         if not(line.startswith("#")):
-            datagraph, querygraph, golden, h1, h2 = line.split()
+            datagraph, querygraph, golden = line.split()
+            datagraph = os.path.basename(datagraph)
+            querygraph = os.path.basename(querygraph)
             if (datagraph == prev_datagraph):
-                test[datagraph].append((querygraph, golden, h1, h2))
+                test[datagraph].append((querygraph, golden))
             else:
-                test[datagraph] = [(querygraph, golden, h1, h2)]
+                test[datagraph] = [(querygraph, golden)]
             prev_datagraph = datagraph
     testfile.close()
     
     subiso(test, args.path)
     
-    # Allocating space for streams. #
-# SRC_EDG_D = allocate(shape=(datagraph_e,), dtype=node_t)
-# DST_EDG_D = allocate(shape=(datagraph_e,), dtype=node_t)
-# SRC_EDG_D_L = allocate(shape=(datagraph_e,), dtype=label_t)
-# DST_EDG_D_L = allocate(shape=(datagraph_e,), dtype=label_t)
-    # Allocating space for streams. #
-# SRC_ORD = allocate(shape=(querygraph_v,), dtype=node_t)
-# SRC_EDG_Q = allocate(shape=(querygraph_e,), dtype=node_t)
-# DST_EDG_Q = allocate(shape=(querygraph_e,), dtype=node_t)
-# SRC_EDG_Q_L = allocate(shape=(querygraph_e,), dtype=label_t)
-# DST_EDG_Q_L = allocate(shape=(querygraph_e,), dtype=label_t)
-
-        #First transaction query vertex order
-# ol.axi_dma_0.sendchannel.transfer(SRC_ORD)
-# ol.axi_dma_0.sendchannel.wait()
-
-# Second transaction query edges
-# ol.axi_dma_3.sendchannel.transfer(DST_EDG_Q_L)
-# ol.axi_dma_2.sendchannel.transfer(SRC_EDG_Q_L)
-# ol.axi_dma_1.sendchannel.transfer(DST_EDG_Q)
-# ol.axi_dma_0.sendchannel.transfer(SRC_EDG_Q)
-# ol.axi_dma_0.sendchannel.wait()
-
-# Third transaction data edges
-# ol.axi_dma_3.sendchannel.transfer(DST_EDG_D_L)
-# ol.axi_dma_2.sendchannel.transfer(SRC_EDG_D_L)
-# ol.axi_dma_1.sendchannel.transfer(DST_EDG_D)
-# ol.axi_dma_0.sendchannel.transfer(SRC_EDG_D)
-# ol.axi_dma_0.sendchannel.wait()
-
-# Fourth transaction data edges
-# ol.axi_dma_3.sendchannel.transfer(DST_EDG_D_L)
-# ol.axi_dma_2.sendchannel.transfer(SRC_EDG_D_L)
-# ol.axi_dma_1.sendchannel.transfer(DST_EDG_D)
-# ol.axi_dma_0.sendchannel.transfer(SRC_EDG_D)
-# ol.axi_dma_0.sendchannel.wait()
-
-        #while (not (ol.subgraphIsomorphism_0.read(0x00) & 0x2)):
-        #    pass

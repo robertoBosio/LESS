@@ -1,6 +1,7 @@
 # Subgraph isomorphism acceleration on FPGAs using High-Level Synthesis 
 
 [![vitis_hls](https://img.shields.io/badge/vitis--hls-2022.2-blue)](https://docs.xilinx.com/r/2022.2-English/ug1399-vitis-hls/Introduction)
+[![vivado](https://img.shields.io/badge/vivado-2022.2-blue)](https://docs.xilinx.com/r/en-US/ug901-vivado-synthesis/Vivado-Documentation)
 [![license](https://img.shields.io/badge/license-BSD--3--Clause%20-blue)](https://github.com/robertoBosio/subgraph-iso/blob/master/LICENSE)
 
 ## Introduction
@@ -18,7 +19,7 @@ Before running the project, ensure that you have the following prerequisites ins
 
 - Vivado 2022.2, with KRIA™ KV26 board files installed.
 - Vitis HLS 2022.2
-- Pynq installed on KRIA™ KV26.
+- Pynq and NumPy installed on KRIA™ KV26.
 
 ### Installation
 
@@ -65,3 +66,29 @@ e 2 4
 e 3 4
 ```
 
+### Run
+
+1. To search a query inside a graph add an entry formatted as '/path/to/datagraph /path/to/query #solutions' in the file run_list.txt which is located under the scripts  directory.
+
+    Example:
+    ```bash
+    ../dataset/graphs/email-Enron.csv ../dataset/queries/query0.csv 38152
+    ```
+
+2. Change the KRIA's IP address in the file script_load.sh under the scripts directory.
+
+    ```bash
+        user=root
+        path=/home/ubuntu
+    ->  ip=192.168.99.170
+    ```
+3. Make the script executable by running:
+    ```bash
+    chmod +x script_load.sh
+    ```
+4. Launch the script by running:
+    ```bash
+    ./script_load.sh
+    ```
+The script will start by gathering all the file necessary for the run, will copy them in the path "/home/ubuntu" and then execute the host.py script which will start the kernel.
+At the end of the run it will remove all the files copied and upload the fan speed controller on the FPGA. The password for the root account will be asked three times.
