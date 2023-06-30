@@ -74,9 +74,10 @@
 #define DEBUG_STATS         0
 #endif /*__SYNTHESIS__*/
 
-typedef struct {
+struct alignas(8) edge_struct{
     ap_uint<VERTEX_WIDTH_BIT> src, dst;
-} edge_t;
+};
+typedef struct edge_struct edge_t;
 
 typedef ap_axiu<VERTEX_WIDTH_BIT, 0, 0, 0> T_NODE;
 typedef ap_axiu<LABEL_WIDTH, 0, 0, 0> T_LABEL;

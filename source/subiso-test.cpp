@@ -3,6 +3,7 @@
 #include <iostream>
 #include <cstdio>
 #include <cassert>
+#include <unistd.h>
 #include <unordered_map>
 
 #include <ap_int.h>
@@ -27,14 +28,17 @@ edge_t *load_graphs(
 {
     unsigned long numDataVertices;
     unsigned long edge_buf_p = 0;
-    edge_t edge;
+    edge_struct_t edge;
 
+    std::cout << queryfile << " : " << datafile << std::endl;
     /* Query file */
     std::ifstream fQuery(queryfile);
     std::ifstream fData(datafile);
     
-    if (!fQuery.is_open() || !fData.is_open())
+    if (!fQuery.is_open() || !fData.is_open()){
+        std::cout << "Datagraph or query files opening failed.\n";
         return (edge_t*)nullptr;
+    }
 
     std::string fLine{};
     std::unordered_map<unsigned long, unsigned long> vToLabelQuery;
@@ -78,14 +82,14 @@ edge_t *load_graphs(
         sscanf(fLine.c_str(), "%*c %lu %lu", &nodesrc_t, &nodedst_t);
         edge.src = (nodesrc_t << LAB_W) | vToLabelData.at(nodesrc_t);
         edge.dst = (nodedst_t << LAB_W) | vToLabelData.at(nodedst_t);
-        edge_buf[edge_buf_p++] = edge;
+        edge_buf[edge_buf_p++] = *((edge_t*)&edge);
     }
 
     /* Stream matching order 
      * RIGHT NOW NUMERICAL ORDERD */
     for(int count = 0; count < numQueryVertices; count++){ 
         edge.src = (ap_uint<NODE_W>)count;
-        edge_buf[edge_buf_p++] = edge;
+        edge_buf[edge_buf_p++] = *((edge_t*)&edge);
     }
 
     /* Stream edges */
@@ -95,7 +99,7 @@ edge_t *load_graphs(
         sscanf(fLine.c_str(), "%*c %lu %lu", &nodesrc_t, &nodedst_t);
         edge.src = (nodesrc_t << LAB_W) | vToLabelQuery.at(nodesrc_t);
         edge.dst = (nodedst_t << LAB_W) | vToLabelQuery.at(nodedst_t);
-        edge_buf[edge_buf_p++] = edge;
+        edge_buf[edge_buf_p++] = *((edge_t*)&edge);
     }
 
     fData.close();
@@ -162,6 +166,9 @@ int main()
     unsigned long diagnostic;
     bool flag = true;
 
+    char cwd[100];
+    if (getcwd(cwd, sizeof(cwd)) != NULL)
+        std::cout << "Current working dir: " << cwd << std::endl;
 
     row_t *res_buf = (row_t*)malloc(RESULTS_SPACE * sizeof(row_t));
     
@@ -170,17 +177,22 @@ int main()
 		return -1;
 	}
 
-
     std::cout << "Allocating " << 
         (unsigned long)((HASHTABLES_SPACE + RESULTS_SPACE) * sizeof(row_t) +
         BLOOM_SPACE * sizeof(bloom_t) +
         GRAPHS_SPACE * sizeof(edge_t)) << " bytes." << std::endl;
  
-    std::ifstream fTest("data/test.csv");
+    std::ifstream fTest("scripts/run_list.txt");
+    if (!fTest.is_open()){
+        std::cout << "Run_list file opening failed.\n";
+        return -1;
+    }
+
+
     std::string fLine{};
     char datagraph_file[100], querygraph_file[100];
     std::getline(fTest, fLine);
-
+    std::cout << fLine << std::endl;
     while (!fTest.eof())
     {
         if (fLine.c_str()[0] == '#')
@@ -214,8 +226,9 @@ int main()
             nQE,
             nDE);
 
-        if (!edge_buf)
+        if (!edge_buf){
             return -1;
+        }
 
         for (unsigned char h1 = 11; h1 < 12; h1++){
             for (unsigned char h2 = 7; h2 < 8; h2++){
