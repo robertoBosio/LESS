@@ -55,15 +55,15 @@ for file_path in "${!unique_paths[@]}"; do
 done
 
 # copy overlay directory to Kria
-# scp -r overlay ${user}@${ip}:${path}
-scp -r overlay kria170:${path}
+scp -r overlay ${user}@${ip}:${path}
+# scp -r overlay kria170:${path}
 
 # execute kernel
-# ssh ${user}@${ip} "source /etc/profile && python3 ${path}overlay/host.py ${path}overlay/"
-ssh kria170 "source /etc/profile && python3 ${path}overlay/host.py ${path}overlay/"
+ssh ${user}@${ip} "source /etc/profile && python3 ${path}overlay/host.py ${path}overlay/"
+# ssh kria170 "source /etc/profile && python3 ${path}overlay/host.py ${path}overlay/"
 
 # cleanup and reloading bitstream to control fan speed
-# ssh ${user}@${ip} "rm -r ${path}overlay && xmutil unloadapp k26-starter-kits && xmutil loadapp k26-starter-kits"
-ssh kria170 "rm -r ${path}overlay && xmutil unloadapp k26-starter-kits && xmutil loadapp k26-starter-kits"
+ssh ${user}@${ip} "rm -r ${path}overlay && xmutil unloadapp k26-starter-kits && xmutil loadapp k26-starter-kits"
+# ssh kria170 "rm -r ${path}overlay && xmutil unloadapp k26-starter-kits && xmutil loadapp k26-starter-kits"
 
 rm -r overlay
