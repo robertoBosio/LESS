@@ -27,6 +27,7 @@ Before running the project, ensure that you have the following prerequisites ins
 
    ```bash
    git clone https://github.com/robertoBosio/subgraph-iso.git
+   git checkout xohw23
    ```
 
 2. Navigate to the project directory:

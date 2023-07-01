@@ -43,7 +43,8 @@ set_property strategy Performance_ExplorePostRoutePhysOpt [get_runs impl_1]
 launch_runs impl_1 -jobs 8
 wait_on_runs impl_1
 
-exit
 #bitstream
 launch_runs impl_1 -to_step write_bitstream -jobs 8
 wait_on_runs impl_1
+
+exit
