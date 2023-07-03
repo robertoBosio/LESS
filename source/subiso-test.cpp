@@ -28,6 +28,7 @@ edge_t *load_graphs(
     unsigned long numDataVertices;
     unsigned long edge_buf_p = 0;
     edge_t edge;
+    chdir("scripts");
 
     /* Query file */
     std::ifstream fQuery(queryfile);
@@ -100,6 +101,7 @@ edge_t *load_graphs(
 
     fData.close();
     fQuery.close();
+    chdir("..");
     return edge_buf;
 }
 
@@ -176,7 +178,7 @@ int main()
         BLOOM_SPACE * sizeof(bloom_t) +
         GRAPHS_SPACE * sizeof(edge_t)) << " bytes." << std::endl;
  
-    std::ifstream fTest("data/test.csv");
+    std::ifstream fTest("scripts/run_list.txt");
     std::string fLine{};
     char datagraph_file[100], querygraph_file[100];
     std::getline(fTest, fLine);

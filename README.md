@@ -26,14 +26,14 @@ Before running the project, ensure that you have the following prerequisites ins
 1. Clone the repository:
 
    ```bash
-   git clone https://github.com/robertoBosio/subgraph-iso.git
-   git checkout xohw23
+   git clone --recurse-submodules https://github.com/robertoBosio/subgraph-iso.git
    ```
 
 2. Navigate to the project directory:
 
    ```bash
    cd subgraph-iso
+   git checkout xohw23
    ```
 
 3. Setup the paths:
@@ -68,6 +68,7 @@ e 3 4
 ```
 
 ### Run
+The connection to the KRIA must be done via ssh.
 
 1. To search a query inside a graph add an entry formatted as '/path/to/datagraph /path/to/query #solutions' in the file run_list.txt which is located under the scripts  directory.
 
@@ -91,5 +92,5 @@ e 3 4
     ```bash
     ./script_load.sh
     ```
-The script will start by gathering all the file necessary for the run, will copy them in the path "/home/ubuntu" and then execute the host.py script which will start the kernel.
+The script will start by gathering all the file necessary for the run (bitstream, host script, query files ecc...), will copy them in the path "/home/ubuntu" and then execute the host.py script which will start the kernel.
 At the end of the run it will remove all the files copied and upload the fan speed controller on the FPGA. The password for the root account will be asked three times.
