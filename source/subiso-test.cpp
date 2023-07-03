@@ -28,8 +28,8 @@ edge_t *load_graphs(
 {
     unsigned long numDataVertices;
     unsigned long edge_buf_p = 0;
-    edge_struct_t edge;
-
+    edge_t edge;
+    chdir("scripts");
     std::cout << queryfile << " : " << datafile << std::endl;
     /* Query file */
     std::ifstream fQuery(queryfile);
@@ -104,6 +104,7 @@ edge_t *load_graphs(
 
     fData.close();
     fQuery.close();
+    chdir("..");
     return edge_buf;
 }
 
@@ -181,7 +182,8 @@ int main()
         (unsigned long)((HASHTABLES_SPACE + RESULTS_SPACE) * sizeof(row_t) +
         BLOOM_SPACE * sizeof(bloom_t) +
         GRAPHS_SPACE * sizeof(edge_t)) << " bytes." << std::endl;
- 
+
+
     std::ifstream fTest("scripts/run_list.txt");
     if (!fTest.is_open()){
         std::cout << "Run_list file opening failed.\n";
