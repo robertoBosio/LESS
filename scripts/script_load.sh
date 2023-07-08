@@ -1,70 +1,72 @@
-if [ $# -lt 2 ]; then
-    echo "Provide the board used and the description of the test"
-    exit
-fi
+user="root"
+path="/home/ubuntu/"
+ip="192.168.99.170"
+device="kria170"
 
-if [ $1 = "kria" ]; then
-    user="ubuntu"
-    path="/home/ubuntu/"
-    ip="192.168.99.170"
-    device="kria170"
-elif [ $1 = "ultra96" ]; then
-    user="root"
-    path="/home/xilinx/"
-    ip="192.168.3.1"
-    device="${user}@${ip}"
-else
-    echo "board parameter must be kria or ultra96"
-    exit
-fi
-
-res_file=results_${1}_$(date +%m%d%H%M).csv
-#echo "exec_time_avg,exec_time_std,power_avg,power_std,energy_avg,energy_std" > ${res_file}
-
-#project=subiso_bd
-
+# ssh_string="${user}@${ip}"
+ssh_string="$device"
 if [ -d overlay ]; then
     rm overlay -r
 fi
 
+# Input file path
+input_file="run_list.txt"
+
+# Check if the input file exists
+if [ ! -f "$input_file" ]; then
+  echo "Input file $input_file does not exist."
+  exit 1
+fi
+
+# Read paths from input file into an array
+readarray -t lines < <(grep -v "^#" "$input_file")
+
+# Create a set to store unique paths
+declare -A unique_paths
+
+# Iterate over the lines and extract paths
+for line in "${lines[@]}"; do
+
+  # Remove leading/trailing whitespace from line
+  line=$(echo "$line" | awk '{$1=$1};1')
+
+  # Split the line into two paths
+  IFS=' ' read -ra paths <<< "$line"
+
+  # Iterate over the paths and add them to the set
+  for file_path in "${paths[@]}"; do
+
+    if [[ $file_path =~ ^[0-9]+$ ]]; then
+      continue
+    fi
+
+    # Add path to the set
+    unique_paths["$file_path"]=1
+  done
+done
+
+
 mkdir overlay
-cp ../subiso_bd_kria/subiso_bd_kria.runs/impl_1/design_1_wrapper.bit overlay/design_1.bit
-cp ../subiso_bd_kria/subiso_bd_kria.gen/sources_1/bd/design_1/hw_handoff/design_1.hwh overlay/design_1.hwh
-cp ./test.txt overlay/test.txt
+cp ../subiso_bd/subiso_bd.runs/impl_1/design_1_wrapper.bit overlay/design_1.bit
+cp ../subiso_bd/subiso_bd.gen/sources_1/bd/design_1/hw_handoff/design_1.hwh overlay/design_1.hwh
+cp ./run_list.txt overlay/test.txt
 cp ./host.py overlay/host.py
 
 mkdir overlay/data
-cp ../dataset/benchmark/labelled/email-EnronRM.csv overlay/data/
-cp ../dataset/benchmark/labelled/musae_githubRM.csv overlay/data/
-cp ../dataset/benchmark/labelled/musae_facebookRM.csv overlay/data/
-cp ../dataset/benchmark/labelled/twitter_combinedRM.csv overlay/data/
-# cp ../dataset/benchmark/labelled/simpleRM.csv overlay/data/
-# cp ../dataset/benchmark/labelled/dataEdges2RM.csv overlay/data/
-# cp ../dataset/benchmark/labelled/wiki_simpleRM.csv overlay/data/
-cp ../dataset/benchmark/queries/query0RM.csv overlay/data/
-cp ../dataset/benchmark/queries/query1RM.csv overlay/data/
-cp ../dataset/benchmark/queries/query2RM.csv overlay/data/
-cp ../dataset/benchmark/queries/query3RM.csv overlay/data/
-cp ../dataset/benchmark/queries/query4RM.csv overlay/data/
-cp ../dataset/benchmark/queries/query5RM.csv overlay/data/
+for file_path in "${!unique_paths[@]}"; do
+  cp "$file_path" overlay/data/
+done
 
-# upload bitstream to sdcard
-# scp -r overlay root@${ip}:/home/xilinx/
-scp -r overlay ${device}:${path}
+# copy overlay directory to Kria
+scp -r overlay ${ssh_string}:${path}
+# scp -r overlay kria170:${path}
 
 # execute kernel
-#cat ./host.py | ssh root@192.168.3.1 'python3 -'
-ssh ${device} "source /etc/profile && python3 ${path}overlay/host.py ${path}overlay/"
-#>> ${res_file}
+ssh ${ssh_string} "source /etc/profile && python3 ${path}overlay/host.py ${path}overlay/"
+# ssh kria170 "source /etc/profile && python3 ${path}overlay/host.py ${path}overlay/"
 
-# cleanup
-scp ${device}:${path}overlay/results.txt ./${res_file}
-echo $2 >> ./${res_file}
-
-if [ $1 = "kria" ]; then
-    ssh ${device} "rm -r ${path}overlay && xmutil unloadapp k26-starter-kits && xmutil loadapp k26-starter-kits"
-else
-    ssh ${device} "rm -r ${path}overlay"
-fi
+# cleanup and reloading bitstream to control fan speed
+ssh ${ssh_string} "rm -r ${path}overlay && xmutil unloadapp k26-starter-kits && xmutil loadapp k26-starter-kits"
+# ssh kria170 "rm -r ${path}overlay && xmutil unloadapp k26-starter-kits && xmutil loadapp k26-starter-kits"
 
 rm -r overlay

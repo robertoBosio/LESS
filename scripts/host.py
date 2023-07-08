@@ -9,6 +9,8 @@ import time
 import getopt
 import argparse
 import os.path
+import subprocess
+import re
 from time import perf_counter
 
 def parse_args():
@@ -233,6 +235,11 @@ def subiso(test, path):
                         break
                     else:
                         if (curr_time - checkpoint) > 10:
+                            output = subprocess.run(["xmutil", "platformstats"], 
+                                    stdout=subprocess.PIPE,
+                                    text=True)
+                            res = re.search("([0-9]+) mW", str(output))
+                            print(res)
                             print(ol.subgraphIsomorphism_0.read(addr_dyn_fifo), ", ", curr_time - end_preprocess, "s", sep="", flush=True)
                             checkpoint = curr_time
                         else :
@@ -300,6 +307,8 @@ if __name__ == "__main__":
     for line in testfile:
         if not(line.startswith("#")):
             datagraph, querygraph, golden, h1, h2 = line.split()
+            datagraph = os.path.basename(datagraph)
+            querygraph = os.path.basename(querygraph)
             if (datagraph == prev_datagraph):
                 test[datagraph].append((querygraph, golden, h1, h2))
             else:

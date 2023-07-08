@@ -261,7 +261,7 @@ runimpl: data setup runhls | check_vivado
 	vivado -mode tcl -source script_vivado.tcl
 
 clean:
-	rm -rf settings.tcl *_hls.log vivado*.log vivado*.jou
+	rm -rf settings.tcl *_hls.log vivado*.log vivado*.jou vivado*.str
 
 # Used by Jenkins test
 cleanall: clean

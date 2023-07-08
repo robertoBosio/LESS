@@ -48,7 +48,7 @@
 
 #if CACHE_ENABLE
 typedef cache< ap_uint<DDR_W>, true, false, 2,
-        HASHTABLES_SPACE, 1, 1, (1UL << CACHE_WORDS_PER_LINE), false, 128, 1,
+        HASHTABLES_SPACE, 1, 1, (1UL << CACHE_WORDS_PER_LINE), false, 512, 1,
         false, 1, AUTO, BRAM> htb_cache_t;
 
 typedef cache< ap_uint<DDR_W>, true, false, 1,
@@ -62,6 +62,7 @@ enum edge_flag{
     NO_EDGE = 2,
     CHECK   = 0
 };
+typedef ap_uint<2> edge_flag_type;
 
 typedef struct {
     ap_uint<V_ID_W>         indexing_v;
@@ -81,7 +82,7 @@ typedef struct {
     unsigned char           tb_index;
     ap_uint<PROPOSE_BATCH_LOG> pos;
     bool                    bit_last_edge;
-    edge_flag               flag;
+    edge_flag_type               flag;
 } intersect_tuple_t;
 
 typedef struct {
@@ -93,7 +94,7 @@ typedef struct {
     ap_uint<(1UL << C_W)>   start_off;
     ap_uint<PROPOSE_BATCH_LOG> pos;
     bool                    bit_last_edge;
-    edge_flag               flag;
+    edge_flag_type               flag;
 } split_tuple_t;
 
 typedef struct {
@@ -104,7 +105,7 @@ typedef struct {
     ap_uint<(1UL << C_W)>   address;
     bool                    bit_last_address;
     bool                    bit_last_edge;
-    edge_flag               flag;
+    edge_flag_type               flag;
 } verify_tuple_t;
 
 typedef struct {
@@ -2045,15 +2046,18 @@ void subgraphIsomorphism(
 {
 
 #pragma HLS INTERFACE mode=m_axi port=htb_buf0 bundle=prop_batch \
-    max_widen_bitwidth=128
+    max_widen_bitwidth=128 latency=20
 #pragma HLS INTERFACE mode=m_axi port=htb_buf1 bundle=cache \
-    max_widen_bitwidth=128 num_write_outstanding=1 max_write_burst_length=2
+    max_widen_bitwidth=128 num_write_outstanding=1 max_write_burst_length=2 \
+    latency=20
 #pragma HLS INTERFACE mode=m_axi port=htb_buf2 bundle=readmin \
-    max_widen_bitwidth=128 num_write_outstanding=1 max_write_burst_length=2
+    max_widen_bitwidth=128 num_write_outstanding=1 max_write_burst_length=2 \
+    latency=20
 #pragma HLS INTERFACE mode=m_axi port=res_buf bundle=fifo \
-    max_widen_bitwidth=128 max_read_burst_length=32 max_write_burst_length=32 
+    max_widen_bitwidth=128 max_read_burst_length=32 max_write_burst_length=32 \
+    latency=20
 #pragma HLS INTERFACE mode=m_axi port=bloom_p bundle=bloom \
-    max_widen_bitwidth=128
+    max_widen_bitwidth=128 latency=20
 
 #pragma HLS alias ports=htb_buf0,htb_buf1,htb_buf2 distance=0
 

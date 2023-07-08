@@ -29,8 +29,11 @@ edge_t *load_graphs(
     unsigned long numDataVertices;
     unsigned long edge_buf_p = 0;
     edge_t edge;
-    chdir("scripts");
-    std::cout << queryfile << " : " << datafile << std::endl;
+    
+    /* Remove "../" to make paths correct */
+    queryfile = queryfile.substr(3);
+    datafile = datafile.substr(3);
+    
     /* Query file */
     std::ifstream fQuery(queryfile);
     std::ifstream fData(datafile);
@@ -104,7 +107,6 @@ edge_t *load_graphs(
 
     fData.close();
     fQuery.close();
-    chdir("..");
     return edge_buf;
 }
 
@@ -189,7 +191,6 @@ int main()
         std::cout << "Run_list file opening failed.\n";
         return -1;
     }
-
 
     std::string fLine{};
     char datagraph_file[100], querygraph_file[100];
