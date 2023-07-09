@@ -85,7 +85,7 @@ def subiso(test, path):
 # MEM = allocate(shape=(int((1 << 26)/np.dtype(node_t).itemsize),), dtype=node_t)
     FIFO = allocate(shape=(int(68000000/np.dtype(node_t).itemsize),), dtype=node_t)
     BLOOM = allocate(shape=((1 << 26),), dtype=np.uint8)
-    MEM = allocate(shape=(int((1 << 25)/np.dtype(node_t).itemsize),), dtype=node_t)
+    MEM = allocate(shape=(int((1 << 26)/np.dtype(node_t).itemsize),), dtype=node_t)
 
     fres = open(path + "results.txt", "a")
 
@@ -227,7 +227,8 @@ def subiso(test, path):
                 print(end_preprocess - start, flush=True)
                 checkpoint = end_preprocess
 
-                while (not (ol.subgraphIsomorphism_0.read(0x00) & 0x2)):
+# while (not (ol.subgraphIsomorphism_0.read(0x00) & 0x2)):
+                while (not (ol.subgraphIsomorphism_0.read(addr_res_ctrl))):
                     curr_time = perf_counter()
                     if (curr_time - end_preprocess) > time_limit:
                         print("Failed", flush=True)
@@ -239,7 +240,7 @@ def subiso(test, path):
                                     stdout=subprocess.PIPE,
                                     text=True)
                             res = re.search("([0-9]+) mW", str(output))
-                            print(res)
+                            print(res.group(1))
                             print(ol.subgraphIsomorphism_0.read(addr_dyn_fifo), ", ", curr_time - end_preprocess, "s", sep="", flush=True)
                             checkpoint = curr_time
                         else :

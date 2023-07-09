@@ -2,6 +2,12 @@ user="root"
 path="/home/ubuntu/"
 ip="192.168.99.170"
 device="kria170"
+res_file=results_${1}_$(date +%m%d%H%M).csv
+
+if [ $# -lt 2 ]; then
+    echo "Provide the board used and the description of the test"
+    exit
+fi
 
 # ssh_string="${user}@${ip}"
 ssh_string="$device"
@@ -49,6 +55,8 @@ done
 mkdir overlay
 cp ../subiso_bd/subiso_bd.runs/impl_1/design_1_wrapper.bit overlay/design_1.bit
 cp ../subiso_bd/subiso_bd.gen/sources_1/bd/design_1/hw_handoff/design_1.hwh overlay/design_1.hwh
+# cp bitstream/design_1.bit overlay/design_1.bit
+# cp bitstream/design_1.hwh overlay/design_1.hwh
 cp ./run_list.txt overlay/test.txt
 cp ./host.py overlay/host.py
 
@@ -63,10 +71,12 @@ scp -r overlay ${ssh_string}:${path}
 
 # execute kernel
 ssh ${ssh_string} "source /etc/profile && python3 ${path}overlay/host.py ${path}overlay/"
-# ssh kria170 "source /etc/profile && python3 ${path}overlay/host.py ${path}overlay/"
+
+# copy result
+scp ${ssh_string}:${path}overlay/results.txt ./${res_file}
+echo $2 >> ./${res_file}
 
 # cleanup and reloading bitstream to control fan speed
 ssh ${ssh_string} "rm -r ${path}overlay && xmutil unloadapp k26-starter-kits && xmutil loadapp k26-starter-kits"
-# ssh kria170 "rm -r ${path}overlay && xmutil unloadapp k26-starter-kits && xmutil loadapp k26-starter-kits"
 
 rm -r overlay
