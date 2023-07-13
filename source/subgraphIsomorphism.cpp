@@ -1414,9 +1414,10 @@ PROPOSE_TBINDEXING_LOOP:
     unsigned int cnt = 0;
 
 PROPOSE_READ_MIN_INDEXING_LOOP:
-    for (unsigned int g = rowstart; g <= rowend; g++){
-        row_t row = htb_buf[g];
+    for (unsigned int g = 0; g <= rowend - rowstart; g++){
+        row_t row = htb_buf[rowstart + g];
         for (unsigned int i = 0; i < EDGE_ROW; i++, cnt++){
+#pragma HLS unroll
             if (cnt < window_right){
                 edge = row.range((1UL << E_W) - 1, 0);
                 vertex = edge.range(V_ID_W * 2 - 1, V_ID_W);
@@ -2161,7 +2162,7 @@ void subgraphIsomorphism(
     latency=20
 #pragma HLS INTERFACE mode=m_axi port=htb_buf2 bundle=readmin \
     max_widen_bitwidth=128 num_write_outstanding=1 max_write_burst_length=2 \
-    latency=20
+    latency=1
 #pragma HLS INTERFACE mode=m_axi port=res_buf bundle=fifo \
     max_widen_bitwidth=128 max_read_burst_length=32 max_write_burst_length=32 \
     latency=20
@@ -2253,20 +2254,20 @@ void subgraphIsomorphism(
 {
 
 #pragma HLS INTERFACE mode=m_axi port=htb_buf0 bundle=prop_batch \
-    max_widen_bitwidth=128 latency=20
+    max_widen_bitwidth=128 latency=1
 #pragma HLS INTERFACE mode=m_axi port=htb_buf1 bundle=cache \
     max_widen_bitwidth=128 num_write_outstanding=1 max_write_burst_length=2 \
-    latency=20
+    latency=1
 #pragma HLS INTERFACE mode=m_axi port=htb_buf2 bundle=readmin \
     max_widen_bitwidth=128 num_write_outstanding=1 max_write_burst_length=2 \
-    latency=20
+    latency=1
 #pragma HLS INTERFACE mode=m_axi port=res_buf bundle=fifo \
     max_widen_bitwidth=128 max_read_burst_length=32 max_write_burst_length=32 \
     latency=20
 #pragma HLS INTERFACE mode=m_axi port=bloom_p bundle=bloom \
     max_widen_bitwidth=128 latency=20
 #pragma HLS INTERFACE mode=m_axi port=edge_buf bundle=graph \
-    max_widen_bitwidth=128 latency=20
+    max_widen_bitwidth=128 latency=1
 
 #pragma HLS alias ports=htb_buf0,htb_buf1,htb_buf2 distance=0
 
