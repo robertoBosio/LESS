@@ -76,7 +76,7 @@ def subiso(test, path):
 # Clocks._instance.PL_SRC_PLL_CTRLS[0].DIV2=0
 # Clocks.fclk0_mhz = 500
 # Clocks._instance.PL_SRC_PLL_CTRLS[0].FBDIV=60
-    Clocks._instance.PL_CLK_CTRLS[0].DIVISOR0=4
+    Clocks._instance.PL_CLK_CTRLS[0].DIVISOR0=10
     # Clocks.fclk0_mhz = 250
     #print(Clocks._instance.PL_SRC_PLL_CTRLS)
     #print(Clocks._instance.PL_CLK_CTRLS)
@@ -124,7 +124,7 @@ def subiso(test, path):
         del datagraph_la
         
         for querytuple in test[data]:
-            Clocks._instance.PL_CLK_CTRLS[0].DIVISOR0=4
+            Clocks._instance.PL_CLK_CTRLS[0].DIVISOR0=10
             print(Clocks.fclk0_mhz)
 
             query = querytuple[0]

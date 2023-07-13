@@ -195,7 +195,6 @@ int main()
     std::string fLine{};
     char datagraph_file[100], querygraph_file[100];
     std::getline(fTest, fLine);
-    std::cout << fLine << std::endl;
     while (!fTest.eof())
     {
         if (fLine.c_str()[0] == '#')
@@ -233,8 +232,8 @@ int main()
             return -1;
         }
 
-        for (unsigned char h1 = 11; h1 < 12; h1++){
-            for (unsigned char h2 = 7; h2 < 8; h2++){
+        for (unsigned char h1 = 12; h1 < 13; h1++){
+            for (unsigned char h2 = 5; h2 < 6; h2++){
 #if SOFTWARE_PREPROC 
                 QueryVertex qVertices0[MAX_QUERY_VERTICES]; 
                 QueryVertex qVertices1[MAX_QUERY_VERTICES];
