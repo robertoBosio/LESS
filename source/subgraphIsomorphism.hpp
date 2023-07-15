@@ -1,5 +1,5 @@
 #pragma once
-#define HLS_STREAM_THREAD_SAFE
+#define HLS_STREAM_THREAD_SAFE 1
 
 #include <hls_stream.h>
 #include <ap_int.h>
