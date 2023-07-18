@@ -102,7 +102,7 @@ void stack(
 
             if (top > max_top){
                 max_top = top;
-                std::cout << max_top << std::endl;
+/* std::cout << max_top << std::endl; */
             }
 
             state = evaluate;
@@ -146,7 +146,7 @@ void stack(
         bool req_s;
         if (stop_req_stream.read_nb(req_s))
         {
-            std::cout << max_top << std::endl;
+/* std::cout << max_top << std::endl; */
             break;
         }
     }
