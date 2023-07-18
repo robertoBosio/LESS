@@ -1,6 +1,6 @@
 ../dataset/datagraph/email-Enron.csv ../dataset/queries/query0.csv 38152
-../dataset/datagraph/email-Enron.csv ../dataset/queries/query1.csv 440532
-../dataset/datagraph/email-Enron.csv ../dataset/queries/query2.csv 266256
-../dataset/datagraph/email-Enron.csv ../dataset/queries/query3.csv 78188
-../dataset/datagraph/email-Enron.csv ../dataset/queries/query4.csv 9044626
-../dataset/datagraph/email-Enron.csv ../dataset/queries/query5.csv 917160
+# ../dataset/datagraph/email-Enron.csv ../dataset/queries/query1.csv 440532
+# ../dataset/datagraph/email-Enron.csv ../dataset/queries/query2.csv 266256
+# ../dataset/datagraph/email-Enron.csv ../dataset/queries/query3.csv 78188
+# ../dataset/datagraph/email-Enron.csv ../dataset/queries/query4.csv 9044626
+# ../dataset/datagraph/email-Enron.csv ../dataset/queries/query5.csv 917160

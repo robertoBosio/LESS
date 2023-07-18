@@ -26,7 +26,7 @@ Before running the project, ensure that you have the following prerequisites ins
 1. Clone the repository:
 
    ```bash
-   git clone --recurse-submodules https://github.com/robertoBosio/subgraph-iso.git
+   git clone https://github.com/robertoBosio/subgraph-iso.git
    ```
 
 2. Navigate to the project directory:
