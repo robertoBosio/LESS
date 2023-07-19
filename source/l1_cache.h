@@ -44,8 +44,8 @@ class l1_cache {
 		typedef replacer<false, addr_type, ((N_SETS > 0) ? N_SETS : 1),
 			((N_WAYS > 0) ? N_WAYS : 1), N_WORDS_PER_LINE> replacer_type;
 
-		ap_uint<(TAG_SIZE > 0) ? TAG_SIZE : 1> m_tag[N_LINES];	// 1
-		ap_uint<N_LINES> m_valid;				// 2
+		ap_uint<(TAG_SIZE > 0) ? TAG_SIZE + 1 : 1> m_tag[N_LINES] = {0};	// 1
+		// ap_uint<N_LINES> m_valid;				// 2
 		WORD_TYPE m_cache_mem[N_LINES][N_WORDS_PER_LINE];	// 3
 		replacer_type m_replacer;				// 4
 
@@ -59,7 +59,7 @@ class l1_cache {
 #pragma HLS bind_storage variable=m_cache_mem type=RAM_2P impl=URAM
 					break;
 				case BRAM:
-#pragma HLS bind_storage variable=m_cache_mem type=RAM_2P impl=BRAM
+#pragma HLS bind_storage variable=m_cache_mem type=RAM_2P impl=BRAM latency=3
 					break;
 				case LUTRAM:
 #pragma HLS bind_storage variable=m_cache_mem type=RAM_2P impl=LUTRAM
@@ -71,8 +71,20 @@ class l1_cache {
 
 		void init() {
 #pragma HLS inline
-			m_valid = 0;
+			for(int g = 0; g < (int)N_LINES; g++){
+				#pragma HLS unroll
+				m_tag[g] = 0;
+			}
 			m_replacer.init();
+		}
+
+		void set_tag(const ap_uint<ADDR_SIZE> addr_main){
+			#pragma HLS inline
+			addr_type addr(addr_main);
+			// addr.set_way(0);
+			// m_tag[addr.m_set] = ((ap_uint<1>)1, addr.m_tag);
+			m_tag[addr.m_set] = addr.m_tag;
+			m_tag[addr.m_set][TAG_SIZE] = 1;
 		}
 
 		bool get_line(const ap_uint<ADDR_SIZE> addr_main, line_type line) const {
@@ -103,8 +115,8 @@ class l1_cache {
 #pragma HLS unroll
 				m_cache_mem[addr.m_addr_line][off] = line[off];
 			}
-			m_valid[addr.m_addr_line] = true;
-			m_tag[addr.m_addr_line] = addr.m_tag;
+			// m_valid[addr.m_addr_line] = true;
+			// m_tag[addr.m_addr_line] = addr.m_tag;
 
 			m_replacer.notify_insertion(addr);
 		}
@@ -114,7 +126,8 @@ class l1_cache {
 			const addr_type addr(addr_main);
 
 			if (hit(addr) != -1)
-				m_valid[addr.m_addr_line] = false;
+				m_tag[addr.m_addr_line] = 0;
+				// m_valid[addr.m_addr_line] = false;
 		}
 
 	private:
@@ -122,13 +135,15 @@ class l1_cache {
 #pragma HLS inline
 			addr_type addr_tmp = addr;
 			auto hit_way = -1;
+			ap_uint<TAG_SIZE + 1> tag_search = addr_tmp.m_tag;
+			tag_search[TAG_SIZE] = 1;
 			for (size_t way = 0; way < N_WAYS; way++) {
 				addr_tmp.set_way(way);
-				if (m_valid[addr_tmp.m_addr_line] &&
-						(addr_tmp.m_tag == m_tag[addr_tmp.m_addr_line])) {
+				if (tag_search == m_tag[addr_tmp.m_addr_line]) {
 					hit_way = way;
 				}
 			}
+			// std::cout << ((ap_uint<1>)1, addr_tmp.m_tag) << " " << m_tag[addr_tmp.m_addr_line] << std::endl;
 
 			return hit_way;
 		}

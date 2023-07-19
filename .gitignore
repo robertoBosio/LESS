@@ -1,0 +1,9 @@
+dataset/*
+sw_benchmark/*
+subgraphiso-kria/*
+subiso_bd/*
+.vscode/*
+result*
+settings.tcl
+stats.txt
+*.log

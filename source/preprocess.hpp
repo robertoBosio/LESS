@@ -212,6 +212,7 @@ void counterToOffset(
 {
     const size_t CNT_ROW = 1UL << (ROW_LOG - CNT_LOG);
     T_DDR row[32];
+    T_DDR row_new;
 
 COUNTER_TO_OFFSET_DDR_LOOP:
     for (unsigned int ntb = 0; ntb < numTables; ntb++){
@@ -220,16 +221,17 @@ COUNTER_TO_OFFSET_DDR_LOOP:
 
 COUNTER_TO_OFFSET_BLOCK:
         for(unsigned int start = 0; start < htb_size ; start += 32){
-            
+#pragma HLS pipeline off
+
+COUNTER_TO_OFFSET_READ_LOOP:
             for (unsigned char g = 0; g < 32; g++)
-                row[g] = htb_buf[start + hTables[ntb].start_offset + g];
-
-
-            for (unsigned char g = 0; g < 32; g++){
-                unsigned int val0 = row[g](31, 0);
-                unsigned int val1 = row[g](63, 32);
-                unsigned int val2 = row[g](95, 64);
-                unsigned int val3 = row[g](127, 96);
+            {
+#pragma HLS pipeline II=1
+                row_new = htb_buf[start + hTables[ntb].start_offset + g];
+                unsigned int val0 = row_new(31, 0);
+                unsigned int val1 = row_new(63, 32);
+                unsigned int val2 = row_new(95, 64);
+                unsigned int val3 = row_new(127, 96);
                 unsigned int sum0 = val0;
                 unsigned int sum1 = val0 + val1;
                 unsigned int sum2 = val0 + val1 + val2;
@@ -240,6 +242,7 @@ COUNTER_TO_OFFSET_BLOCK:
                 row[g](127, 96) = base_addr + sum2;
                 base_addr += sum3;
             }
+
 #if DEBUG_STAT
             if (counter > debug::max_collisions)
                 debug::max_collisions = counter;
@@ -247,9 +250,10 @@ COUNTER_TO_OFFSET_BLOCK:
 #endif /* DEBUG_STATS */
 
             for (unsigned char g = 0; g < 32; g++)
+#pragma HLS unroll
                 htb_buf[start + hTables[ntb].start_offset + g] = row[g];
         }
-    }       
+}       
 }
 
 /* Store edges based on offsets */

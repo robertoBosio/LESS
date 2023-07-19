@@ -36,7 +36,7 @@
 #pragma GCC diagnostic ignored "-Wsign-compare"
 #pragma GCC diagnostic ignored "-Wunused-parameter"
 
-#define STOP_S      6    
+#define STOP_S      7    
 #define V_ID_W      VERTEX_WIDTH_BIT
 #define V_L_W       LABEL_WIDTH
 #define MAX_QV      MAX_QUERY_VERTICES
@@ -1771,21 +1771,21 @@ void multiwayJoin(
     htb_cache_t htb_cache(htb_buf0);
     // bloom_cache_t bloom_cache(bloom_p);
 
-    // dynfifo_init<
-    //     ap_uint<V_ID_W>,        /* fifo data type */
-    //     row_t,                  /* fifo data type */
-    //     DYN_FIFO_DEPTH,         /* in/out stream size */
-    //     DYN_FIFO_BURST * 2,     /* load/store stream size */
-    //     DDR_WORD,               /* bitwidth ddr word */
-    //     DYN_FIFO_BURST,         /* burst transaction size */
-    //     RESULTS_SPACE>          /* memory words available */
-    //         (res_buf,   
-    //          dynfifo_diagnostic,
-    //          a_stream_sol,
-    //          dyn_stream_sol,
-    //          streams_stop[STOP_S - 2],
-    //          streams_stop[STOP_S - 1],
-    //          dyn_stream_ovf);
+    dynfifo_init<
+        ap_uint<V_ID_W>,        /* fifo data type */
+        row_t,                  /* fifo data type */
+        DYN_FIFO_DEPTH,         /* in/out stream size */
+        DYN_FIFO_BURST * 2,     /* load/store stream size */
+        DDR_WORD,               /* bitwidth ddr word */
+        DYN_FIFO_BURST,         /* burst transaction size */
+        RESULTS_SPACE>          /* memory words available */
+            (res_buf,   
+             dynfifo_diagnostic,
+             a_stream_sol,
+             dyn_stream_sol,
+             streams_stop[STOP_S - 2],
+             streams_stop[STOP_S - 1],
+             dyn_stream_ovf);
 
 
     hls_thread_local hls::task mwj_propose_t(
@@ -1914,16 +1914,16 @@ void multiwayJoin(
     //               p_stream_sol,
     //               p_stream_sol_end);
     
-    stack<
-        ap_uint<V_ID_W>,
-        V_ID_W,
-        MAX_QV,
-        DYN_FIFO_DEPTH,
-        8192>(
-        a_stream_sol,
-        dyn_stream_sol,
-        streams_stop[STOP_S - 1],
-        dyn_stream_ovf);
+    // stack<
+    //     ap_uint<V_ID_W>,
+    //     V_ID_W,
+    //     MAX_QV,
+    //     DYN_FIFO_DEPTH,
+    //     8192>(
+    //     a_stream_sol,
+    //     dyn_stream_sol,
+    //     streams_stop[STOP_S - 1],
+    //     dyn_stream_ovf);
 
     mwj_findmin<
         T_BLOOM,
@@ -2010,16 +2010,16 @@ void multiwayJoin(
     htb_cache.init();
     // bloom_cache.init();
 
-    std::thread stack_t(
-        stack<ap_uint<V_ID_W>,
-              V_ID_W,
-              MAX_QV,
-              DYN_FIFO_DEPTH,
-              8192>,
-        std::ref(a_stream_sol),
-        std::ref(dyn_stream_sol),
-        std::ref(streams_stop[STOP_S - 1]),
-        std::ref(dyn_stream_ovf));
+    // std::thread stack_t(
+    //     stack<ap_uint<V_ID_W>,
+    //           V_ID_W,
+    //           MAX_QV,
+    //           DYN_FIFO_DEPTH,
+    //           8192>,
+    //     std::ref(a_stream_sol),
+    //     std::ref(dyn_stream_sol),
+    //     std::ref(streams_stop[STOP_S - 1]),
+    //     std::ref(dyn_stream_ovf));
 
     std::thread mwj_findmin_t(
         mwj_findmin<T_BLOOM,
@@ -2123,7 +2123,7 @@ void multiwayJoin(
     mwj_tuplebuild_t.join();
     mwj_intersect_t.join(); 
     mwj_verify_t.join();
-    stack_t.join();
+    // stack_t.join();
     mwj_assembly_t.join();
 
 
