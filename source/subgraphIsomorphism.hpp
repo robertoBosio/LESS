@@ -18,6 +18,7 @@ void subgraphIsomorphism(
     const unsigned short numQueryVert,
     const unsigned char hash1_w,
     const unsigned char hash2_w,
+    const unsigned long dynfifo_space,
     unsigned long &dynfifo_diagnostic,
     QueryVertex qVertices0[MAX_QUERY_VERTICES],
     QueryVertex qVertices1[MAX_QUERY_VERTICES],
@@ -49,6 +50,7 @@ void subgraphIsomorphism(
     const unsigned long numDataEdges,
     const unsigned char hash1_w,
     const unsigned char hash2_w,
+    const unsigned long dynfifo_space,
     unsigned long &dynfifo_diagnostic,
 
 #if DEBUG_INTERFACE

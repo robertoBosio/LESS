@@ -30,6 +30,11 @@ def parse_args():
 
 def subiso(test, path):
   
+    HASHTABLES_SPACE = 1 << 26  #~ 67 MB
+    BLOOM_SPACE  = 1 << 26  #~ 67 MB
+    RESULTS_SPACE = 1 << 26  #~ 67 MB
+    MAX_QDATA = 300
+    BURST_SIZE = 32
     nfile = 0
     tot_time_bench = 0
     time_limit = 4000
@@ -51,18 +56,20 @@ def subiso(test, path):
 # addr_mem3 = 0x40
     addr_bloom = 0x34
     addr_fifo = 0x40
+    
     addr_qv = 0x4c
     addr_qe = 0x54
     addr_de = 0x5c
-# addr_batch_size = 0x80
     addr_hash1_w = 0x68
     addr_hash2_w = 0x70
-    addr_dyn_fifo = 0x78
-    addr_dyn_fifo_ctrl = 0x80
-    addr_preproc = 0x90
-    addr_preproc_ctrl = 0x94
-    addr_res = 0xa0
-    addr_res_ctrl = 0xa8
+    addr_dyn_space = 0x78
+    
+    addr_dyn_fifo = 0x84
+    addr_dyn_fifo_ctrl = 0x8c
+    addr_preproc = 0x9c
+    addr_preproc_ctrl = 0xa0
+    addr_res = 0xac
+    addr_res_ctrl = 0xb4
 
     node_t = np.uint32
     label_t = np.uint8
@@ -82,12 +89,11 @@ def subiso(test, path):
     # Clocks.fclk0_mhz = 250
     #print(Clocks._instance.PL_SRC_PLL_CTRLS)
     #print(Clocks._instance.PL_CLK_CTRLS)
-# FIFO = allocate(shape=(int(68000000/np.dtype(node_t).itemsize),), dtype=node_t)
-# BLOOM = allocate(shape=((1 << 25),), dtype=np.uint8)
-# MEM = allocate(shape=(int((1 << 26)/np.dtype(node_t).itemsize),), dtype=node_t)
-    FIFO = allocate(shape=(int(68000000/np.dtype(edge_t).itemsize),), dtype=edge_t)
-    BLOOM = allocate(shape=((1 << 26),), dtype=np.uint8)
-    MEM = allocate(shape=(int((1 << 26)/np.dtype(node_t).itemsize),), dtype=node_t)
+    
+    FIFO = allocate(shape=(int(RESULTS_SPACE/np.dtype(edge_t).itemsize),), dtype=edge_t)
+    BLOOM = allocate(shape=(BLOOM_SPACE,), dtype=np.uint8)
+    MEM = allocate(shape=(int(HASHTABLES_SPACE/np.dtype(node_t).itemsize),), dtype=node_t)
+    dynfifo_space = 0
 
     fres = open(path + "results.txt", "a")
 
@@ -100,6 +106,12 @@ def subiso(test, path):
         datagraph_v = int(datagraph_v)
         datagraph_e = int(datagraph_e)
 
+        #Computing space for dynamic fifo
+        dynfifo_space = datagraph_e + MAX_QDATA;
+        dynfifo_space = dynfifo_space - (dynfifo_space % BURST_SIZE) + BURST_SIZE;
+        dynfifo_space = int(RESULTS_SPACE / np.dtype(edge_t).itemsize) - dynfifo_space;
+        counter = dynfifo_space;
+
         # Allocating space for map (id -> label)
         datagraph_la = np.empty([datagraph_v], dtype=label_t)
 
@@ -108,8 +120,6 @@ def subiso(test, path):
             letter, node, label, degree = line.split()
             datagraph_la[int(node)] = int(label)
     
-        # GRAPH_SPACE = allocate(shape=(datagraph_e + 100,), dtype=edge_t)
-
         print("Loading", data, "in DDR...", sep=" ", end = "", flush=True)
         start = perf_counter()
         for e in range(datagraph_e):
@@ -133,7 +143,7 @@ def subiso(test, path):
             query = querytuple[0]
             
             querygraph = path + "data/" + query
-            counter = datagraph_e
+            counter = dynfifo_space + datagraph_e
             fq = open(querygraph, "r")
             line = fq.readline()
             letter, querygraph_v, querygraph_e = line.split()
@@ -199,7 +209,7 @@ def subiso(test, path):
             ol.subgraphIsomorphism_0.write(addr_qv, querygraph_v)
             ol.subgraphIsomorphism_0.write(addr_qe, querygraph_e)
             ol.subgraphIsomorphism_0.write(addr_de, datagraph_e)
-# ol.subgraphIsomorphism_0.write(addr_batch_size, 2)
+            ol.subgraphIsomorphism_0.write(addr_dyn_space, dynfifo_space)
 
            
             hashtable_spaceused = len(tablelist) * (2**hash1_w) * (2**hash2_w) * byte_counter
@@ -210,7 +220,6 @@ def subiso(test, path):
             mem_counter += FIFO.nbytes
             mem_counter += MEM.nbytes
             mem_counter += BLOOM.nbytes
-            # mem_counter += GRAPH_SPACE.nbytes
             
             #Print useful information on memory occupation
             print(data, querytuple, sep=" ", flush=True)

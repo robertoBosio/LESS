@@ -926,7 +926,6 @@ void fillTables(
     T_DDR *bloom_p,
     AdjHT *hTables0,
     AdjHT *hTables1,
-    // TableDescriptor *tDescriptors,
     const ap_uint<8> labelToTable[MAX_LABELS][MAX_LABELS],
     const unsigned long numDataEdges,
     const unsigned short numTables,

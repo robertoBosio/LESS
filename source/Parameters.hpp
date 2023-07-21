@@ -12,6 +12,9 @@
 #define MAX_QUERY_VERTICES	(1UL << 4)
 #define MAX_TABLES 		    32
 
+/* Max space given to query data in fifo for graph read*/
+#define MAX_QUERYDATA       300
+
 /* 5 bits are dedicated to labels, to compact as
  * much as possible input data.
  * In the multiway join instead, labels are no more
@@ -42,7 +45,7 @@
 #define DEFAULT_STREAM_DEPTH 32
 
 /* Dynamic fifo parameters */
-#define DYN_FIFO_DEPTH      32
+#define DYN_FIFO_DEPTH      128
 #define DYN_FIFO_BURST      32
 
 #define DDR_BIT             7

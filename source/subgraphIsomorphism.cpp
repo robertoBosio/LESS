@@ -1585,29 +1585,30 @@ void verifycache_wrapper(
 }
 
 template <typename T_BLOOM,
-        size_t BLOOM_LOG, 
-        size_t K_FUN_LOG>
+          size_t BLOOM_LOG,
+          size_t K_FUN_LOG>
 void multiwayJoin(
-        ap_uint<DDR_W>                  *htb_buf0,
-        ap_uint<DDR_W>                  *htb_buf1,
-        T_BLOOM                         *bloom_p,
-        row_t                           *res_buf,
-        AdjHT                           *hTables0,
-        AdjHT                           *hTables1,
-        QueryVertex                     *qVertices0,
-        const unsigned short            nQueryVer,
-        const unsigned char             hash1_w,
-        const unsigned char             hash2_w,
-        hls::stream< ap_uint<V_ID_W> >  &stream_batch,
-        hls::stream<bool>               &stream_batch_end,
-        unsigned long                   &dynfifo_diagnostic,
-        
+    ap_uint<DDR_W> *htb_buf0,
+    ap_uint<DDR_W> *htb_buf1,
+    T_BLOOM *bloom_p,
+    row_t *res_buf,
+    AdjHT *hTables0,
+    AdjHT *hTables1,
+    QueryVertex *qVertices0,
+    const unsigned short nQueryVer,
+    const unsigned char hash1_w,
+    const unsigned char hash2_w,
+    const unsigned long dynfifo_space,
+    hls::stream< ap_uint<V_ID_W> > &stream_batch,
+    hls::stream<bool> &stream_batch_end,
+    unsigned long &dynfifo_diagnostic,
+
 #if COUNT_ONLY
-        long unsigned int &result
+    long unsigned int &result
 #else
-        hls::stream<T_NODE> &result
+    hls::stream<T_NODE> &result
 #endif
-        )
+)
 {
 #pragma HLS STABLE variable=htb_buf0
 #pragma HLS STABLE variable=htb_buf1
@@ -1618,6 +1619,7 @@ void multiwayJoin(
 #pragma HLS STABLE variable=nQueryVer
 #pragma HLS STABLE variable=hash1_w
 #pragma HLS STABLE variable=hash2_w
+#pragma HLS STABLE variable=dynfifo_space
 
 #pragma HLS DATAFLOW
 
@@ -1781,6 +1783,7 @@ void multiwayJoin(
         RESULTS_SPACE>          /* memory words available */
             (res_buf,   
              dynfifo_diagnostic,
+             dynfifo_space,
              a_stream_sol,
              dyn_stream_sol,
              streams_stop[STOP_S - 2],
@@ -2158,6 +2161,7 @@ void multiwayJoinWrap(
         const unsigned short nQueryVer,
         const unsigned char hash1_w,
         const unsigned char hash2_w,
+        const unsigned long dynfifo_space,
         unsigned long &dynfifo_diagnostic,
 
 #if COUNT_ONLY
@@ -2177,6 +2181,7 @@ void multiwayJoinWrap(
 #pragma HLS STABLE variable=nQueryVer
 #pragma HLS STABLE variable=hash1_w
 #pragma HLS STABLE variable=hash2_w
+#pragma HLS STABLE variable=dynfifo_space
 #pragma HLS dataflow
 
     hls::stream<bool, S_D> stream_batch_end("Stream batch end");
@@ -2204,6 +2209,7 @@ void multiwayJoinWrap(
                 nQueryVer,
                 hash1_w,
                 hash2_w,
+                dynfifo_space,
                 stream_batch,
                 stream_batch_end,
                 dynfifo_diagnostic,
@@ -2220,6 +2226,7 @@ void subgraphIsomorphism(
         const unsigned short numQueryVert,
         const unsigned char hash1_w,
         const unsigned char hash2_w,
+        const unsigned long dynfifo_space,
         unsigned long &dynfifo_diagnostic,
         QueryVertex qVertices0[MAX_QV], 
         QueryVertex qVertices1[MAX_QV],
@@ -2258,6 +2265,7 @@ void subgraphIsomorphism(
 #pragma HLS INTERFACE mode=s_axilite port=numQueryVert
 #pragma HLS INTERFACE mode=s_axilite port=hash1_w
 #pragma HLS INTERFACE mode=s_axilite port=hash2_w
+#pragma HLS INTERFACE mode=s_axilite port=dynfifo_space
 #pragma HLS INTERFACE mode=s_axilite port=dynfifo_diagnostic
 #pragma HLS INTERFACE mode=s_axilite port=return
 
@@ -2298,6 +2306,7 @@ void subgraphIsomorphism(
             numQueryVert,
             hash1_w,
             hash2_w,
+            dynfifo_space,
             dynfifo_diagnostic,
             localResult);
 
@@ -2322,6 +2331,7 @@ void subgraphIsomorphism(
         const unsigned long numDataEdges,
         const unsigned char hash1_w,
         const unsigned char hash2_w,
+        const unsigned long dynfifo_space,
         unsigned long &dynfifo_diagnostic,
 
 #if DEBUG_INTERFACE
@@ -2347,7 +2357,7 @@ void subgraphIsomorphism(
     latency=1
 #pragma HLS INTERFACE mode=m_axi port=res_buf bundle=fifo \
     max_widen_bitwidth=128 max_read_burst_length=32 max_write_burst_length=32 \
-    latency=20
+    latency=1
 #pragma HLS INTERFACE mode=m_axi port=bloom_p bundle=bloom \
     max_widen_bitwidth=128 latency=20
 
@@ -2358,6 +2368,7 @@ void subgraphIsomorphism(
 #pragma HLS INTERFACE mode=s_axilite port=numDataEdges
 #pragma HLS INTERFACE mode=s_axilite port=hash1_w
 #pragma HLS INTERFACE mode=s_axilite port=hash2_w
+#pragma HLS INTERFACE mode=s_axilite port=dynfifo_space
 #pragma HLS INTERFACE mode=s_axilite port=dynfifo_diagnostic
 #pragma HLS INTERFACE mode=s_axilite port=return
 
@@ -2393,7 +2404,7 @@ void subgraphIsomorphism(
                HASHTABLES_SPACE,
                MAX_QUERY_VERTICES,
                MAX_TABLES>(
-        res_buf,
+        &res_buf[dynfifo_space],
         htb_buf0,
         bloom_p,
         qVertices0,
@@ -2428,6 +2439,7 @@ void subgraphIsomorphism(
             numQueryVert,
             hash1_w,
             hash2_w,
+            dynfifo_space,
             dynfifo_diagnostic,
             localResult);
 

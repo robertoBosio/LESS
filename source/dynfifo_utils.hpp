@@ -208,6 +208,7 @@ template <typename DDR_WORD_T,
             size_t BURST_SIZE>
 void MMU_slow(
         DDR_WORD_T* mem,
+        const unsigned long space,
         unsigned long &diagnostic,
         hls::stream<DDR_WORD_T> &in_stream,
         hls::stream<DDR_WORD_T> &out_stream,
@@ -252,12 +253,16 @@ MMU_SLOW_TASK_LOOP:
 #pragma HLS unroll
                     mem[mem_head + g] = in_stream.read();
                 }
-                mem_head = (mem_head + BURST_SIZE) % DDR_WORDS;
+                mem_head = (mem_head + BURST_SIZE);
+                if (mem_head == space)
+                    mem_head = 0;
+
                 space_used += BURST_SIZE;
                 if (space_used > max_space){
                     max_space = space_used;
                 }
-                if (space_used > DDR_WORDS){
+
+                if (space_used > space){
                     overflow_stream.write(true);
                 }
                 state = stall_ddr;
@@ -268,7 +273,9 @@ MMU_SLOW_TASK_LOOP:
 #pragma HLS unroll
                     out_stream.write(mem[mem_tail + g]);
                 }
-                mem_tail = (mem_tail + BURST_SIZE) % DDR_WORDS;
+                mem_tail = (mem_tail + BURST_SIZE);
+                if (mem_tail == space)
+                    mem_tail = 0;
                 space_used -= BURST_SIZE;
                 state = (mem_head == mem_tail)? bypass: stall_ddr;
                 break;
@@ -312,6 +319,7 @@ template<typename DATA_T,
 void dynfifo_init(
         DDR_WORD_T mem[DDR_WORDS],
         unsigned long &diagnostic,
+        const unsigned long space,
         hls::stream<DATA_T> &in_stream,
         hls::stream<DATA_T> &out_stream,
         hls::stream<bool> &stop_req_stream_fast,
@@ -352,6 +360,7 @@ void dynfifo_init(
             DDR_WORDS,
             BURST_SIZE>(
             mem,
+            space,
             diagnostic,
             store_p_stream,
             load_p_stream,
@@ -378,6 +387,7 @@ void dynfifo_init(
             DDR_WORDS,
             BURST_SIZE>,
             mem,
+            space,
             std::ref(diagnostic),
             std::ref(store_p_stream),
             std::ref(load_p_stream),

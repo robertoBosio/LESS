@@ -29,10 +29,13 @@ struct TestEntry {
 
 template <size_t NODE_W,
          size_t LAB_W,
-         size_t GRAPH_SPACE>
+         size_t BURST_SIZE,
+         size_t RESULT_SPACE,
+         size_t MAX_QDATA>
 void load_datagraphs(
         row_t *edge_buf,
         std::string datafile,
+        unsigned long & dynfifo_space,
         unsigned long &numDataEdges)
 {
     unsigned long numDataVertices;
@@ -54,7 +57,13 @@ void load_datagraphs(
 
     std::getline(fData, fLine);
     sscanf(fLine.c_str(), "%*c %lu %lu", &numDataVertices, &numDataEdges);
-    
+
+    // Find space for the graph and align it to BURST_SIZE
+    dynfifo_space = numDataEdges + MAX_QDATA;
+    dynfifo_space = dynfifo_space - (dynfifo_space % BURST_SIZE) + BURST_SIZE;
+    dynfifo_space = RESULT_SPACE - dynfifo_space;
+    edge_buf_p = dynfifo_space;
+
     /* Store data labels */
     for(int count = 0; count < numDataVertices; count++){    
         unsigned long node_t, label_t;
@@ -80,16 +89,17 @@ void load_datagraphs(
 
 template <size_t NODE_W,
          size_t LAB_W,
-         size_t GRAPH_SPACE>
+         size_t MAX_QDATA>
 void load_querygraphs(
         row_t *edge_buf,
         std::string queryfile,
+        const unsigned long dynfifo_space,
         unsigned short &numQueryVertices,
         unsigned short &numQueryEdges,
         unsigned long numDataEdges)
 {
     unsigned long numDataVertices;
-    unsigned long edge_buf_p = numDataEdges;
+    unsigned long edge_buf_p = numDataEdges + dynfifo_space;
     edge_t edge;
     
     /* Remove "../" to make paths correct */
@@ -107,10 +117,13 @@ void load_querygraphs(
 
     /* Read vertices and edges cardinality */
     std::getline(fQuery, fLine);
-    sscanf(fLine.c_str(), "%*c %hu %hu", &numQueryVertices, &numQueryEdges);	
+    sscanf(fLine.c_str(), "%*c %hu %hu", &numQueryVertices, &numQueryEdges);
 
+    assert(MAX_QDATA >= numQueryEdges + numQueryVertices);
+    
     /* Store query labels */
-    for(int count = 0; count < numQueryVertices; count++){    
+    for (int count = 0; count < numQueryVertices; count++)
+    {
         unsigned long node_t, label_t;
         std::getline(fQuery, fLine);
         sscanf(fLine.c_str(), "%*c %lu %lu %*u", &node_t, &label_t);
@@ -196,6 +209,7 @@ int main()
     unsigned int res_actual;
     unsigned int res_expected;
     unsigned long diagnostic;
+    unsigned long dynfifo_space;
     bool flag = true;
     std::map<std::string, std::vector<TestEntry>> test;
     std::string prev_datagraph;
@@ -268,9 +282,12 @@ int main()
         load_datagraphs<
             VERTEX_WIDTH_BIT,
             LABEL_WIDTH,
-            GRAPHS_SPACE>(
+            DYN_FIFO_BURST,
+            RESULTS_SPACE,
+            MAX_QUERYDATA>(
             res_buf,
             std::string(datagraph),
+            dynfifo_space,
             nDE);
 
         for (const TestEntry &testEntry : entries)
@@ -280,9 +297,10 @@ int main()
             load_querygraphs<
                 VERTEX_WIDTH_BIT,
                 LABEL_WIDTH,
-                GRAPHS_SPACE>(
+                MAX_QUERYDATA>(
                 res_buf,
                 std::string(testEntry.querygraph),
+                dynfifo_space,
                 nQV,
                 nQE,
                 nDE);
@@ -336,6 +354,7 @@ int main()
                 nQV,
                 h1,
                 h2,
+                dynfifo_space,
                 diagnostic,
                 qVertices0,
                 qVertices1,
@@ -358,6 +377,7 @@ int main()
                 nDE,
                 h1,
                 h2,
+                dynfifo_space,
                 diagnostic,
 #if DEBUG_INTERFACE
                 debug_endpreprocess_s,

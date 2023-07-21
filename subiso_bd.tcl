@@ -124,6 +124,7 @@ set bCheckIPsPassed 1
 set bCheckIPs 1
 if { $bCheckIPs == 1 } {
    set list_check_ips "\ 
+xilinx.com:ip:clk_wiz:6.0\
 xilinx.com:ip:proc_sys_reset:5.0\
 xilinx.com:ip:smartconnect:1.0\
 xilinx.com:hls:subgraphIsomorphism:1.0\
@@ -194,20 +195,32 @@ proc create_root_design { parentCell } {
 
   # Create ports
 
+  # Create instance: clk_wiz_0, and set properties
+  set clk_wiz_0 [ create_bd_cell -type ip -vlnv xilinx.com:ip:clk_wiz:6.0 clk_wiz_0 ]
+  set_property -dict [list \
+    CONFIG.CLKOUT1_JITTER {167.873} \
+    CONFIG.CLKOUT1_PHASE_ERROR {307.857} \
+    CONFIG.CLKOUT1_REQUESTED_OUT_FREQ {290.000} \
+    CONFIG.MMCM_CLKFBOUT_MULT_F {61.625} \
+    CONFIG.MMCM_CLKOUT0_DIVIDE_F {4.250} \
+    CONFIG.MMCM_DIVCLK_DIVIDE {5} \
+    CONFIG.PRIM_SOURCE {No_buffer} \
+    CONFIG.RESET_PORT {resetn} \
+    CONFIG.RESET_TYPE {ACTIVE_LOW} \
+  ] $clk_wiz_0
+
+
   # Create instance: ps8_0_axi_periph, and set properties
   set ps8_0_axi_periph [ create_bd_cell -type ip -vlnv xilinx.com:ip:axi_interconnect:2.1 ps8_0_axi_periph ]
-  set_property -dict [list \
-    CONFIG.NUM_MI {1} \
-    CONFIG.NUM_SI {1} \
-  ] $ps8_0_axi_periph
+  set_property CONFIG.NUM_MI {1} $ps8_0_axi_periph
 
 
-  # Create instance: rst_ps8_0_499M, and set properties
-  set rst_ps8_0_499M [ create_bd_cell -type ip -vlnv xilinx.com:ip:proc_sys_reset:5.0 rst_ps8_0_499M ]
+  # Create instance: rst_ps8_0_99M, and set properties
+  set rst_ps8_0_99M [ create_bd_cell -type ip -vlnv xilinx.com:ip:proc_sys_reset:5.0 rst_ps8_0_99M ]
 
   # Create instance: smartconnect_0, and set properties
   set smartconnect_0 [ create_bd_cell -type ip -vlnv xilinx.com:ip:smartconnect:1.0 smartconnect_0 ]
-  set_property CONFIG.NUM_SI {3} $smartconnect_0
+  set_property CONFIG.NUM_SI {2} $smartconnect_0
 
 
   # Create instance: subgraphIsomorphism_0, and set properties
@@ -230,6 +243,7 @@ proc create_root_design { parentCell } {
     CONFIG.PSU_MIO_11_DRIVE_STRENGTH {4} \
     CONFIG.PSU_MIO_11_SLEW {slow} \
     CONFIG.PSU_MIO_12_DRIVE_STRENGTH {4} \
+    CONFIG.PSU_MIO_12_INPUT_TYPE {cmos} \
     CONFIG.PSU_MIO_12_POLARITY {Default} \
     CONFIG.PSU_MIO_12_SLEW {slow} \
     CONFIG.PSU_MIO_13_DRIVE_STRENGTH {4} \
@@ -262,6 +276,7 @@ proc create_root_design { parentCell } {
     CONFIG.PSU_MIO_21_POLARITY {Default} \
     CONFIG.PSU_MIO_21_SLEW {slow} \
     CONFIG.PSU_MIO_22_DRIVE_STRENGTH {4} \
+    CONFIG.PSU_MIO_22_INPUT_TYPE {cmos} \
     CONFIG.PSU_MIO_22_POLARITY {Default} \
     CONFIG.PSU_MIO_22_SLEW {slow} \
     CONFIG.PSU_MIO_23_DRIVE_STRENGTH {4} \
@@ -379,6 +394,7 @@ proc create_root_design { parentCell } {
     CONFIG.PSU_MIO_77_DRIVE_STRENGTH {4} \
     CONFIG.PSU_MIO_77_SLEW {slow} \
     CONFIG.PSU_MIO_7_DRIVE_STRENGTH {4} \
+    CONFIG.PSU_MIO_7_INPUT_TYPE {cmos} \
     CONFIG.PSU_MIO_7_POLARITY {Default} \
     CONFIG.PSU_MIO_7_SLEW {slow} \
     CONFIG.PSU_MIO_8_DRIVE_STRENGTH {4} \
@@ -394,174 +410,81 @@ MIO#GPIO1 MIO#GPIO1 MIO#GPIO1 MIO#GPIO1 MIO#GPIO1 MIO#GPIO1 MIO#GPIO1 MIO#GPIO1 
     CONFIG.PSU__ACT_DDR_FREQ_MHZ {1066.656006} \
     CONFIG.PSU__CAN1__PERIPHERAL__ENABLE {0} \
     CONFIG.PSU__CRF_APB__ACPU_CTRL__ACT_FREQMHZ {1333.333008} \
-    CONFIG.PSU__CRF_APB__ACPU_CTRL__DIVISOR0 {1} \
     CONFIG.PSU__CRF_APB__ACPU_CTRL__FREQMHZ {1333.333} \
     CONFIG.PSU__CRF_APB__ACPU_CTRL__SRCSEL {APLL} \
     CONFIG.PSU__CRF_APB__ACPU__FRAC_ENABLED {1} \
-    CONFIG.PSU__CRF_APB__APLL_CTRL__DIV2 {1} \
-    CONFIG.PSU__CRF_APB__APLL_CTRL__FBDIV {80} \
-    CONFIG.PSU__CRF_APB__APLL_CTRL__FRACDATA {0.000778} \
     CONFIG.PSU__CRF_APB__APLL_CTRL__FRACFREQ {1333.333} \
     CONFIG.PSU__CRF_APB__APLL_CTRL__SRCSEL {PSS_REF_CLK} \
     CONFIG.PSU__CRF_APB__APLL_FRAC_CFG__ENABLED {1} \
-    CONFIG.PSU__CRF_APB__APLL_TO_LPD_CTRL__DIVISOR0 {3} \
     CONFIG.PSU__CRF_APB__DBG_FPD_CTRL__ACT_FREQMHZ {249.997498} \
-    CONFIG.PSU__CRF_APB__DBG_FPD_CTRL__DIVISOR0 {2} \
     CONFIG.PSU__CRF_APB__DBG_FPD_CTRL__FREQMHZ {250} \
     CONFIG.PSU__CRF_APB__DBG_FPD_CTRL__SRCSEL {IOPLL} \
-    CONFIG.PSU__CRF_APB__DBG_TRACE_CTRL__DIVISOR0 {5} \
     CONFIG.PSU__CRF_APB__DBG_TRACE_CTRL__FREQMHZ {250} \
     CONFIG.PSU__CRF_APB__DBG_TRACE_CTRL__SRCSEL {IOPLL} \
     CONFIG.PSU__CRF_APB__DBG_TSTMP_CTRL__ACT_FREQMHZ {249.997498} \
-    CONFIG.PSU__CRF_APB__DBG_TSTMP_CTRL__DIVISOR0 {2} \
     CONFIG.PSU__CRF_APB__DBG_TSTMP_CTRL__FREQMHZ {250} \
     CONFIG.PSU__CRF_APB__DBG_TSTMP_CTRL__SRCSEL {IOPLL} \
     CONFIG.PSU__CRF_APB__DDR_CTRL__ACT_FREQMHZ {533.328003} \
-    CONFIG.PSU__CRF_APB__DDR_CTRL__DIVISOR0 {2} \
     CONFIG.PSU__CRF_APB__DDR_CTRL__FREQMHZ {1200} \
     CONFIG.PSU__CRF_APB__DDR_CTRL__SRCSEL {DPLL} \
     CONFIG.PSU__CRF_APB__DPDMA_REF_CTRL__ACT_FREQMHZ {444.444336} \
-    CONFIG.PSU__CRF_APB__DPDMA_REF_CTRL__DIVISOR0 {3} \
     CONFIG.PSU__CRF_APB__DPDMA_REF_CTRL__FREQMHZ {600} \
     CONFIG.PSU__CRF_APB__DPDMA_REF_CTRL__SRCSEL {APLL} \
-    CONFIG.PSU__CRF_APB__DPLL_CTRL__DIV2 {1} \
-    CONFIG.PSU__CRF_APB__DPLL_CTRL__FBDIV {64} \
     CONFIG.PSU__CRF_APB__DPLL_CTRL__SRCSEL {PSS_REF_CLK} \
-    CONFIG.PSU__CRF_APB__DPLL_TO_LPD_CTRL__DIVISOR0 {2} \
-    CONFIG.PSU__CRF_APB__DP_AUDIO_REF_CTRL__DIVISOR0 {63} \
-    CONFIG.PSU__CRF_APB__DP_AUDIO_REF_CTRL__DIVISOR1 {1} \
-    CONFIG.PSU__CRF_APB__DP_STC_REF_CTRL__DIVISOR0 {6} \
-    CONFIG.PSU__CRF_APB__DP_STC_REF_CTRL__DIVISOR1 {10} \
-    CONFIG.PSU__CRF_APB__DP_VIDEO_REF_CTRL__DIVISOR0 {5} \
-    CONFIG.PSU__CRF_APB__DP_VIDEO_REF_CTRL__DIVISOR1 {1} \
     CONFIG.PSU__CRF_APB__GDMA_REF_CTRL__ACT_FREQMHZ {533.328003} \
-    CONFIG.PSU__CRF_APB__GDMA_REF_CTRL__DIVISOR0 {2} \
     CONFIG.PSU__CRF_APB__GDMA_REF_CTRL__FREQMHZ {600} \
     CONFIG.PSU__CRF_APB__GDMA_REF_CTRL__SRCSEL {DPLL} \
     CONFIG.PSU__CRF_APB__GPU_REF_CTRL__ACT_FREQMHZ {499.994995} \
-    CONFIG.PSU__CRF_APB__GPU_REF_CTRL__DIVISOR0 {1} \
     CONFIG.PSU__CRF_APB__GPU_REF_CTRL__FREQMHZ {600} \
     CONFIG.PSU__CRF_APB__GPU_REF_CTRL__SRCSEL {IOPLL} \
-    CONFIG.PSU__CRF_APB__PCIE_REF_CTRL__DIVISOR0 {6} \
-    CONFIG.PSU__CRF_APB__SATA_REF_CTRL__DIVISOR0 {5} \
     CONFIG.PSU__CRF_APB__TOPSW_LSBUS_CTRL__ACT_FREQMHZ {99.999001} \
-    CONFIG.PSU__CRF_APB__TOPSW_LSBUS_CTRL__DIVISOR0 {5} \
     CONFIG.PSU__CRF_APB__TOPSW_LSBUS_CTRL__FREQMHZ {100} \
     CONFIG.PSU__CRF_APB__TOPSW_LSBUS_CTRL__SRCSEL {IOPLL} \
     CONFIG.PSU__CRF_APB__TOPSW_MAIN_CTRL__ACT_FREQMHZ {533.328003} \
-    CONFIG.PSU__CRF_APB__TOPSW_MAIN_CTRL__DIVISOR0 {2} \
     CONFIG.PSU__CRF_APB__TOPSW_MAIN_CTRL__FREQMHZ {533.33} \
     CONFIG.PSU__CRF_APB__TOPSW_MAIN_CTRL__SRCSEL {DPLL} \
-    CONFIG.PSU__CRF_APB__VPLL_CTRL__DIV2 {1} \
-    CONFIG.PSU__CRF_APB__VPLL_CTRL__FBDIV {90} \
     CONFIG.PSU__CRF_APB__VPLL_CTRL__SRCSEL {PSS_REF_CLK} \
-    CONFIG.PSU__CRF_APB__VPLL_TO_LPD_CTRL__DIVISOR0 {3} \
     CONFIG.PSU__CRL_APB__ADMA_REF_CTRL__ACT_FREQMHZ {499.994995} \
-    CONFIG.PSU__CRL_APB__ADMA_REF_CTRL__DIVISOR0 {3} \
     CONFIG.PSU__CRL_APB__ADMA_REF_CTRL__FREQMHZ {500} \
     CONFIG.PSU__CRL_APB__ADMA_REF_CTRL__SRCSEL {IOPLL} \
-    CONFIG.PSU__CRL_APB__AFI6_REF_CTRL__DIVISOR0 {3} \
     CONFIG.PSU__CRL_APB__AMS_REF_CTRL__ACT_FREQMHZ {49.999500} \
-    CONFIG.PSU__CRL_APB__AMS_REF_CTRL__DIVISOR0 {30} \
-    CONFIG.PSU__CRL_APB__AMS_REF_CTRL__DIVISOR1 {1} \
-    CONFIG.PSU__CRL_APB__CAN0_REF_CTRL__DIVISOR0 {15} \
-    CONFIG.PSU__CRL_APB__CAN0_REF_CTRL__DIVISOR1 {1} \
-    CONFIG.PSU__CRL_APB__CAN1_REF_CTRL__DIVISOR0 {15} \
-    CONFIG.PSU__CRL_APB__CAN1_REF_CTRL__DIVISOR1 {1} \
     CONFIG.PSU__CRL_APB__CAN1_REF_CTRL__SRCSEL {IOPLL} \
     CONFIG.PSU__CRL_APB__CPU_R5_CTRL__ACT_FREQMHZ {533.328003} \
-    CONFIG.PSU__CRL_APB__CPU_R5_CTRL__DIVISOR0 {2} \
     CONFIG.PSU__CRL_APB__CPU_R5_CTRL__FREQMHZ {533.333} \
     CONFIG.PSU__CRL_APB__CPU_R5_CTRL__SRCSEL {RPLL} \
     CONFIG.PSU__CRL_APB__DBG_LPD_CTRL__ACT_FREQMHZ {249.997498} \
-    CONFIG.PSU__CRL_APB__DBG_LPD_CTRL__DIVISOR0 {6} \
     CONFIG.PSU__CRL_APB__DBG_LPD_CTRL__FREQMHZ {250} \
     CONFIG.PSU__CRL_APB__DBG_LPD_CTRL__SRCSEL {IOPLL} \
-    CONFIG.PSU__CRL_APB__DLL_REF_CTRL__ACT_FREQMHZ {1499.984985} \
-    CONFIG.PSU__CRL_APB__GEM0_REF_CTRL__DIVISOR0 {12} \
-    CONFIG.PSU__CRL_APB__GEM0_REF_CTRL__DIVISOR1 {1} \
-    CONFIG.PSU__CRL_APB__GEM1_REF_CTRL__DIVISOR0 {12} \
-    CONFIG.PSU__CRL_APB__GEM1_REF_CTRL__DIVISOR1 {1} \
-    CONFIG.PSU__CRL_APB__GEM2_REF_CTRL__DIVISOR0 {12} \
-    CONFIG.PSU__CRL_APB__GEM2_REF_CTRL__DIVISOR1 {1} \
-    CONFIG.PSU__CRL_APB__GEM3_REF_CTRL__DIVISOR0 {12} \
-    CONFIG.PSU__CRL_APB__GEM3_REF_CTRL__DIVISOR1 {1} \
-    CONFIG.PSU__CRL_APB__GEM_TSU_REF_CTRL__DIVISOR0 {4} \
-    CONFIG.PSU__CRL_APB__GEM_TSU_REF_CTRL__DIVISOR1 {1} \
-    CONFIG.PSU__CRL_APB__I2C0_REF_CTRL__DIVISOR0 {15} \
-    CONFIG.PSU__CRL_APB__I2C0_REF_CTRL__DIVISOR1 {1} \
+    CONFIG.PSU__CRL_APB__DLL_REF_CTRL__ACT_FREQMHZ {999.989990} \
     CONFIG.PSU__CRL_APB__I2C1_REF_CTRL__ACT_FREQMHZ {99.999001} \
-    CONFIG.PSU__CRL_APB__I2C1_REF_CTRL__DIVISOR0 {15} \
-    CONFIG.PSU__CRL_APB__I2C1_REF_CTRL__DIVISOR1 {1} \
     CONFIG.PSU__CRL_APB__I2C1_REF_CTRL__FREQMHZ {100} \
     CONFIG.PSU__CRL_APB__I2C1_REF_CTRL__SRCSEL {IOPLL} \
-    CONFIG.PSU__CRL_APB__IOPLL_CTRL__DIV2 {1} \
-    CONFIG.PSU__CRL_APB__IOPLL_CTRL__FBDIV {90} \
     CONFIG.PSU__CRL_APB__IOPLL_CTRL__SRCSEL {PSS_REF_CLK} \
-    CONFIG.PSU__CRL_APB__IOPLL_TO_FPD_CTRL__DIVISOR0 {3} \
     CONFIG.PSU__CRL_APB__IOU_SWITCH_CTRL__ACT_FREQMHZ {249.997498} \
-    CONFIG.PSU__CRL_APB__IOU_SWITCH_CTRL__DIVISOR0 {6} \
     CONFIG.PSU__CRL_APB__IOU_SWITCH_CTRL__FREQMHZ {250} \
     CONFIG.PSU__CRL_APB__IOU_SWITCH_CTRL__SRCSEL {IOPLL} \
     CONFIG.PSU__CRL_APB__LPD_LSBUS_CTRL__ACT_FREQMHZ {99.999001} \
-    CONFIG.PSU__CRL_APB__LPD_LSBUS_CTRL__DIVISOR0 {15} \
     CONFIG.PSU__CRL_APB__LPD_LSBUS_CTRL__FREQMHZ {100} \
     CONFIG.PSU__CRL_APB__LPD_LSBUS_CTRL__SRCSEL {IOPLL} \
     CONFIG.PSU__CRL_APB__LPD_SWITCH_CTRL__ACT_FREQMHZ {499.994995} \
-    CONFIG.PSU__CRL_APB__LPD_SWITCH_CTRL__DIVISOR0 {3} \
     CONFIG.PSU__CRL_APB__LPD_SWITCH_CTRL__FREQMHZ {500} \
     CONFIG.PSU__CRL_APB__LPD_SWITCH_CTRL__SRCSEL {IOPLL} \
-    CONFIG.PSU__CRL_APB__NAND_REF_CTRL__DIVISOR0 {15} \
-    CONFIG.PSU__CRL_APB__NAND_REF_CTRL__DIVISOR1 {1} \
-    CONFIG.PSU__CRL_APB__PCAP_CTRL__ACT_FREQMHZ {187.498123} \
-    CONFIG.PSU__CRL_APB__PCAP_CTRL__DIVISOR0 {8} \
+    CONFIG.PSU__CRL_APB__PCAP_CTRL__ACT_FREQMHZ {199.998001} \
     CONFIG.PSU__CRL_APB__PCAP_CTRL__FREQMHZ {200} \
     CONFIG.PSU__CRL_APB__PCAP_CTRL__SRCSEL {IOPLL} \
-    CONFIG.PSU__CRL_APB__PL0_REF_CTRL__ACT_FREQMHZ {249.997498} \
-    CONFIG.PSU__CRL_APB__PL0_REF_CTRL__DIVISOR0 {6} \
-    CONFIG.PSU__CRL_APB__PL0_REF_CTRL__DIVISOR1 {1} \
-    CONFIG.PSU__CRL_APB__PL0_REF_CTRL__FREQMHZ {331} \
+    CONFIG.PSU__CRL_APB__PL0_REF_CTRL__ACT_FREQMHZ {99.999001} \
+    CONFIG.PSU__CRL_APB__PL0_REF_CTRL__FREQMHZ {100} \
     CONFIG.PSU__CRL_APB__PL0_REF_CTRL__SRCSEL {IOPLL} \
     CONFIG.PSU__CRL_APB__PL1_REF_CTRL__ACT_FREQMHZ {99.999001} \
-    CONFIG.PSU__CRL_APB__PL1_REF_CTRL__DIVISOR0 {4} \
-    CONFIG.PSU__CRL_APB__PL1_REF_CTRL__DIVISOR1 {1} \
-    CONFIG.PSU__CRL_APB__PL2_REF_CTRL__DIVISOR0 {4} \
-    CONFIG.PSU__CRL_APB__PL2_REF_CTRL__DIVISOR1 {1} \
-    CONFIG.PSU__CRL_APB__PL3_REF_CTRL__DIVISOR0 {4} \
-    CONFIG.PSU__CRL_APB__PL3_REF_CTRL__DIVISOR1 {1} \
     CONFIG.PSU__CRL_APB__QSPI_REF_CTRL__ACT_FREQMHZ {124.998749} \
-    CONFIG.PSU__CRL_APB__QSPI_REF_CTRL__DIVISOR0 {12} \
-    CONFIG.PSU__CRL_APB__QSPI_REF_CTRL__DIVISOR1 {1} \
     CONFIG.PSU__CRL_APB__QSPI_REF_CTRL__FREQMHZ {125} \
     CONFIG.PSU__CRL_APB__QSPI_REF_CTRL__SRCSEL {IOPLL} \
-    CONFIG.PSU__CRL_APB__RPLL_CTRL__DIV2 {1} \
-    CONFIG.PSU__CRL_APB__RPLL_CTRL__FBDIV {64} \
     CONFIG.PSU__CRL_APB__RPLL_CTRL__SRCSEL {PSS_REF_CLK} \
-    CONFIG.PSU__CRL_APB__RPLL_TO_FPD_CTRL__DIVISOR0 {2} \
-    CONFIG.PSU__CRL_APB__SDIO0_REF_CTRL__DIVISOR0 {7} \
-    CONFIG.PSU__CRL_APB__SDIO0_REF_CTRL__DIVISOR1 {1} \
-    CONFIG.PSU__CRL_APB__SDIO1_REF_CTRL__DIVISOR0 {7} \
-    CONFIG.PSU__CRL_APB__SDIO1_REF_CTRL__DIVISOR1 {1} \
-    CONFIG.PSU__CRL_APB__SPI0_REF_CTRL__DIVISOR0 {7} \
-    CONFIG.PSU__CRL_APB__SPI0_REF_CTRL__DIVISOR1 {1} \
-    CONFIG.PSU__CRL_APB__SPI1_REF_CTRL__ACT_FREQMHZ {187.498123} \
-    CONFIG.PSU__CRL_APB__SPI1_REF_CTRL__DIVISOR0 {8} \
-    CONFIG.PSU__CRL_APB__SPI1_REF_CTRL__DIVISOR1 {1} \
+    CONFIG.PSU__CRL_APB__SPI1_REF_CTRL__ACT_FREQMHZ {199.998001} \
     CONFIG.PSU__CRL_APB__SPI1_REF_CTRL__SRCSEL {IOPLL} \
     CONFIG.PSU__CRL_APB__TIMESTAMP_REF_CTRL__ACT_FREQMHZ {99.999001} \
-    CONFIG.PSU__CRL_APB__TIMESTAMP_REF_CTRL__DIVISOR0 {15} \
     CONFIG.PSU__CRL_APB__TIMESTAMP_REF_CTRL__FREQMHZ {100} \
     CONFIG.PSU__CRL_APB__TIMESTAMP_REF_CTRL__SRCSEL {IOPLL} \
-    CONFIG.PSU__CRL_APB__UART0_REF_CTRL__DIVISOR0 {15} \
-    CONFIG.PSU__CRL_APB__UART0_REF_CTRL__DIVISOR1 {1} \
-    CONFIG.PSU__CRL_APB__UART1_REF_CTRL__DIVISOR0 {15} \
-    CONFIG.PSU__CRL_APB__UART1_REF_CTRL__DIVISOR1 {1} \
-    CONFIG.PSU__CRL_APB__USB0_BUS_REF_CTRL__DIVISOR0 {6} \
-    CONFIG.PSU__CRL_APB__USB0_BUS_REF_CTRL__DIVISOR1 {1} \
-    CONFIG.PSU__CRL_APB__USB1_BUS_REF_CTRL__DIVISOR0 {6} \
-    CONFIG.PSU__CRL_APB__USB1_BUS_REF_CTRL__DIVISOR1 {1} \
-    CONFIG.PSU__CRL_APB__USB3_DUAL_REF_CTRL__DIVISOR0 {5} \
-    CONFIG.PSU__CRL_APB__USB3_DUAL_REF_CTRL__DIVISOR1 {15} \
     CONFIG.PSU__CSUPMU__PERIPHERAL__VALID {1} \
     CONFIG.PSU__DDRC__BG_ADDR_COUNT {1} \
     CONFIG.PSU__DDRC__BRC_MAPPING {ROW_BANK_COL} \
@@ -622,7 +545,7 @@ MIO#GPIO1 MIO#GPIO1 MIO#GPIO1 MIO#GPIO1 MIO#GPIO1 MIO#GPIO1 MIO#GPIO1 MIO#GPIO1 
     CONFIG.PSU__IOU_SLCR__WDT0__ACT_FREQMHZ {99.999001} \
     CONFIG.PSU__LPD_SLCR__CSUPMU__ACT_FREQMHZ {100.000000} \
     CONFIG.PSU__MAXIGP0__DATA_WIDTH {128} \
-    CONFIG.PSU__OVERRIDE__BASIC_CLOCK {1} \
+    CONFIG.PSU__OVERRIDE__BASIC_CLOCK {0} \
     CONFIG.PSU__PL_CLK0_BUF {TRUE} \
     CONFIG.PSU__PMU_COHERENCY {0} \
     CONFIG.PSU__PMU__AIBACK__ENABLE {0} \
@@ -691,8 +614,6 @@ Port;FD4A0000;FD4AFFFF;0|FPD;DPDMA;FD4C0000;FD4CFFFF;0|FPD;DDR_XMPU5_CFG;FD05000
     CONFIG.PSU__USE__M_AXI_GP0 {1} \
     CONFIG.PSU__USE__M_AXI_GP1 {0} \
     CONFIG.PSU__USE__M_AXI_GP2 {0} \
-    CONFIG.PSU__USE__S_AXI_ACP {0} \
-    CONFIG.PSU__USE__S_AXI_GP0 {0} \
     CONFIG.PSU__USE__S_AXI_GP2 {1} \
     CONFIG.PSU__USE__S_AXI_GP3 {1} \
     CONFIG.PSU__USE__S_AXI_GP4 {1} \
@@ -701,20 +622,22 @@ Port;FD4A0000;FD4AFFFF;0|FPD;DPDMA;FD4C0000;FD4CFFFF;0|FPD;DDR_XMPU5_CFG;FD05000
 
 
   # Create interface connections
-  connect_bd_intf_net -intf_net S00_AXI_1 [get_bd_intf_pins ps8_0_axi_periph/S00_AXI] [get_bd_intf_pins zynq_ultra_ps_e_0/M_AXI_HPM0_FPD]
   connect_bd_intf_net -intf_net ps8_0_axi_periph_M00_AXI [get_bd_intf_pins ps8_0_axi_periph/M00_AXI] [get_bd_intf_pins subgraphIsomorphism_0/s_axi_control]
   connect_bd_intf_net -intf_net smartconnect_0_M00_AXI [get_bd_intf_pins smartconnect_0/M00_AXI] [get_bd_intf_pins zynq_ultra_ps_e_0/S_AXI_HP3_FPD]
   connect_bd_intf_net -intf_net subgraphIsomorphism_0_m_axi_bloom [get_bd_intf_pins subgraphIsomorphism_0/m_axi_bloom] [get_bd_intf_pins zynq_ultra_ps_e_0/S_AXI_HP2_FPD]
   connect_bd_intf_net -intf_net subgraphIsomorphism_0_m_axi_cache [get_bd_intf_pins subgraphIsomorphism_0/m_axi_cache] [get_bd_intf_pins zynq_ultra_ps_e_0/S_AXI_HP0_FPD]
-  connect_bd_intf_net -intf_net subgraphIsomorphism_0_m_axi_fifo [get_bd_intf_pins smartconnect_0/S02_AXI] [get_bd_intf_pins subgraphIsomorphism_0/m_axi_fifo]
-  connect_bd_intf_net -intf_net subgraphIsomorphism_0_m_axi_graph [get_bd_intf_pins smartconnect_0/S00_AXI] [get_bd_intf_pins subgraphIsomorphism_0/m_axi_graph]
+  connect_bd_intf_net -intf_net subgraphIsomorphism_0_m_axi_fifo [get_bd_intf_pins smartconnect_0/S00_AXI] [get_bd_intf_pins subgraphIsomorphism_0/m_axi_fifo]
   connect_bd_intf_net -intf_net subgraphIsomorphism_0_m_axi_prop_batch [get_bd_intf_pins smartconnect_0/S01_AXI] [get_bd_intf_pins subgraphIsomorphism_0/m_axi_prop_batch]
   connect_bd_intf_net -intf_net subgraphIsomorphism_0_m_axi_readmin [get_bd_intf_pins subgraphIsomorphism_0/m_axi_readmin] [get_bd_intf_pins zynq_ultra_ps_e_0/S_AXI_HP1_FPD]
+  connect_bd_intf_net -intf_net zynq_ultra_ps_e_0_M_AXI_HPM0_FPD [get_bd_intf_pins ps8_0_axi_periph/S00_AXI] [get_bd_intf_pins zynq_ultra_ps_e_0/M_AXI_HPM0_FPD]
 
   # Create port connections
-  connect_bd_net -net rst_ps8_0_499M_peripheral_aresetn [get_bd_pins ps8_0_axi_periph/ARESETN] [get_bd_pins ps8_0_axi_periph/M00_ARESETN] [get_bd_pins ps8_0_axi_periph/S00_ARESETN] [get_bd_pins rst_ps8_0_499M/peripheral_aresetn] [get_bd_pins smartconnect_0/aresetn] [get_bd_pins subgraphIsomorphism_0/ap_rst_n]
-  connect_bd_net -net zynq_ultra_ps_e_0_pl_clk0 [get_bd_pins ps8_0_axi_periph/ACLK] [get_bd_pins ps8_0_axi_periph/M00_ACLK] [get_bd_pins ps8_0_axi_periph/S00_ACLK] [get_bd_pins rst_ps8_0_499M/slowest_sync_clk] [get_bd_pins smartconnect_0/aclk] [get_bd_pins subgraphIsomorphism_0/ap_clk] [get_bd_pins zynq_ultra_ps_e_0/maxihpm0_fpd_aclk] [get_bd_pins zynq_ultra_ps_e_0/pl_clk0] [get_bd_pins zynq_ultra_ps_e_0/saxihp0_fpd_aclk] [get_bd_pins zynq_ultra_ps_e_0/saxihp1_fpd_aclk] [get_bd_pins zynq_ultra_ps_e_0/saxihp2_fpd_aclk] [get_bd_pins zynq_ultra_ps_e_0/saxihp3_fpd_aclk]
-  connect_bd_net -net zynq_ultra_ps_e_0_pl_resetn0 [get_bd_pins rst_ps8_0_499M/ext_reset_in] [get_bd_pins zynq_ultra_ps_e_0/pl_resetn0]
+  connect_bd_net -net clk_wiz_0_clk_out1 [get_bd_pins clk_wiz_0/clk_out1] [get_bd_pins ps8_0_axi_periph/ACLK] [get_bd_pins ps8_0_axi_periph/M00_ACLK] [get_bd_pins ps8_0_axi_periph/S00_ACLK] [get_bd_pins rst_ps8_0_99M/slowest_sync_clk] [get_bd_pins smartconnect_0/aclk] [get_bd_pins subgraphIsomorphism_0/ap_clk] [get_bd_pins zynq_ultra_ps_e_0/maxihpm0_fpd_aclk] [get_bd_pins zynq_ultra_ps_e_0/saxihp0_fpd_aclk] [get_bd_pins zynq_ultra_ps_e_0/saxihp1_fpd_aclk] [get_bd_pins zynq_ultra_ps_e_0/saxihp2_fpd_aclk] [get_bd_pins zynq_ultra_ps_e_0/saxihp3_fpd_aclk]
+  connect_bd_net -net clk_wiz_0_locked [get_bd_pins clk_wiz_0/locked] [get_bd_pins rst_ps8_0_99M/dcm_locked]
+  connect_bd_net -net rst_ps8_0_99M_peripheral_aresetn [get_bd_pins ps8_0_axi_periph/ARESETN] [get_bd_pins ps8_0_axi_periph/M00_ARESETN] [get_bd_pins ps8_0_axi_periph/S00_ARESETN] [get_bd_pins rst_ps8_0_99M/peripheral_aresetn] [get_bd_pins smartconnect_0/aresetn] [get_bd_pins subgraphIsomorphism_0/ap_rst_n]
+  connect_bd_net -net subgraphIsomorphism_0_interrupt [get_bd_pins subgraphIsomorphism_0/interrupt] [get_bd_pins zynq_ultra_ps_e_0/pl_ps_irq0]
+  connect_bd_net -net zynq_ultra_ps_e_0_pl_clk0 [get_bd_pins clk_wiz_0/clk_in1] [get_bd_pins zynq_ultra_ps_e_0/pl_clk0]
+  connect_bd_net -net zynq_ultra_ps_e_0_pl_resetn0 [get_bd_pins clk_wiz_0/resetn] [get_bd_pins rst_ps8_0_99M/ext_reset_in] [get_bd_pins zynq_ultra_ps_e_0/pl_resetn0]
 
   # Create address segments
   assign_bd_address -offset 0x000800000000 -range 0x000800000000 -target_address_space [get_bd_addr_spaces subgraphIsomorphism_0/Data_m_axi_bloom] [get_bd_addr_segs zynq_ultra_ps_e_0/SAXIGP4/HP2_DDR_HIGH] -force
@@ -726,9 +649,6 @@ Port;FD4A0000;FD4AFFFF;0|FPD;DPDMA;FD4C0000;FD4CFFFF;0|FPD;DDR_XMPU5_CFG;FD05000
   assign_bd_address -offset 0x000800000000 -range 0x000800000000 -target_address_space [get_bd_addr_spaces subgraphIsomorphism_0/Data_m_axi_fifo] [get_bd_addr_segs zynq_ultra_ps_e_0/SAXIGP5/HP3_DDR_HIGH] -force
   assign_bd_address -offset 0x00000000 -range 0x80000000 -target_address_space [get_bd_addr_spaces subgraphIsomorphism_0/Data_m_axi_fifo] [get_bd_addr_segs zynq_ultra_ps_e_0/SAXIGP5/HP3_DDR_LOW] -force
   assign_bd_address -offset 0xC0000000 -range 0x20000000 -target_address_space [get_bd_addr_spaces subgraphIsomorphism_0/Data_m_axi_fifo] [get_bd_addr_segs zynq_ultra_ps_e_0/SAXIGP5/HP3_QSPI] -force
-  assign_bd_address -offset 0x000800000000 -range 0x000800000000 -target_address_space [get_bd_addr_spaces subgraphIsomorphism_0/Data_m_axi_graph] [get_bd_addr_segs zynq_ultra_ps_e_0/SAXIGP5/HP3_DDR_HIGH] -force
-  assign_bd_address -offset 0x00000000 -range 0x80000000 -target_address_space [get_bd_addr_spaces subgraphIsomorphism_0/Data_m_axi_graph] [get_bd_addr_segs zynq_ultra_ps_e_0/SAXIGP5/HP3_DDR_LOW] -force
-  assign_bd_address -offset 0xC0000000 -range 0x20000000 -target_address_space [get_bd_addr_spaces subgraphIsomorphism_0/Data_m_axi_graph] [get_bd_addr_segs zynq_ultra_ps_e_0/SAXIGP5/HP3_QSPI] -force
   assign_bd_address -offset 0x000800000000 -range 0x000800000000 -target_address_space [get_bd_addr_spaces subgraphIsomorphism_0/Data_m_axi_prop_batch] [get_bd_addr_segs zynq_ultra_ps_e_0/SAXIGP5/HP3_DDR_HIGH] -force
   assign_bd_address -offset 0x00000000 -range 0x80000000 -target_address_space [get_bd_addr_spaces subgraphIsomorphism_0/Data_m_axi_prop_batch] [get_bd_addr_segs zynq_ultra_ps_e_0/SAXIGP5/HP3_DDR_LOW] -force
   assign_bd_address -offset 0xC0000000 -range 0x20000000 -target_address_space [get_bd_addr_spaces subgraphIsomorphism_0/Data_m_axi_prop_batch] [get_bd_addr_segs zynq_ultra_ps_e_0/SAXIGP5/HP3_QSPI] -force
@@ -736,6 +656,13 @@ Port;FD4A0000;FD4AFFFF;0|FPD;DPDMA;FD4C0000;FD4CFFFF;0|FPD;DDR_XMPU5_CFG;FD05000
   assign_bd_address -offset 0x00000000 -range 0x80000000 -target_address_space [get_bd_addr_spaces subgraphIsomorphism_0/Data_m_axi_readmin] [get_bd_addr_segs zynq_ultra_ps_e_0/SAXIGP3/HP1_DDR_LOW] -force
   assign_bd_address -offset 0xC0000000 -range 0x20000000 -target_address_space [get_bd_addr_spaces subgraphIsomorphism_0/Data_m_axi_readmin] [get_bd_addr_segs zynq_ultra_ps_e_0/SAXIGP3/HP1_QSPI] -force
   assign_bd_address -offset 0xA0000000 -range 0x00010000 -target_address_space [get_bd_addr_spaces zynq_ultra_ps_e_0/Data] [get_bd_addr_segs subgraphIsomorphism_0/s_axi_control/Reg] -force
+
+  # Exclude Address Segments
+  exclude_bd_addr_seg -offset 0xFF000000 -range 0x01000000 -target_address_space [get_bd_addr_spaces subgraphIsomorphism_0/Data_m_axi_bloom] [get_bd_addr_segs zynq_ultra_ps_e_0/SAXIGP4/HP2_LPS_OCM]
+  exclude_bd_addr_seg -offset 0xFF000000 -range 0x01000000 -target_address_space [get_bd_addr_spaces subgraphIsomorphism_0/Data_m_axi_cache] [get_bd_addr_segs zynq_ultra_ps_e_0/SAXIGP2/HP0_LPS_OCM]
+  exclude_bd_addr_seg -offset 0xFF000000 -range 0x01000000 -target_address_space [get_bd_addr_spaces subgraphIsomorphism_0/Data_m_axi_fifo] [get_bd_addr_segs zynq_ultra_ps_e_0/SAXIGP5/HP3_LPS_OCM]
+  exclude_bd_addr_seg -offset 0xFF000000 -range 0x01000000 -target_address_space [get_bd_addr_spaces subgraphIsomorphism_0/Data_m_axi_prop_batch] [get_bd_addr_segs zynq_ultra_ps_e_0/SAXIGP5/HP3_LPS_OCM]
+  exclude_bd_addr_seg -offset 0xFF000000 -range 0x01000000 -target_address_space [get_bd_addr_spaces subgraphIsomorphism_0/Data_m_axi_readmin] [get_bd_addr_segs zynq_ultra_ps_e_0/SAXIGP3/HP1_LPS_OCM]
 
 
   # Restore current instance
