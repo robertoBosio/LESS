@@ -27,7 +27,7 @@ template <size_t MAX_QV,
          size_t LAB_W,
          size_t MAX_LABELS>
 void buildTableDescriptors(
-        edge_t *edge_buf,
+        row_t *edge_buf,
         QueryVertex *qVertices0,
         QueryVertex *qVertices1,
         // TableDescriptor *tDescriptors,
@@ -38,16 +38,20 @@ void buildTableDescriptors(
 {
     /* Translate from id of vertex to position in the order */
     unsigned short fromNumToPos[MAX_QV];
+    constexpr size_t SRC_NODE = 0;
+    constexpr size_t DST_NODE = 32;
+    constexpr size_t LABELSRC_NODE = 64;
+    constexpr size_t LABELDST_NODE = 96;
 
     /* Filling information about query vertices and coping
      * the vertex order needed by multiway join */
 FILL_ORDER_LOOP:
     for (int g = 0; g < numQueryVert; g++){
-        ap_uint<NODE_W> node = edge_buf[g].src;
+		ap_uint<NODE_W> nodesrc = edge_buf[g].range(SRC_NODE + NODE_W - 1, SRC_NODE);
 #ifndef __SYNTHESIS__
         assert(numQueryVert < (MAX_QV));
 #endif
-        fromNumToPos[node] = g;
+        fromNumToPos[nodesrc] = g;
     }
 
     /* Creating table descriptors */
@@ -55,12 +59,12 @@ CREATE_TABDESC_LOOP:
     for (int s = 0; s < numQueryEdge; s++) {
         bool dirEdge = false;
         ap_uint<8> index = 0;
-        edge_t edge = edge_buf[s + numQueryVert];
+        row_t edge = edge_buf[s + numQueryVert];
         int temp = LAB_W;
-        ap_uint<LAB_W> labeldst = edge.dst.range(LAB_W - 1, 0);
-		ap_uint<LAB_W> labelsrc = edge.src.range(LAB_W - 1, 0);
-		ap_uint<NODE_W> nodedst = edge.dst >> LAB_W;
-		ap_uint<NODE_W> nodesrc = edge.src >> LAB_W;
+        ap_uint<LAB_W> labeldst = edge.range(LABELDST_NODE + LAB_W - 1, LABELDST_NODE);
+		ap_uint<LAB_W> labelsrc = edge.range(LABELSRC_NODE + LAB_W - 1, LABELSRC_NODE);
+		ap_uint<NODE_W> nodedst = edge.range(DST_NODE + NODE_W - 1, DST_NODE);
+		ap_uint<NODE_W> nodesrc = edge.range(SRC_NODE + NODE_W - 1, SRC_NODE);
         unsigned short nodeSrcPos = fromNumToPos[nodesrc];
         unsigned short nodeDstPos = fromNumToPos[nodedst];
 
@@ -312,7 +316,7 @@ void storeEdges(
     ap_uint<64> addr_offset;
 
     bool last = stream_end.read();
-INCREASE_COUNTER_DDR_LOOP:
+STORE_EDGES_INCREASE_COUNTER_DDR_LOOP:
     while(!last){
         index1 = stream_index1.read();
         index2 = stream_index2.read();
@@ -409,7 +413,7 @@ template <size_t NODE_W,
           size_t HASH_W,
           size_t MAX_LABELS>
 void edgeToHashFirst(
-    edge_t *edge_buf,
+    row_t *edge_buf,
     // TableDescriptor *tDescriptors,
     const ap_uint<8> labelToTable[MAX_LABELS][MAX_LABELS],
     const unsigned short numTables,
@@ -424,14 +428,19 @@ void edgeToHashFirst(
     hls::stream<bool> &stream_c_end,
     const unsigned char hash1_w)
 {
+    constexpr size_t SRC_NODE = 0;
+    constexpr size_t DST_NODE = 32;
+    constexpr size_t LABELSRC_NODE = 64;
+    constexpr size_t LABELDST_NODE = 96;
 
 COUNT_OCCURENCIES_TOP_LOOP:
     for (int s = 0; s < numDataEdges; s++) {
-        edge_t edge = edge_buf[s];
-        ap_uint<LAB_W> labeldst = edge.dst.range(LAB_W - 1, 0);
-		ap_uint<LAB_W> labelsrc = edge.src.range(LAB_W - 1, 0);
-		ap_uint<NODE_W> nodedst = edge.dst >> LAB_W;
-		ap_uint<NODE_W> nodesrc = edge.src >> LAB_W;
+        row_t edge = edge_buf[s];
+
+        ap_uint<LAB_W> labeldst = edge.range(LABELDST_NODE + LAB_W - 1, LABELDST_NODE);
+		ap_uint<LAB_W> labelsrc = edge.range(LABELSRC_NODE + LAB_W - 1, LABELSRC_NODE);
+		ap_uint<NODE_W> nodedst = edge.range(DST_NODE + NODE_W - 1, DST_NODE);
+		ap_uint<NODE_W> nodesrc = edge.range(SRC_NODE + NODE_W - 1, SRC_NODE);
 
         // Retrieve index of table with source as indexing vertex
         ap_uint<8> index0 = labelToTable[labelsrc][labeldst];
@@ -594,7 +603,7 @@ template <typename T_DDR,
           size_t STREAM_D,
           size_t MAX_LABELS>
 void countEdges(
-    edge_t *edge_p,
+    row_t *edge_p,
     T_DDR *htb_p,
     T_DDR *bloom_p,
     // TableDescriptor *tDescriptors,
@@ -670,7 +679,7 @@ template <size_t EDGE_LOG,
           size_t HASH_W,
           size_t MAX_LABELS>
 void edgeToHashSecond(
-    edge_t *edge_buf,
+    row_t *edge_buf,
     // TableDescriptor *tDescriptors,
     const ap_uint<8> labelToTable[MAX_LABELS][MAX_LABELS],
     const unsigned short numTables,
@@ -682,14 +691,18 @@ void edgeToHashSecond(
     hls::stream<unsigned short> &stream_c_ntable,
     hls::stream<bool> &stream_c_end)
 {
+    constexpr size_t SRC_NODE = 0;
+    constexpr size_t DST_NODE = 32;
+    constexpr size_t LABELSRC_NODE = 64;
+    constexpr size_t LABELDST_NODE = 96;
 
 COUNT_OCCURENCIES_TOP_LOOP:
     for (int s = 0; s < numDataEdges; s++) {
-        edge_t edge = edge_buf[s];
-        ap_uint<LAB_W> labeldst = edge.dst.range(LAB_W - 1, 0);
-		ap_uint<LAB_W> labelsrc = edge.src.range(LAB_W - 1, 0);
-		ap_uint<NODE_W> nodedst = edge.dst >> LAB_W;
-		ap_uint<NODE_W> nodesrc = edge.src >> LAB_W;
+        row_t edge = edge_buf[s];
+        ap_uint<LAB_W> labeldst = edge.range(LABELDST_NODE + LAB_W - 1, LABELDST_NODE);
+		ap_uint<LAB_W> labelsrc = edge.range(LABELSRC_NODE + LAB_W - 1, LABELSRC_NODE);
+		ap_uint<NODE_W> nodedst = edge.range(DST_NODE + NODE_W - 1, DST_NODE);
+		ap_uint<NODE_W> nodesrc = edge.range(SRC_NODE + NODE_W - 1, SRC_NODE);
         
         // Retrieve index of table with source as indexing vertex
         ap_uint<8> index0 = labelToTable[labelsrc][labeldst];
@@ -838,7 +851,7 @@ template <typename T_DDR,
           size_t STREAM_D,
           size_t MAX_LABELS>
 void writeEdges(
-    edge_t *edge_p,
+    row_t *edge_p,
     T_DDR *htb_p,
     // TableDescriptor *tDescriptors,
     const ap_uint<8> labelToTable[MAX_LABELS][MAX_LABELS],
@@ -908,7 +921,7 @@ template <typename T_DDR,
           size_t HTB_SPACE,
           size_t MAX_LABELS>
 void fillTables(
-    edge_t *edge_buf,
+    row_t *edge_buf,
     T_DDR *htb_buf,
     T_DDR *bloom_p,
     AdjHT *hTables0,
@@ -951,7 +964,6 @@ STORE_HASHTABLES_POINTER_LOOP:
             edge_buf,
             htb_buf,
             bloom_p,
-            // tDescriptors,
             labelToTable,
             hTables0,
             numTables,
@@ -1134,7 +1146,7 @@ template <typename T_DDR,
          size_t MAX_QV,
          size_t MAX_TB>
 void preprocess(
-        edge_t *edge_buf,
+        row_t *edge_buf,
         T_DDR *htb_buf,
         T_DDR *bloom_p,
         QueryVertex *qVertices0,
@@ -1190,7 +1202,6 @@ void preprocess(
             bloom_p,
             hTables0,
             hTables1,
-            // tDescriptors,
             labelToTable,
             numDataEdges,
             numTables,

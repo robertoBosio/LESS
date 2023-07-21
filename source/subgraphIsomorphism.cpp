@@ -2249,7 +2249,7 @@ void subgraphIsomorphism(
     latency=1
 #pragma HLS INTERFACE mode=m_axi port=res_buf bundle=fifo \
     max_widen_bitwidth=128 max_read_burst_length=32 max_write_burst_length=32 \
-    latency=1
+    latency=20
 #pragma HLS INTERFACE mode=m_axi port=bloom_p bundle=bloom \
     max_widen_bitwidth=128 latency=20
 
@@ -2312,7 +2312,6 @@ void subgraphIsomorphism(
 #else
 
 void subgraphIsomorphism(
-        edge_t edge_buf[GRAPHS_SPACE],
         row_t htb_buf0[HASHTABLES_SPACE],
         row_t htb_buf1[HASHTABLES_SPACE],
         row_t htb_buf2[HASHTABLES_SPACE],
@@ -2351,8 +2350,6 @@ void subgraphIsomorphism(
     latency=20
 #pragma HLS INTERFACE mode=m_axi port=bloom_p bundle=bloom \
     max_widen_bitwidth=128 latency=20
-#pragma HLS INTERFACE mode=m_axi port=edge_buf bundle=graph \
-    max_widen_bitwidth=128 latency=1
 
 #pragma HLS alias ports=htb_buf0,htb_buf1,htb_buf2 distance=0
 
@@ -2396,7 +2393,7 @@ void subgraphIsomorphism(
                HASHTABLES_SPACE,
                MAX_QUERY_VERTICES,
                MAX_TABLES>(
-        edge_buf,
+        res_buf,
         htb_buf0,
         bloom_p,
         qVertices0,

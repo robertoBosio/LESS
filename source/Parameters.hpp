@@ -74,8 +74,8 @@
 #define DEBUG_STATS         0
 #endif /*__SYNTHESIS__*/
 
-struct alignas(8) edge_struct{
-    ap_uint<VERTEX_WIDTH_BIT> src, dst;
+struct alignas(16) edge_struct{
+    ap_uint<VERTEX_WIDTH_BIT> src, dst, labelsrc, labeldst;
 };
 typedef struct edge_struct edge_t;
 

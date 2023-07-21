@@ -44,32 +44,34 @@ def subiso(test, path):
     byte_edge = 5
    
     ## AXILITE register addresses ##
-    addr_graph = 0x10
-    addr_mem0 = 0x1c
-    addr_mem1 = 0x28
-    addr_mem2 = 0x34
+    # addr_graph = 0x10
+    addr_mem0 = 0x10
+    addr_mem1 = 0x1c
+    addr_mem2 = 0x28
 # addr_mem3 = 0x40
-    addr_bloom = 0x40
-    addr_fifo = 0x4c
-    addr_qv = 0x58
-    addr_qe = 0x60
-    addr_de = 0x68
+    addr_bloom = 0x34
+    addr_fifo = 0x40
+    addr_qv = 0x4c
+    addr_qe = 0x54
+    addr_de = 0x5c
 # addr_batch_size = 0x80
-    addr_hash1_w = 0x74
-    addr_hash2_w = 0x7c
-    addr_dyn_fifo = 0x84
-    addr_dyn_fifo_ctrl = 0x8c
-    addr_preproc = 0x9c
-    addr_preproc_ctrl = 0xa0
-    addr_res = 0xac
-    addr_res_ctrl = 0xb4
+    addr_hash1_w = 0x68
+    addr_hash2_w = 0x70
+    addr_dyn_fifo = 0x78
+    addr_dyn_fifo_ctrl = 0x80
+    addr_preproc = 0x90
+    addr_preproc_ctrl = 0x94
+    addr_res = 0xa0
+    addr_res_ctrl = 0xa8
 
     node_t = np.uint32
     label_t = np.uint8
     edge_t = np.dtype([('src', node_t), 
-                       ('dst', node_t)]) 
+                       ('dst', node_t),
+                       ('lsrc', node_t),
+                       ('ldst', node_t)]) 
 
-    ol = Overlay(path + "design_1.bit")
+    ol = Overlay(path + "design_1.bit", download=False)
 
 # print(Clocks.fclk0_mhz)
 # Clocks._instance.PL_SRC_PLL_CTRLS[0].FBDIV=45
@@ -83,7 +85,7 @@ def subiso(test, path):
 # FIFO = allocate(shape=(int(68000000/np.dtype(node_t).itemsize),), dtype=node_t)
 # BLOOM = allocate(shape=((1 << 25),), dtype=np.uint8)
 # MEM = allocate(shape=(int((1 << 26)/np.dtype(node_t).itemsize),), dtype=node_t)
-    FIFO = allocate(shape=(int(68000000/np.dtype(node_t).itemsize),), dtype=node_t)
+    FIFO = allocate(shape=(int(68000000/np.dtype(edge_t).itemsize),), dtype=edge_t)
     BLOOM = allocate(shape=((1 << 26),), dtype=np.uint8)
     MEM = allocate(shape=(int((1 << 26)/np.dtype(node_t).itemsize),), dtype=node_t)
 
@@ -106,16 +108,16 @@ def subiso(test, path):
             letter, node, label, degree = line.split()
             datagraph_la[int(node)] = int(label)
     
-        GRAPH_SPACE = allocate(shape=(datagraph_e + 100,), dtype=edge_t)
+        # GRAPH_SPACE = allocate(shape=(datagraph_e + 100,), dtype=edge_t)
 
         print("Loading", data, "in DDR...", sep=" ", end = "", flush=True)
         start = perf_counter()
         for e in range(datagraph_e):
             line = fd.readline()
             letter, nodesrc, nodedst = line.split()
-            nodesrc = (int(nodesrc) << lab_w) | datagraph_la[int(nodesrc)]
-            nodedst = (int(nodedst) << lab_w) | datagraph_la[int(nodedst)]
-            GRAPH_SPACE[counter] = (nodesrc, nodedst)
+            nodesrc = int(nodesrc)
+            nodedst = int(nodedst)
+            FIFO[counter] = (nodesrc, nodedst, datagraph_la[int(nodesrc)], datagraph_la[int(nodedst)])
             counter = counter + 1
         end = perf_counter()
         print(" Done in ", end - start, "s", sep="", flush=True)
@@ -124,6 +126,7 @@ def subiso(test, path):
         del datagraph_la
         
         for querytuple in test[data]:
+            ol.download()
             Clocks._instance.PL_CLK_CTRLS[0].DIVISOR0=10
             print(Clocks.fclk0_mhz)
 
@@ -148,18 +151,18 @@ def subiso(test, path):
             # Streaming the query order
             # order = [ 3, 4, 0, 1, 2]
             for x in range(querygraph_v):
-                GRAPH_SPACE[counter] = (int(x), 0)
+                FIFO[counter] = (int(x), 0, 0, 0)
                 counter = counter + 1
             
             tablelist = []
             for e in range(querygraph_e):
                 line = fq.readline()
                 letter, nodesrc, nodedst = line.split()
-                labelsrc = querygraph_la[int(nodesrc)] 
-                labeldst = querygraph_la[int(nodedst)] 
-                nodesrc = (int(nodesrc) << lab_w) | labelsrc
-                nodedst = (int(nodedst) << lab_w) | labeldst
-                GRAPH_SPACE[counter] = (nodesrc, nodedst)
+                labelsrc = querygraph_la[int(nodesrc)]
+                labeldst = querygraph_la[int(nodedst)]
+                nodesrc = int(nodesrc)
+                nodedst = int(nodedst)
+                FIFO[counter] = (nodesrc, nodedst, labelsrc, labeldst)
                 counter = counter + 1
                 
                 ## Counting number of tables for memory overflow check
@@ -179,12 +182,12 @@ def subiso(test, path):
             BLOOM.fill(0)
             MEM.flush()
             BLOOM.flush()
-            GRAPH_SPACE.flush()
+            FIFO.flush()
             
             hash1_w = int(querytuple[2])
             hash2_w = int(querytuple[3])
     
-            ol.subgraphIsomorphism_0.write(addr_graph, GRAPH_SPACE.device_address)
+            # ol.subgraphIsomorphism_0.write(addr_graph, GRAPH_SPACE.device_address)
             ol.subgraphIsomorphism_0.write(addr_mem0, MEM.device_address)
             ol.subgraphIsomorphism_0.write(addr_mem1, MEM.device_address)
             ol.subgraphIsomorphism_0.write(addr_mem2, MEM.device_address)
@@ -207,7 +210,7 @@ def subiso(test, path):
             mem_counter += FIFO.nbytes
             mem_counter += MEM.nbytes
             mem_counter += BLOOM.nbytes
-            mem_counter += GRAPH_SPACE.nbytes
+            # mem_counter += GRAPH_SPACE.nbytes
             
             #Print useful information on memory occupation
             print(data, querytuple, sep=" ", flush=True)
@@ -280,7 +283,6 @@ def subiso(test, path):
                           sep='\n',
                           file=fres)
                 
-                ol.download()
             else :
                 print("Skipped due to memory overflow.", flush=True)
 
@@ -297,7 +299,8 @@ def subiso(test, path):
     
     print(f"Total test time: {tot_time_bench:.4f}", file=fres)
     fres.close()
-    del FIFO, GRAPH_SPACE, MEM, BLOOM
+    # del FIFO, GRAPH_SPACE, MEM, BLOOM
+    del FIFO, MEM, BLOOM
 
 if __name__ == "__main__":
     args = parse_args()

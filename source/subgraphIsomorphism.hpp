@@ -39,7 +39,6 @@ void subgraphIsomorphism(
 #else
 
 void subgraphIsomorphism(
-    edge_t edge_buf[GRAPHS_SPACE],
     row_t htb_buf0[HASHTABLES_SPACE],
     row_t htb_buf1[HASHTABLES_SPACE],
     row_t htb_buf2[HASHTABLES_SPACE],
