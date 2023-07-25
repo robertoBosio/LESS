@@ -9,3 +9,4 @@ stats.txt
 *.log
 vivado*
 .Xil/
+scripts/bitstream/*

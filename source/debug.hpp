@@ -18,38 +18,42 @@ namespace debug {
     static unsigned long max_collisions;
     static unsigned long cache_req_prop;
     static unsigned long cache_req_inter;
+    static unsigned long cache_req_inter2;
     static unsigned long cache_req_verify;
     static unsigned long cache_req_verify2;
     static unsigned long hash_collisions;
     static float bloom_fullness;
     static float cache_hit_prop;
     static float cache_hit_inter;
+    static float cache_hit_inter2;
     static float cache_hit_verify;
     static float cache_hit_verify2;
     
     static void init(){
-        batch_reads      = 0;
-        findmin_reads    = 0;
-        readmin_reads    = 0;
-        readmin_n_sets   = 0;
-        readmin_vstream  = 0;
-        bloom_filter     = 0;
-        bloom_fullness   = 0;
-        intersect_reads  = 0;
+        batch_reads = 0;
+        findmin_reads = 0;
+        readmin_reads = 0;
+        readmin_n_sets = 0;
+        readmin_vstream = 0;
+        bloom_filter = 0;
+        bloom_fullness = 0;
+        intersect_reads = 0;
         intersect_filter = 0;
-        verify_filter    = 0;
-        verify_reads     = 0;
-        homomo_trashed   = 0;
-        start_set        = 0;
-        miss_indexing    = 0;
-        max_collisions   = 0;
-        hash_collisions  = 0;
-        cache_hit_prop   = 0;
-        cache_hit_inter  = 0;
+        verify_filter = 0;
+        verify_reads = 0;
+        homomo_trashed = 0;
+        start_set = 0;
+        miss_indexing = 0;
+        max_collisions = 0;
+        hash_collisions = 0;
+        cache_hit_prop = 0;
+        cache_hit_inter = 0;
+        cache_hit_inter2 = 0;
         cache_hit_verify = 0;
         cache_hit_verify2 = 0;
-        cache_req_prop   = 0;
-        cache_req_inter  = 0;
+        cache_req_prop = 0;
+        cache_req_inter = 0;
+        cache_req_inter2 = 0;
         cache_req_verify = 0;
         cache_req_verify2 = 0;
     }
@@ -88,8 +92,9 @@ namespace debug {
             std::endl;
 
 #if CACHE_ENABLE
-        mem_reads = mem_reads - cache_hit_verify - cache_hit_verify2 - cache_hit_inter - cache_hit_prop;
+        mem_reads = mem_reads - cache_hit_verify - cache_hit_verify2 - cache_hit_inter - cache_hit_inter2 - cache_hit_prop;
         intersect_reads -= cache_hit_inter;
+        intersect_reads -= cache_hit_inter2;
         verify_reads -= cache_hit_verify;
         verify_reads -= cache_hit_verify2;
         findmin_reads -= cache_hit_prop;
@@ -113,6 +118,9 @@ namespace debug {
         debof << "\tmean cache hit inter:   " << cache_hit_inter / cache_req_inter  
             << std::endl;
         debof << "\tcache reqs inter:       " << cache_req_inter  << std::endl;
+        debof << "\tmean cache hit inter2:   " << cache_hit_inter2 / cache_req_inter2  
+            << std::endl;
+        debof << "\tcache reqs inter2:       " << cache_req_inter2  << std::endl;
         debof << "\tmean cache hit verify:  " << cache_hit_verify / cache_req_verify  
             << std::endl;
         debof << "\tcache reqs verify:      " << cache_req_verify << std::endl; 
