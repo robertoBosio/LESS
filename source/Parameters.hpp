@@ -61,7 +61,8 @@
 
 #define PROPOSE_BATCH_LOG   6
 #define MERGE_IN_STREAMS    2
-#define CACHE_WORDS_PER_LINE 3
+#define CACHE_WORDS_PER_LINE 2
+#define PIPELINES           1
 #include <ap_axi_sdata.h>
 
 /* Functionality definition */
