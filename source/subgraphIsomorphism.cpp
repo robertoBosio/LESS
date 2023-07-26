@@ -36,7 +36,7 @@
 #pragma GCC diagnostic ignored "-Wsign-compare"
 #pragma GCC diagnostic ignored "-Wunused-parameter"
 
-#define STOP_S      7    
+#define STOP_S      8    
 #define V_ID_W      VERTEX_WIDTH_BIT
 #define V_L_W       LABEL_WIDTH
 #define MAX_QV      MAX_QUERY_VERTICES
@@ -67,6 +67,16 @@ enum edge_flag
     CHECK = 0
 };
 typedef ap_uint<2> edge_flag_type;
+
+typedef struct
+{
+    ap_uint<V_ID_W> indexing_v;
+    unsigned char tb_index;
+    unsigned char iv_pos; // Query indexing vertex position.
+    unsigned int address;
+    bool reset;
+    bool last;
+} findmin_tuple_t;
 
 typedef struct
 {
@@ -275,42 +285,34 @@ PROPOSE_FIFO_NEW_SOLUTION_LOOP:
     }
 }
 
-template <typename T_BLOOM,
-          size_t BLOOM_LOG,
-          size_t K_FUN_LOG>
-void mwj_findmin(
+void mwj_edgebuild(
     const unsigned char hash1_w,
     QueryVertex *qVertices,
-    bloom_t *bloom_p,
     hls::stream<ap_uint<V_ID_W> > &stream_sol_in,
     hls::stream<bool> &stream_sol_end_in,
     hls::stream<bool> &stream_stop,
 
-    hls::stream<readmin_tuple_t> &stream_tuple_out,
-    hls::stream<T_BLOOM> &stream_filter_out,
+    hls::stream<findmin_tuple_t> &stream_tuple_out,
     hls::stream<ap_uint<V_ID_W> > &stream_sol_out,
     hls::stream<bool> &stream_sol_end_out)
 {
-    constexpr size_t K_FUN = (1UL << K_FUN_LOG);
-    T_BLOOM filter[K_FUN];
-#pragma HLS array_partition variable=filter type=complete dim=1
-
-    readmin_tuple_t tuple;
     ap_uint<V_ID_W> curEmb[MAX_QV];
-    ap_uint<V_ID_W> curQV;
-    ap_uint<V_ID_W> readv;
-    unsigned int minSize;
-    unsigned int minTab; 
-    unsigned int minIvPos;
+    hls::stream<ap_uint<V_ID_W>, 4> hash_in0, hash_in1;
+    hls::stream<ap_uint<64>, 4> hash_out0, hash_out1;
+    unsigned char curQV {0};
     bool stop, last;
+    findmin_tuple_t tuple_out;
 
-FINDMIN_TASK_LOOP:
-    while (1) {
-
+    //Initializing filter in findmin
+    tuple_out.reset = true;
+    tuple_out.last = false;
+    stream_tuple_out.write(tuple_out);
+   
+    while(true) {
         if (stream_sol_end_in.read_nb(last)){ 
             curQV = 0;
 
-FINDMIN_COPYING_EMBEDDING_LOOP:
+EDGEBUILD_COPYING_EMBEDDING_LOOP:
             while(!last){
                 curEmb[curQV] = stream_sol_in.read();
                 stream_sol_out.write(curEmb[curQV]);
@@ -320,63 +322,114 @@ FINDMIN_COPYING_EMBEDDING_LOOP:
             }
             stream_sol_end_out.write(true);
 
-            //Initializing variables for a new partial solution
-            for (int g = 0; g < K_FUN; g++)
-            {
-#pragma HLS unroll
-                filter[g] = ~0;
-            }
-            minSize = ~0;
-
-            /* Find sizes of sets in which the current query vertex
-             * is indexed by an other query vertex */
-FINDMIN_TBINDEXED_LOOP:
+EDGEBUILD_MAIN_LOOP:
             for(int g = 0; g < qVertices[curQV].numTablesIndexed; g++){
-#pragma HLS pipeline II=8
                 unsigned char tableIndex = qVertices[curQV].tables_indexed[g];
                 unsigned char ivPos = qVertices[curQV].vertex_indexing[g];
 
-                //Computing intersection between bloom filters
+                //Computing addresses of indexed sets
                 ap_uint<64> hash_out;
                 xf::database::details::hashlookup3_core<V_ID_W>(curEmb[ivPos], hash_out);
                 hash_out = hash_out.range(hash1_w - 1, 0);
                 unsigned int address = (tableIndex * (1UL << hash1_w)) + hash_out;
-                address <<= K_FUN_LOG;
-                unsigned short bloom_s = 0;
-//                 T_BLOOM set_bloom[K_FUN];
-// #pragma HLS array_partition variable=set_bloom type=complete dim=0
+                tuple_out.indexing_v = curEmb[ivPos];
+                tuple_out.iv_pos = ivPos;
+                tuple_out.tb_index = tableIndex;
+                tuple_out.address = address;
+                tuple_out.reset = false;
+                tuple_out.last = (g == qVertices[curQV].numTablesIndexed - 1);
+                stream_tuple_out.write(tuple_out);
+            }
+            tuple_out.reset = true;
+            tuple_out.last = false;
+            stream_tuple_out.write(tuple_out);
+        }
 
-                // bloom_p.get_line(address, 0, set_bloom);
-                // for (int g = 0; g < K_FUN; g++){
-                //     set_bloom[g] = bloom_p[address + g];
-                // }
+        if (stream_stop.read_nb(stop))
+            break;
+    }
+}
 
-                for (int s = 0; s < K_FUN; s++){
+template <typename T_BLOOM,
+          size_t BLOOM_LOG,
+          size_t K_FUN_LOG>
+void mwj_findmin(
+    bloom_t *bloom_p,
+    hls::stream<findmin_tuple_t> &stream_tuple_in,
+    hls::stream<bool> &stream_stop,
+
+    hls::stream<readmin_tuple_t> &stream_tuple_out,
+    hls::stream<T_BLOOM> &stream_filter_out)
+{
+    constexpr size_t K_FUN = (1UL << K_FUN_LOG);
+    T_BLOOM filter[K_FUN];
+#pragma HLS array_partition variable=filter type=complete dim=1
+
+    readmin_tuple_t tuple_out;
+    findmin_tuple_t tuple_in;
+    ap_uint<V_ID_W> minIndexingVertex;
+    unsigned int minSize;
+    unsigned int minTab; 
+    unsigned int minIvPos;
+    bool stop;
+
+FINDMIN_TASK_LOOP:
+    while (1) {
+#pragma HLS pipeline II=8
+
+        if (stream_tuple_in.read_nb(tuple_in)){ 
+            unsigned int address = tuple_in.address;
+            address <<= K_FUN_LOG;
+            unsigned short bloom_s = 0;
+            if (tuple_in.reset){
+                for (int s = 0; s < K_FUN; s++)
+                {
+#pragma HLS unroll
+                    filter[s] = ~0;
+                }
+            }
+            else
+            {
+                for (int s = 0; s < K_FUN; s++)
+                {
 #pragma HLS unroll
                     T_BLOOM set_bloom = bloom_p[address + s];
                     bloom_s += bloom_bitset<T_BLOOM, BLOOM_LOG, 0>(set_bloom);
                     filter[s] = filter[s] & set_bloom;
                 }
-                bloom_s >>= K_FUN_LOG;
-
 #if DEBUG_STATS
-                debug::findmin_reads++;
+            debug::findmin_reads++;
 #endif
-                if (bloom_s < minSize){
+            }
+            bloom_s >>= K_FUN_LOG;
+
+            if (tuple_in.reset)
+            {
+                minSize = ~0;
+            }
+            else
+            {
+                if (bloom_s < minSize)
+                {
                     minSize = bloom_s;
-                    minTab = tableIndex;
-                    minIvPos = ivPos;
+                    minTab = tuple_in.tb_index;
+                    minIvPos = tuple_in.iv_pos;
+                    minIndexingVertex = tuple_in.indexing_v;
                 }
             }
-          
-            tuple.indexing_v = curEmb[minIvPos]; 
-            tuple.tb_index = minTab;
-            tuple.iv_pos = minIvPos; 
-            stream_tuple_out.write(tuple);
-            
-            for (int g = 0; g < K_FUN; g++){
+
+            if (tuple_in.last)
+            {
+                tuple_out.indexing_v = minIndexingVertex;
+                tuple_out.tb_index = minTab;
+                tuple_out.iv_pos = minIvPos;
+                stream_tuple_out.write(tuple_out);
+
+                for (int g = 0; g < K_FUN; g++)
+                {
 #pragma HLS unroll
-                stream_filter_out.write(filter[g]);
+                    stream_filter_out.write(filter[g]);
+                }
             }
         }
 
@@ -1629,12 +1682,20 @@ void multiwayJoin(
     hls_thread_local hls::stream<bool, MAX_QV> p0_stream_sol_end
         ("Propose - partial solution end flag");
     
+    /* Edgebuild data out */
+    hls_thread_local hls::stream<ap_uint<V_ID_W>, MAX_QV> e_stream_sol
+        ("Edgebuild - partial solution");
+    hls_thread_local hls::stream<bool, MAX_QV> e_stream_sol_end
+        ("Edgebuild - partial solution end flag");
+    hls_thread_local hls::stream<findmin_tuple_t, S_D> e_stream_tuple
+        ("Edgebuild - tuples");
+    
     /* Findmin data out */
     hls_thread_local hls::stream<ap_uint<V_ID_W>, MAX_QV> p_stream_sol
         ("Propose - partial solution");
     hls_thread_local hls::stream<bool, MAX_QV> p_stream_sol_end
         ("Propose - partial solution end flag");
-    hls_thread_local hls::stream<T_BLOOM, (1UL << K_FUN_LOG)> p_stream_filter
+    hls_thread_local hls::stream<T_BLOOM, (1UL << K_FUN_LOG) * 4> p_stream_filter
         ("Propose - filter");
     hls_thread_local hls::stream<readmin_tuple_t, S_D> p_stream_tuple
         ("Propose - tuples");
@@ -1824,49 +1885,56 @@ void multiwayJoin(
             b_stream_sol,
             b_stream_sol_end);
     
-    hls_thread_local hls::task mwj_bypass_sol_t5(
+    hls_thread_local hls::task mwj_bypass_sol_findmin(
+            mwj_bypass_sol,
+            e_stream_sol,
+            e_stream_sol_end,
+            p_stream_sol,
+            p_stream_sol_end);
+    
+    hls_thread_local hls::task mwj_bypass_sol_readmin(
             mwj_bypass_sol,
             p_stream_sol,
             p_stream_sol_end,
             r_stream_sol,
             r_stream_sol_end);
 
-    hls_thread_local hls::task mwj_bypass_sol_t0(
+    hls_thread_local hls::task mwj_bypass_sol_intersect(
             mwj_bypass_sol,
             t_stream_sol,
             t_stream_sol_end,
             i_stream_sol,
             i_stream_sol_end);
 
-    hls_thread_local hls::task mwj_bypass_sol_t1(
+    hls_thread_local hls::task mwj_bypass_sol_offset(
             mwj_bypass_sol,
             i_stream_sol,
             i_stream_sol_end,
             o_stream_sol,
             o_stream_sol_end);
     
-    hls_thread_local hls::task mwj_bypass_sol_t6(
+    hls_thread_local hls::task mwj_bypass_sol_split(
             mwj_bypass_sol,
             o_stream_sol,
             o_stream_sol_end,
             s_stream_sol,
             s_stream_sol_end);
     
-    hls_thread_local hls::task mwj_bypass_sol_t2(
+    hls_thread_local hls::task mwj_bypass_sol_verify(
             mwj_bypass_sol,
             s_stream_sol,
             s_stream_sol_end,
             v_stream_sol,
             v_stream_sol_end);
     
-    hls_thread_local hls::task mwj_bypass_sol_t3(
+    hls_thread_local hls::task mwj_bypass_sol_compact(
             mwj_bypass_sol,
             v_stream_sol,
             v_stream_sol_end,
             c_stream_sol,
             c_stream_sol_end);
     
-    hls_thread_local hls::task mwj_bypass_sol_t4(
+    hls_thread_local hls::task mwj_bypass_sol_filter(
             mwj_bypass_sol,
             c_stream_sol,
             c_stream_sol_end,
@@ -1928,20 +1996,25 @@ void multiwayJoin(
     //     streams_stop[STOP_S - 1],
     //     dyn_stream_ovf);
 
+    mwj_edgebuild(
+        hash1_w,
+        qVertices0,
+        p0_stream_sol,
+        p0_stream_sol_end,
+        streams_stop[0],
+        e_stream_tuple,
+        e_stream_sol,
+        e_stream_sol_end);
+
     mwj_findmin<
         T_BLOOM,
         BLOOM_LOG,
         K_FUN_LOG>(
-        hash1_w,
-        qVertices0,
         bloom_p,
-        p0_stream_sol,
-        p0_stream_sol_end,
-        streams_stop[0],
+        e_stream_tuple,
+        streams_stop[1],
         p_stream_tuple,
-        p_stream_filter,
-        p_stream_sol,
-        p_stream_sol_end);
+        p_stream_filter);
 
     mwj_readmin<
         T_BLOOM,
@@ -1953,7 +2026,7 @@ void multiwayJoin(
         htb_buf1,
         p_stream_tuple,
         p_stream_filter,
-        streams_stop[1],
+        streams_stop[2],
         r_stream_set,
         r_stream_set_end,
         r_stream_tuple);
@@ -1967,7 +2040,7 @@ void multiwayJoin(
         b_stream_tuple,
         b_stream_sol,
         b_stream_sol_end,
-        streams_stop[2],
+        streams_stop[3],
         t_stream_tuple,
         t_stream_tuple_end,
         t_stream_sol,
@@ -1978,32 +2051,32 @@ void multiwayJoin(
         htb_cache,
         t_stream_tuple,
         t_stream_tuple_end,
-        streams_stop[3],
+        streams_stop[4],
         i_stream_tuple,
         i_stream_tuple_end);
 
     verifycache_wrapper<PROPOSE_BATCH_LOG>(
-            hTables1,
-            htb_cache,
-            s_stream_tuple,
-            s_stream_tuple_end,
-            streams_stop[4],
-            v_stream_tuple,
-            v_stream_tuple_end);
-    
+        hTables1,
+        htb_cache,
+        s_stream_tuple,
+        s_stream_tuple_end,
+        streams_stop[5],
+        v_stream_tuple,
+        v_stream_tuple_end);
+
     mwj_assembly(
-            nQueryVer,
-            f_stream_set,
-            f_stream_set_end,
-            f_stream_sol,
-            f_stream_sol_end,
-            stream_batch,
-            stream_batch_end,
-            streams_stop,
-            stream_sol0,
-            merge_in[1],
-            a_stream_sol,
-            result);
+        nQueryVer,
+        f_stream_set,
+        f_stream_set_end,
+        f_stream_sol,
+        f_stream_sol_end,
+        stream_batch,
+        stream_batch_end,
+        streams_stop,
+        stream_sol0,
+        merge_in[1],
+        a_stream_sol,
+        result);
 
 #else
   
@@ -2024,21 +2097,42 @@ void multiwayJoin(
     //     std::ref(streams_stop[STOP_S - 1]),
     //     std::ref(dyn_stream_ovf));
 
+    std::thread mwj_edgebuild_t(
+        mwj_edgebuild,
+        hash1_w,
+        qVertices0,
+        std::ref(p0_stream_sol),
+        std::ref(p0_stream_sol_end),
+        std::ref(streams_stop[0]),
+        std::ref(e_stream_tuple),
+        std::ref(e_stream_sol),
+        std::ref(e_stream_sol_end));
+
     std::thread mwj_findmin_t(
         mwj_findmin<T_BLOOM,
                     BLOOM_LOG,
                     K_FUN_LOG>,
-        hash1_w,
-        qVertices0,
         bloom_p,
         // std::ref(bloom_cache),
-        std::ref(p0_stream_sol),
-        std::ref(p0_stream_sol_end),
-        std::ref(streams_stop[0]),
+        std::ref(e_stream_tuple),
+        std::ref(streams_stop[1]),
         std::ref(p_stream_tuple),
-        std::ref(p_stream_filter),
-        std::ref(p_stream_sol),
-        std::ref(p_stream_sol_end));
+        std::ref(p_stream_filter));
+
+    std::thread mwj_readmin_t(
+            mwj_readmin<T_BLOOM,
+            BLOOM_LOG,
+            K_FUN_LOG>,
+            hash1_w,
+            hash2_w,
+            hTables0,
+            htb_buf1,
+            std::ref(p_stream_tuple),
+            std::ref(p_stream_filter),
+            std::ref(streams_stop[3]),
+            std::ref(r_stream_set),
+            std::ref(r_stream_set_end),
+            std::ref(r_stream_tuple));
 
     std::thread mwj_tuplebuild_t(
             mwj_tuplebuild<PROPOSE_BATCH_LOG>,
@@ -2055,21 +2149,6 @@ void multiwayJoin(
             std::ref(t_stream_tuple_end),
             std::ref(t_stream_sol),
             std::ref(t_stream_sol_end));
-
-    std::thread mwj_readmin_t(
-            mwj_readmin<T_BLOOM,
-            BLOOM_LOG,
-            K_FUN_LOG>,
-            hash1_w,
-            hash2_w,
-            hTables0,
-            htb_buf1,
-            std::ref(p_stream_tuple),
-            std::ref(p_stream_filter),
-            std::ref(streams_stop[1]),
-            std::ref(r_stream_set),
-            std::ref(r_stream_set_end),
-            std::ref(r_stream_tuple));
     
     std::thread mwj_intersect_t(
             mwj_intersect<PROPOSE_BATCH_LOG>,
@@ -2077,7 +2156,7 @@ void multiwayJoin(
             std::ref(htb_cache),
             std::ref(t_stream_tuple),
             std::ref(t_stream_tuple_end),
-            std::ref(streams_stop[3]),
+            std::ref(streams_stop[4]),
             std::ref(i_stream_tuple),
             std::ref(i_stream_tuple_end));
 
@@ -2087,7 +2166,7 @@ void multiwayJoin(
             std::ref(htb_cache),
             std::ref(s_stream_tuple),
             std::ref(s_stream_tuple_end),
-            std::ref(streams_stop[4]),
+            std::ref(streams_stop[5]),
             std::ref(v_stream_tuple),
             std::ref(v_stream_tuple_end));
     
@@ -2121,6 +2200,7 @@ void multiwayJoin(
 
 #ifndef __SYNTHESIS__
 
+    mwj_edgebuild_t.join();
     mwj_findmin_t.join();
     mwj_readmin_t.join();
     mwj_tuplebuild_t.join();

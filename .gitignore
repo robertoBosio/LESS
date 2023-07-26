@@ -4,8 +4,11 @@ subgraphiso-kria*/*
 subiso_bd/*
 .vscode/*
 result*
+vivado*
+DaCH/*
+scripts/bitstream/*
+.Xil/*
+*.log
+*.wcfg
 settings.tcl
 stats.txt
-*.log
-vivado*
-.Xil/

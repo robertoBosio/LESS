@@ -332,7 +332,7 @@ int main()
                        HASHTABLES_SPACE,
                        MAX_QUERY_VERTICES,
                        MAX_TABLES>(
-                res_buf,
+                &res_buf[dynfifo_space],
                 htb_buf,
                 bloom_p,
                 qVertices0,
