@@ -53,23 +53,23 @@ def subiso(test, path):
     addr_mem0 = 0x10
     addr_mem1 = 0x1c
     addr_mem2 = 0x28
-# addr_mem3 = 0x40
-    addr_bloom = 0x34
-    addr_fifo = 0x40
+    addr_mem3 = 0x34
+    addr_bloom = 0x40
+    addr_fifo = 0x4c
     
-    addr_qv = 0x4c
-    addr_qe = 0x54
-    addr_de = 0x5c
-    addr_hash1_w = 0x68
-    addr_hash2_w = 0x70
-    addr_dyn_space = 0x78
+    addr_qv = 0x58
+    addr_qe = 0x60
+    addr_de = 0x68
+    addr_hash1_w = 0x74
+    addr_hash2_w = 0x7c
+    addr_dyn_space = 0x84
     
-    addr_dyn_fifo = 0x84
-    addr_dyn_fifo_ctrl = 0x8c
-    addr_preproc = 0x9c
-    addr_preproc_ctrl = 0xa0
-    addr_res = 0xac
-    addr_res_ctrl = 0xb4
+    addr_dyn_fifo = 0x90
+    addr_dyn_fifo_ctrl = 0x98
+    addr_preproc = 0xa8
+    addr_preproc_ctrl = 0xac
+    addr_res = 0xb8
+    addr_res_ctrl = 0xc0
 
     node_t = np.uint32
     label_t = np.uint8
@@ -201,7 +201,7 @@ def subiso(test, path):
             ol.subgraphIsomorphism_0.write(addr_mem0, MEM.device_address)
             ol.subgraphIsomorphism_0.write(addr_mem1, MEM.device_address)
             ol.subgraphIsomorphism_0.write(addr_mem2, MEM.device_address)
-# ol.subgraphIsomorphism_0.write(addr_mem3, MEM.device_address)
+            ol.subgraphIsomorphism_0.write(addr_mem3, MEM.device_address)
             ol.subgraphIsomorphism_0.write(addr_bloom, BLOOM.device_address)
             ol.subgraphIsomorphism_0.write(addr_fifo, FIFO.device_address)
             ol.subgraphIsomorphism_0.write(addr_hash1_w, hash1_w)

@@ -5,6 +5,7 @@ namespace debug {
     static unsigned long batch_reads;
     static unsigned long findmin_reads;
     static unsigned long readmin_reads;
+    static unsigned long readmin_burst;
     static unsigned long readmin_n_sets;
     static unsigned long readmin_vstream;
     static unsigned long bloom_filter;
@@ -29,6 +30,7 @@ namespace debug {
         batch_reads      = 0;
         findmin_reads    = 0;
         readmin_reads    = 0;
+        readmin_burst    = 0;
         readmin_n_sets   = 0;
         readmin_vstream  = 0;
         bloom_filter     = 0;
@@ -59,6 +61,7 @@ namespace debug {
         unsigned long mem_reads =  batch_reads +
         findmin_reads    +
         readmin_reads    +
+        readmin_burst    +
         intersect_reads  +
         verify_reads;     
         
@@ -76,6 +79,8 @@ namespace debug {
             findmin_reads * 100 / mem_reads << "%" << std::endl;
         debof << "\treadmin reads:   " << readmin_reads << "\t" <<
             readmin_reads * 100 / mem_reads << "%"<< std::endl;
+        debof << "\treadmin burst reads:   " << readmin_burst << "\t" <<
+            readmin_burst * 100 / mem_reads << "%"<< std::endl;
         debof << "\tintersect reads: " << intersect_reads << "\t" << 
             intersect_reads * 100 / mem_reads << "%"<< std::endl;
         debof << "\tverify reads:    " << verify_reads << "\t" << 
@@ -95,6 +100,8 @@ namespace debug {
             findmin_reads * 100 / mem_reads << "%" << std::endl;
         debof << "\treadmin reads:   " << readmin_reads << "\t" <<
             readmin_reads * 100 / mem_reads << "%"<< std::endl;
+        debof << "\treadmin burst reads:   " << readmin_burst << "\t" <<
+            readmin_burst * 100 / mem_reads << "%"<< std::endl;
         debof << "\tintersect reads: " << intersect_reads << "\t" << 
             intersect_reads * 100 / mem_reads << "%"<< std::endl;
         debof << "\tverify reads:    " << verify_reads << "\t" << 

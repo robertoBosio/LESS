@@ -35,8 +35,9 @@
 #pragma GCC diagnostic ignored "-Wunused-label"
 #pragma GCC diagnostic ignored "-Wsign-compare"
 #pragma GCC diagnostic ignored "-Wunused-parameter"
+// #pragma GCC diagnostic ignored "-Wunused-but-set-variable"
 
-#define STOP_S      8    
+#define STOP_S      9    
 #define V_ID_W      VERTEX_WIDTH_BIT
 #define V_L_W       LABEL_WIDTH
 #define MAX_QV      MAX_QUERY_VERTICES
@@ -50,7 +51,7 @@
 
 #if CACHE_ENABLE
 typedef cache< ap_uint<DDR_W>, true, false, 2,
-        HASHTABLES_SPACE, 1, 1, (1UL << CACHE_WORDS_PER_LINE), false, 512, 1,
+        HASHTABLES_SPACE, 0, 0, (1UL << CACHE_WORDS_PER_LINE), false, 512, 1,
         false, 1, AUTO, BRAM> htb_cache_t;
 
 // typedef cache< bloom_t, true, false, 1,
@@ -83,7 +84,16 @@ typedef struct
     ap_uint<V_ID_W> indexing_v;
     unsigned char tb_index;
     unsigned char iv_pos; // Query indexing vertex position.
-} readmin_tuple_t;
+} readmin_counter_tuple_t;
+
+typedef struct
+{
+    ap_uint<V_ID_W> indexing_v;
+    unsigned char tb_index;
+    unsigned char iv_pos; // Query indexing vertex position.
+    unsigned int rowstart;
+    unsigned int rowend;
+} readmin_edge_tuple_t;
 
 typedef struct
 {
@@ -324,20 +334,20 @@ EDGEBUILD_COPYING_EMBEDDING_LOOP:
 
 EDGEBUILD_MAIN_LOOP:
             for(int g = 0; g < qVertices[curQV].numTablesIndexed; g++){
-                unsigned char tableIndex = qVertices[curQV].tables_indexed[g];
-                unsigned char ivPos = qVertices[curQV].vertex_indexing[g];
+                unsigned char tb_index = qVertices[curQV].tables_indexed[g];
+                unsigned char iv_pos = qVertices[curQV].vertex_indexing[g];
 
                 //Computing addresses of indexed sets
                 ap_uint<64> hash_out;
-                xf::database::details::hashlookup3_core<V_ID_W>(curEmb[ivPos], hash_out);
+                xf::database::details::hashlookup3_core<V_ID_W>(curEmb[iv_pos], hash_out);
                 hash_out = hash_out.range(hash1_w - 1, 0);
-                unsigned int address = (tableIndex * (1UL << hash1_w)) + hash_out;
-                tuple_out.indexing_v = curEmb[ivPos];
-                tuple_out.iv_pos = ivPos;
-                tuple_out.tb_index = tableIndex;
+                unsigned int address = (tb_index * (1UL << hash1_w)) + hash_out;
+                tuple_out.indexing_v = curEmb[iv_pos];
+                tuple_out.iv_pos = iv_pos;
+                tuple_out.tb_index = tb_index;
                 tuple_out.address = address;
                 tuple_out.reset = false;
-                tuple_out.last = (g == qVertices[curQV].numTablesIndexed - 1);
+                tuple_out.last = (g == (qVertices[curQV].numTablesIndexed - 1));
                 stream_tuple_out.write(tuple_out);
             }
             tuple_out.reset = true;
@@ -358,19 +368,16 @@ void mwj_findmin(
     hls::stream<findmin_tuple_t> &stream_tuple_in,
     hls::stream<bool> &stream_stop,
 
-    hls::stream<readmin_tuple_t> &stream_tuple_out,
+    hls::stream<readmin_counter_tuple_t> &stream_tuple_out,
     hls::stream<T_BLOOM> &stream_filter_out)
 {
     constexpr size_t K_FUN = (1UL << K_FUN_LOG);
     T_BLOOM filter[K_FUN];
 #pragma HLS array_partition variable=filter type=complete dim=1
 
-    readmin_tuple_t tuple_out;
+    readmin_counter_tuple_t tuple_out;
     findmin_tuple_t tuple_in;
-    ap_uint<V_ID_W> minIndexingVertex;
-    unsigned int minSize;
-    unsigned int minTab; 
-    unsigned int minIvPos;
+    unsigned int min_size;
     bool stop;
 
 FINDMIN_TASK_LOOP:
@@ -381,6 +388,7 @@ FINDMIN_TASK_LOOP:
             unsigned int address = tuple_in.address;
             address <<= K_FUN_LOG;
             unsigned short bloom_s = 0;
+
             if (tuple_in.reset){
                 for (int s = 0; s < K_FUN; s++)
                 {
@@ -405,24 +413,21 @@ FINDMIN_TASK_LOOP:
 
             if (tuple_in.reset)
             {
-                minSize = ~0;
+                min_size = ~0;
             }
             else
             {
-                if (bloom_s < minSize)
+                if (bloom_s < min_size)
                 {
-                    minSize = bloom_s;
-                    minTab = tuple_in.tb_index;
-                    minIvPos = tuple_in.iv_pos;
-                    minIndexingVertex = tuple_in.indexing_v;
+                    min_size = bloom_s;
+                    tuple_out.indexing_v = tuple_in.indexing_v;
+                    tuple_out.tb_index = tuple_in.tb_index;
+                    tuple_out.iv_pos = tuple_in.iv_pos;
                 }
             }
 
             if (tuple_in.last)
             {
-                tuple_out.indexing_v = minIndexingVertex;
-                tuple_out.tb_index = minTab;
-                tuple_out.iv_pos = minIvPos;
                 stream_tuple_out.write(tuple_out);
 
                 for (int g = 0; g < K_FUN; g++)
@@ -441,42 +446,30 @@ FINDMIN_TASK_LOOP:
 template <typename T_BLOOM,
           size_t BLOOM_LOG,
           size_t K_FUN_LOG>
-void mwj_readmin(
+void mwj_readmin_counter(
     const unsigned char hash1_w,
     const unsigned char hash2_w,
     AdjHT *hTables,
     row_t *m_axi,
-    hls::stream<readmin_tuple_t> &stream_tuple_in,
+    hls::stream<readmin_counter_tuple_t> &stream_tuple_in,
     hls::stream<T_BLOOM> &stream_filter_in,
     hls::stream<bool> &stream_stop,
 
-    hls::stream<ap_uint<V_ID_W> > &stream_set_out,
-    hls::stream<bool> &stream_set_end_out,
-    hls::stream<tuplebuild_tuple_t> &stream_tuple_out)
+    hls::stream<readmin_edge_tuple_t> &stream_tuple_out,
+    hls::stream<T_BLOOM> &stream_filter_out)
 {
     constexpr size_t K_FUN = (1UL << K_FUN_LOG);
-    T_BLOOM filter[K_FUN];
-#pragma HLS array_partition variable=filter type=complete dim=1
-
-    // const unsigned long hash_mask = (1UL << hash1_w) - 1; 
-    readmin_tuple_t tuple_in;
-    tuplebuild_tuple_t tuple_out;
-    ap_uint<V_ID_W> vertexCheck;
-    ap_uint<V_ID_W> curQV;
-    ap_uint<V_ID_W> vertex; 
-    ap_uint<V_ID_W * 2> edge;
+    readmin_counter_tuple_t tuple_in;
+    readmin_edge_tuple_t tuple_out;
     bool stop;
 
-READMIN_TASK_LOOP:
+READMIN_COUNTER_TASK_LOOP:
     while (true) {
         if (stream_tuple_in.read_nb(tuple_in)){ 
 
-            tuple_out.tb_index = tuple_in.tb_index;
-            tuple_out.iv_pos = tuple_in.iv_pos;
-            stream_tuple_out.write(tuple_out);
             for (int g = 0; g < K_FUN; g++){
 #pragma HLS unroll
-                filter[g] = stream_filter_in.read();
+                stream_filter_out.write(stream_filter_in.read());
             }
 
             ap_uint<64> hash_out;
@@ -521,20 +514,72 @@ READMIN_TASK_LOOP:
             /* Read the data */
             ram_row = m_axi[addr_row];
             end_off = ram_row.range(((addr_inrow + 1) << C_W) - 1, addr_inrow << C_W);
+            
+            unsigned int rowstart = hTables[tuple_in.tb_index].start_edges +
+                                    (start_off >> (DDR_BIT - E_W));
+            unsigned int rowend = hTables[tuple_in.tb_index].start_edges +
+                                  (end_off >> (DDR_BIT - E_W));
+            
+            tuple_out.indexing_v = tuple_in.indexing_v;
+            tuple_out.tb_index = tuple_in.tb_index;
+            tuple_out.iv_pos = tuple_in.iv_pos;
+            tuple_out.rowstart = rowstart;
+            tuple_out.rowend = rowend;
+            
+            stream_tuple_out.write(tuple_out);
 
 #if DEBUG_STATS
             debug::readmin_reads += 2;
 #endif
-           
-            unsigned int rowstart = hTables[tuple_in.tb_index].start_edges + 
-                (start_off >> (DDR_BIT - E_W));
-            unsigned int rowend = hTables[tuple_in.tb_index].start_edges + 
-                (end_off >> (DDR_BIT - E_W));
-            
-READMIN_EDGES_LOOP:
-            for (int g = 0; g <= rowend - rowstart; g++){
-                row_t row = m_axi[rowstart + g];
+        }
 
+        if (stream_stop.read_nb(stop))
+            break;
+    }
+}
+           
+
+template <typename T_BLOOM,
+          size_t BLOOM_LOG,
+          size_t K_FUN_LOG>
+void mwj_readmin_edge(
+    row_t *m_axi,
+    hls::stream<readmin_edge_tuple_t> &stream_tuple_in,
+    hls::stream<T_BLOOM> &stream_filter_in,
+    hls::stream<bool> &stream_stop,
+
+    hls::stream<ap_uint<V_ID_W> > &stream_set_out,
+    hls::stream<bool> &stream_set_end_out,
+    hls::stream<tuplebuild_tuple_t> &stream_tuple_out)
+{
+    constexpr size_t K_FUN = (1UL << K_FUN_LOG);
+    T_BLOOM filter[K_FUN];
+#pragma HLS array_partition variable=filter type=complete dim=1
+
+    readmin_edge_tuple_t tuple_in;
+    tuplebuild_tuple_t tuple_out;
+    ap_uint<V_ID_W> vertexCheck;
+    ap_uint<V_ID_W> vertex; 
+    ap_uint<V_ID_W * 2> edge;
+    ap_uint<64> hash_out;
+    bool stop;
+
+READMIN_EDGE_TASK_LOOP:
+    while (true) {
+        if (stream_tuple_in.read_nb(tuple_in)){ 
+            
+            tuple_out.tb_index = tuple_in.tb_index;
+            tuple_out.iv_pos = tuple_in.iv_pos;
+            stream_tuple_out.write(tuple_out);
+
+            for (int g = 0; g < K_FUN; g++){
+#pragma HLS unroll
+                filter[g] = stream_filter_in.read();
+            }
+
+READMIN_EDGES_MAIN_LOOP:
+            for (int g = 0; g <= tuple_in.rowend - tuple_in.rowstart; g++){
+                row_t row = m_axi[tuple_in.rowstart + g];
                 for (int i = 0; i < EDGE_ROW; i++){
 #pragma HLS unroll
                     edge = row.range(((i + 1) << E_W) - 1, i << E_W);
@@ -566,7 +611,7 @@ READMIN_EDGES_LOOP:
                     }
                 }
 #if DEBUG_STATS
-                debug::readmin_reads++;
+                debug::readmin_burst++;
 #endif
             }
             stream_set_end_out.write(true);
@@ -755,7 +800,7 @@ TUPLEBUILD_COPYING_EMBEDDING_LOOP:
                 uint8_t ivPos = qVertices[curQV].vertex_indexing[0];
                 bool bit_min = (tuple_in.tb_index == tableIndex && 
                         tuple_in.iv_pos == ivPos);
-
+                // bool bit_min = false;
                 last = stream_set_end_in.read();
 
 TUPLEBUILD_MAIN_LOOP_FIRST_IT:
@@ -805,6 +850,7 @@ TUPLEBUILD_EDGE_LOOP_AFTER_IT:
                 bool bit_min = (tuple_in.tb_index == tableIndex && 
                         tuple_in.iv_pos == ivPos);
 
+                // bool bit_min = false;
                 for (int buffer_p = 0; buffer_p < buffer_size; buffer_p++){
 #pragma HLS loop_flatten
                     vToVerify = buffer[buffer_p];
@@ -1311,8 +1357,6 @@ void mwj_assembly(
 {
     const ap_uint<V_ID_W> MASK_NEW_SOLUTION = (1UL << (V_ID_W - 1));
     const ap_uint<V_ID_W> MASK_END_EXTENSION = (1UL << (V_ID_W - 2));
-    // const ap_uint<V_ID_W> BIT_NEW_SOLUTION = V_ID_W - 1;
-    // const ap_uint<V_ID_W> BIT_END_EXTENSION = V_ID_W - 2;
     ap_uint<V_ID_W> curQV;
     ap_uint<V_ID_W> curEmb[MAX_QV];
     bool last_sol, last_set, stop, last_start;
@@ -1329,7 +1373,6 @@ void mwj_assembly(
     stream_partial_out.write(0 | MASK_NEW_SOLUTION);
     stream_partial_out.write(stream_batch.read() | MASK_END_EXTENSION);
     stream_req.write(true);
-
 ASSEMBLY_TASK_LOOP:
     while(1) {
         if (stream_end_embed_in.read_nb(last_sol)){
@@ -1563,34 +1606,34 @@ EXTRACT_BAGTOSET_SETCHECKER_LOOP:
     stream_batch_end.write(true);
 }
 
-template <typename T_BLOOM,
-          size_t BLOOM_LOG,
-          size_t K_FUN_LOG>
-void readmincache_wrapper(
-    AdjHT *hTables,
-    htb_cache_t &htb_buf,
-    hls::stream<readmin_tuple_t> &stream_tuple_in,
-    hls::stream<T_BLOOM> &stream_filter_in,
-    hls::stream<bool> &stream_stop,
+// template <typename T_BLOOM,
+//           size_t BLOOM_LOG,
+//           size_t K_FUN_LOG>
+// void readmincache_wrapper(
+//     AdjHT *hTables,
+//     htb_cache_t &htb_buf,
+//     hls::stream<readmin_tuple_t> &stream_tuple_in,
+//     hls::stream<T_BLOOM> &stream_filter_in,
+//     hls::stream<bool> &stream_stop,
 
-    hls::stream< ap_uint<V_ID_W> > &stream_set_out,
-    hls::stream<bool> &stream_set_end_out,
-    hls::stream<tuplebuild_tuple_t> &stream_tuple_out)
-{
-    htb_buf.init(2);
-    mwj_readmin<T_BLOOM,
-                BLOOM_LOG,
-                K_FUN_LOG>
-                (
-        hTables,
-        htb_buf,
-        stream_tuple_in,
-        stream_filter_in,
-        stream_stop,
-        stream_set_out,
-        stream_set_end_out,
-        stream_tuple_out);
-}
+//     hls::stream< ap_uint<V_ID_W> > &stream_set_out,
+//     hls::stream<bool> &stream_set_end_out,
+//     hls::stream<tuplebuild_tuple_t> &stream_tuple_out)
+// {
+//     htb_buf.init(2);
+//     mwj_readmin<T_BLOOM,
+//                 BLOOM_LOG,
+//                 K_FUN_LOG>
+//                 (
+//         hTables,
+//         htb_buf,
+//         stream_tuple_in,
+//         stream_filter_in,
+//         stream_stop,
+//         stream_set_out,
+//         stream_set_end_out,
+//         stream_tuple_out);
+// }
 
 template <size_t BATCH_SIZE_LOG>
 void intersectcache_wrapper(
@@ -1643,6 +1686,7 @@ template <typename T_BLOOM,
 void multiwayJoin(
     ap_uint<DDR_W> *htb_buf0,
     ap_uint<DDR_W> *htb_buf1,
+    ap_uint<DDR_W> *htb_buf2,
     T_BLOOM *bloom_p,
     row_t *res_buf,
     AdjHT *hTables0,
@@ -1665,6 +1709,7 @@ void multiwayJoin(
 {
 #pragma HLS STABLE variable=htb_buf0
 #pragma HLS STABLE variable=htb_buf1
+#pragma HLS STABLE variable=htb_buf2
 #pragma HLS STABLE variable=bloom_p
 #pragma HLS STABLE variable=hTables0
 #pragma HLS STABLE variable=hTables1
@@ -1697,20 +1742,30 @@ void multiwayJoin(
         ("Propose - partial solution end flag");
     hls_thread_local hls::stream<T_BLOOM, (1UL << K_FUN_LOG) * 4> p_stream_filter
         ("Propose - filter");
-    hls_thread_local hls::stream<readmin_tuple_t, S_D> p_stream_tuple
+    hls_thread_local hls::stream<readmin_counter_tuple_t, S_D> p_stream_tuple
         ("Propose - tuples");
 
-    /* Readmin data out */    
-    hls_thread_local hls::stream<ap_uint<V_ID_W>, MAX_QV> r_stream_sol
-        ("Readmin - partial solution");
-    hls_thread_local hls::stream<bool, MAX_QV> r_stream_sol_end
-        ("Readmin - partial solution end flag");
-    hls_thread_local hls::stream<ap_uint<V_ID_W>, S_D> r_stream_set
-        ("Readmin - set nodes");
-    hls_thread_local hls::stream<bool, S_D> r_stream_set_end
-        ("Readmin - set nodes end flag");
-    hls_thread_local hls::stream<tuplebuild_tuple_t, S_D> r_stream_tuple
-        ("Readmin - tuples");
+    /* Readmin counter data out */    
+    hls_thread_local hls::stream<ap_uint<V_ID_W>, MAX_QV> rc_stream_sol
+        ("Readmin counter - partial solution");
+    hls_thread_local hls::stream<bool, MAX_QV> rc_stream_sol_end
+        ("Readmin counter - partial solution end flag");
+    hls_thread_local hls::stream<T_BLOOM, (1UL << K_FUN_LOG) * 4> rc_stream_filter
+        ("Readmin counter - filter");
+    hls_thread_local hls::stream<readmin_edge_tuple_t, S_D> rc_stream_tuple
+        ("Readmin counter - tuples");
+    
+    /* Readmin edge data out */    
+    hls_thread_local hls::stream<ap_uint<V_ID_W>, MAX_QV> re_stream_sol
+        ("Readmin edge - partial solution");
+    hls_thread_local hls::stream<bool, MAX_QV> re_stream_sol_end
+        ("Readmin edge - partial solution end flag");
+    hls_thread_local hls::stream<ap_uint<V_ID_W>, S_D> re_stream_set
+        ("Readmin edge - set nodes");
+    hls_thread_local hls::stream<bool, S_D> re_stream_set_end
+        ("Readmin edge - set nodes end flag");
+    hls_thread_local hls::stream<tuplebuild_tuple_t, S_D> re_stream_tuple
+        ("Readmin edge - tuples");
     
     /* Homomorphism data out */    
     hls_thread_local hls::stream<ap_uint<V_ID_W>, MAX_QV> h_stream_sol
@@ -1835,22 +1890,21 @@ void multiwayJoin(
     // bloom_cache_t bloom_cache(bloom_p);
 
     dynfifo_init<
-        ap_uint<V_ID_W>,        /* fifo data type */
-        row_t,                  /* fifo data type */
-        DYN_FIFO_DEPTH,         /* in/out stream size */
-        DYN_FIFO_BURST * 2,     /* load/store stream size */
-        DDR_WORD,               /* bitwidth ddr word */
-        DYN_FIFO_BURST,         /* burst transaction size */
-        RESULTS_SPACE>          /* memory words available */
-            (res_buf,   
-             dynfifo_diagnostic,
-             dynfifo_space,
-             a_stream_sol,
-             dyn_stream_sol,
-             streams_stop[STOP_S - 2],
-             streams_stop[STOP_S - 1],
-             dyn_stream_ovf);
-
+        ap_uint<V_ID_W>,    /* fifo data type */
+        row_t,              /* fifo data type */
+        DYN_FIFO_DEPTH,     /* in/out stream size */
+        DYN_FIFO_BURST * 2, /* load/store stream size */
+        DDR_WORD,           /* bitwidth ddr word */
+        DYN_FIFO_BURST,     /* burst transaction size */
+        RESULTS_SPACE>      /* memory words available */
+        (res_buf,
+         dynfifo_diagnostic,
+         dynfifo_space,
+         a_stream_sol,
+         dyn_stream_sol,
+         streams_stop[STOP_S - 2],
+         streams_stop[STOP_S - 1],
+         dyn_stream_ovf);
 
     hls_thread_local hls::task mwj_propose_t(
         mwj_propose,
@@ -1858,116 +1912,124 @@ void multiwayJoin(
         p0_stream_sol,
         p0_stream_sol_end);
 
-    hls_thread_local hls::task mwj_homomorphism_t(
-            mwj_homomorphism,
-            r_stream_set,
-            r_stream_set_end,
-            r_stream_tuple,
-            r_stream_sol,
-            r_stream_sol_end,
-            h_stream_set,
-            h_stream_set_end,
-            h_stream_tuple,
-            h_stream_sol,
-            h_stream_sol_end);
 
-    hls_thread_local hls::task mwj_batchbuild_t(
-            mwj_batchbuild<(1UL << PROPOSE_BATCH_LOG)>,
-            h_stream_set,
-            h_stream_set_end,
-            h_stream_tuple,
-            h_stream_sol,
-            h_stream_sol_end,
-            merge_in[0],
-            b_stream_set,
-            b_stream_set_end,
-            b_stream_tuple,
-            b_stream_sol,
-            b_stream_sol_end);
-    
     hls_thread_local hls::task mwj_bypass_sol_findmin(
-            mwj_bypass_sol,
-            e_stream_sol,
-            e_stream_sol_end,
-            p_stream_sol,
-            p_stream_sol_end);
+        mwj_bypass_sol,
+        e_stream_sol,
+        e_stream_sol_end,
+        p_stream_sol,
+        p_stream_sol_end);
+
+    hls_thread_local hls::task mwj_bypass_sol_readmin_counter(
+        mwj_bypass_sol,
+        p_stream_sol,
+        p_stream_sol_end,
+        rc_stream_sol,
+        rc_stream_sol_end);
+
+    hls_thread_local hls::task mwj_bypass_sol_readmin_edge(
+        mwj_bypass_sol,
+        rc_stream_sol,
+        rc_stream_sol_end,
+        re_stream_sol,
+        re_stream_sol_end);
+
+    hls_thread_local hls::task mwj_homomorphism_t(
+        mwj_homomorphism,
+        re_stream_set,
+        re_stream_set_end,
+        re_stream_tuple,
+        re_stream_sol,
+        re_stream_sol_end,
+        h_stream_set,
+        h_stream_set_end,
+        h_stream_tuple,
+        h_stream_sol,
+        h_stream_sol_end);
     
-    hls_thread_local hls::task mwj_bypass_sol_readmin(
-            mwj_bypass_sol,
-            p_stream_sol,
-            p_stream_sol_end,
-            r_stream_sol,
-            r_stream_sol_end);
+    hls_thread_local hls::task mwj_batchbuild_t(
+        mwj_batchbuild<(1UL << PROPOSE_BATCH_LOG)>,
+        h_stream_set,
+        h_stream_set_end,
+        h_stream_tuple,
+        h_stream_sol,
+        h_stream_sol_end,
+        merge_in[0],
+        b_stream_set,
+        b_stream_set_end,
+        b_stream_tuple,
+        b_stream_sol,
+        b_stream_sol_end);
 
     hls_thread_local hls::task mwj_bypass_sol_intersect(
-            mwj_bypass_sol,
-            t_stream_sol,
-            t_stream_sol_end,
-            i_stream_sol,
-            i_stream_sol_end);
+        mwj_bypass_sol,
+        t_stream_sol,
+        t_stream_sol_end,
+        i_stream_sol,
+        i_stream_sol_end);
 
     hls_thread_local hls::task mwj_bypass_sol_offset(
-            mwj_bypass_sol,
-            i_stream_sol,
-            i_stream_sol_end,
-            o_stream_sol,
-            o_stream_sol_end);
-    
+        mwj_bypass_sol,
+        i_stream_sol,
+        i_stream_sol_end,
+        o_stream_sol,
+        o_stream_sol_end);
+
     hls_thread_local hls::task mwj_bypass_sol_split(
-            mwj_bypass_sol,
-            o_stream_sol,
-            o_stream_sol_end,
-            s_stream_sol,
-            s_stream_sol_end);
-    
+        mwj_bypass_sol,
+        o_stream_sol,
+        o_stream_sol_end,
+        s_stream_sol,
+        s_stream_sol_end);
+
     hls_thread_local hls::task mwj_bypass_sol_verify(
-            mwj_bypass_sol,
-            s_stream_sol,
-            s_stream_sol_end,
-            v_stream_sol,
-            v_stream_sol_end);
-    
+        mwj_bypass_sol,
+        s_stream_sol,
+        s_stream_sol_end,
+        v_stream_sol,
+        v_stream_sol_end);
+
     hls_thread_local hls::task mwj_bypass_sol_compact(
-            mwj_bypass_sol,
-            v_stream_sol,
-            v_stream_sol_end,
-            c_stream_sol,
-            c_stream_sol_end);
-    
+        mwj_bypass_sol,
+        v_stream_sol,
+        v_stream_sol_end,
+        c_stream_sol,
+        c_stream_sol_end);
+
     hls_thread_local hls::task mwj_bypass_sol_filter(
-            mwj_bypass_sol,
-            c_stream_sol,
-            c_stream_sol_end,
-            f_stream_sol,
-            f_stream_sol_end);
-    
+        mwj_bypass_sol,
+        c_stream_sol,
+        c_stream_sol_end,
+        f_stream_sol,
+        f_stream_sol_end);
+
     hls_thread_local hls::task mwj_offset_t(
-            mwj_offset,
-            i_stream_tuple,
-            i_stream_tuple_end,
-            o_stream_tuple,
-            o_stream_tuple_end);
-    
+        mwj_offset,
+        i_stream_tuple,
+        i_stream_tuple_end,
+        o_stream_tuple,
+        o_stream_tuple_end);
+
     hls_thread_local hls::task mwj_split_t(
-            mwj_split<(1UL << PROPOSE_BATCH_LOG)>,
-            o_stream_tuple,
-            o_stream_tuple_end,
-            s_stream_tuple,
-            s_stream_tuple_end);
+        mwj_split<(1UL << PROPOSE_BATCH_LOG)>,
+        o_stream_tuple,
+        o_stream_tuple_end,
+        s_stream_tuple,
+        s_stream_tuple_end);
 
     hls_thread_local hls::task mwj_compact_t(
-            mwj_compact,
-            v_stream_tuple,
-            v_stream_tuple_end,
-            c_stream_tuple,
-            c_stream_tuple_end);
+        mwj_compact,
+        v_stream_tuple,
+        v_stream_tuple_end,
+        c_stream_tuple,
+        c_stream_tuple_end);
 
     hls_thread_local hls::task mwj_filter_t(
-            mwj_filter<(1UL << PROPOSE_BATCH_LOG)>,
-            c_stream_tuple,
-            c_stream_tuple_end,
-            f_stream_set,
-            f_stream_set_end);
+        mwj_filter<(1UL << PROPOSE_BATCH_LOG)>,
+        c_stream_tuple,
+        c_stream_tuple_end,
+        f_stream_set,
+        f_stream_set_end);
 
 #ifdef __SYNTHESIS__
 
@@ -2016,7 +2078,7 @@ void multiwayJoin(
         p_stream_tuple,
         p_stream_filter);
 
-    mwj_readmin<
+    mwj_readmin_counter<
         T_BLOOM,
         BLOOM_LOG,
         K_FUN_LOG>(
@@ -2027,10 +2089,21 @@ void multiwayJoin(
         p_stream_tuple,
         p_stream_filter,
         streams_stop[2],
-        r_stream_set,
-        r_stream_set_end,
-        r_stream_tuple);
-
+        rc_stream_tuple,
+        rc_stream_filter);
+    
+    mwj_readmin_edge<
+        T_BLOOM,
+        BLOOM_LOG,
+        K_FUN_LOG>(
+        htb_buf2,
+        rc_stream_tuple,
+        rc_stream_filter,
+        streams_stop[3],
+        re_stream_set,
+        re_stream_set_end,
+        re_stream_tuple);
+    
     mwj_tuplebuild<PROPOSE_BATCH_LOG>(
         hash1_w,
         hash2_w,
@@ -2040,7 +2113,7 @@ void multiwayJoin(
         b_stream_tuple,
         b_stream_sol,
         b_stream_sol_end,
-        streams_stop[3],
+        streams_stop[4],
         t_stream_tuple,
         t_stream_tuple_end,
         t_stream_sol,
@@ -2051,7 +2124,7 @@ void multiwayJoin(
         htb_cache,
         t_stream_tuple,
         t_stream_tuple_end,
-        streams_stop[4],
+        streams_stop[5],
         i_stream_tuple,
         i_stream_tuple_end);
 
@@ -2060,7 +2133,7 @@ void multiwayJoin(
         htb_cache,
         s_stream_tuple,
         s_stream_tuple_end,
-        streams_stop[5],
+        streams_stop[6],
         v_stream_tuple,
         v_stream_tuple_end);
 
@@ -2119,90 +2192,104 @@ void multiwayJoin(
         std::ref(p_stream_tuple),
         std::ref(p_stream_filter));
 
-    std::thread mwj_readmin_t(
-            mwj_readmin<T_BLOOM,
+    std::thread mwj_readmin_counter_t(
+        mwj_readmin_counter<
+            T_BLOOM,
             BLOOM_LOG,
             K_FUN_LOG>,
-            hash1_w,
-            hash2_w,
-            hTables0,
-            htb_buf1,
-            std::ref(p_stream_tuple),
-            std::ref(p_stream_filter),
-            std::ref(streams_stop[3]),
-            std::ref(r_stream_set),
-            std::ref(r_stream_set_end),
-            std::ref(r_stream_tuple));
+        hash1_w,
+        hash2_w,
+        hTables0,
+        htb_buf1,
+        std::ref(p_stream_tuple),
+        std::ref(p_stream_filter),
+        std::ref(streams_stop[2]),
+        std::ref(rc_stream_tuple),
+        std::ref(rc_stream_filter));
+
+    std::thread mwj_readmin_edge_t(
+        mwj_readmin_edge<
+            T_BLOOM,
+            BLOOM_LOG,
+            K_FUN_LOG>,
+        htb_buf2,
+        std::ref(rc_stream_tuple),
+        std::ref(rc_stream_filter),
+        std::ref(streams_stop[3]),
+        std::ref(re_stream_set),
+        std::ref(re_stream_set_end),
+        std::ref(re_stream_tuple));
 
     std::thread mwj_tuplebuild_t(
-            mwj_tuplebuild<PROPOSE_BATCH_LOG>,
-            hash1_w,
-            hash2_w,
-            qVertices0,
-            std::ref(b_stream_set),
-            std::ref(b_stream_set_end),
-            std::ref(b_stream_tuple),
-            std::ref(b_stream_sol),
-            std::ref(b_stream_sol_end),
-            std::ref(streams_stop[2]),
-            std::ref(t_stream_tuple),
-            std::ref(t_stream_tuple_end),
-            std::ref(t_stream_sol),
-            std::ref(t_stream_sol_end));
-    
+        mwj_tuplebuild<PROPOSE_BATCH_LOG>,
+        hash1_w,
+        hash2_w,
+        qVertices0,
+        std::ref(b_stream_set),
+        std::ref(b_stream_set_end),
+        std::ref(b_stream_tuple),
+        std::ref(b_stream_sol),
+        std::ref(b_stream_sol_end),
+        std::ref(streams_stop[4]),
+        std::ref(t_stream_tuple),
+        std::ref(t_stream_tuple_end),
+        std::ref(t_stream_sol),
+        std::ref(t_stream_sol_end));
+
     std::thread mwj_intersect_t(
-            mwj_intersect<PROPOSE_BATCH_LOG>,
-            hTables1,
-            std::ref(htb_cache),
-            std::ref(t_stream_tuple),
-            std::ref(t_stream_tuple_end),
-            std::ref(streams_stop[4]),
-            std::ref(i_stream_tuple),
-            std::ref(i_stream_tuple_end));
+        mwj_intersect<PROPOSE_BATCH_LOG>,
+        hTables1,
+        std::ref(htb_cache),
+        std::ref(t_stream_tuple),
+        std::ref(t_stream_tuple_end),
+        std::ref(streams_stop[5]),
+        std::ref(i_stream_tuple),
+        std::ref(i_stream_tuple_end));
 
     std::thread mwj_verify_t(
-            mwj_verify<PROPOSE_BATCH_LOG>,
-            hTables1,
-            std::ref(htb_cache),
-            std::ref(s_stream_tuple),
-            std::ref(s_stream_tuple_end),
-            std::ref(streams_stop[5]),
-            std::ref(v_stream_tuple),
-            std::ref(v_stream_tuple_end));
-    
+        mwj_verify<PROPOSE_BATCH_LOG>,
+        hTables1,
+        std::ref(htb_cache),
+        std::ref(s_stream_tuple),
+        std::ref(s_stream_tuple_end),
+        std::ref(streams_stop[6]),
+        std::ref(v_stream_tuple),
+        std::ref(v_stream_tuple_end));
+
     std::thread mwj_assembly_t(
-            mwj_assembly,
-            nQueryVer,
-            std::ref(f_stream_set),
-            std::ref(f_stream_set_end),
-            std::ref(f_stream_sol),
-            std::ref(f_stream_sol_end),
-            std::ref(stream_batch),
-            std::ref(stream_batch_end),
-            std::ref(streams_stop),
-            std::ref(stream_sol0),
-            std::ref(merge_in[0]),
-            std::ref(a_stream_sol),
-            std::ref(result));
+        mwj_assembly,
+        nQueryVer,
+        std::ref(f_stream_set),
+        std::ref(f_stream_set_end),
+        std::ref(f_stream_sol),
+        std::ref(f_stream_sol_end),
+        std::ref(stream_batch),
+        std::ref(stream_batch_end),
+        std::ref(streams_stop),
+        std::ref(stream_sol0),
+        std::ref(merge_in[0]),
+        std::ref(a_stream_sol),
+        std::ref(result));
 
 #endif /* __SYNTHESIS__ */
-    
+
     hls_thread_local hls::task mwj_merge_t(
-            mwj_merge<bool>,
-            merge_in,
-            merge_out);
+        mwj_merge<bool>,
+        merge_in,
+        merge_out);
 
     hls_thread_local hls::task mwj_stop_t(
-            mwj_stop,
-            merge_out,
-            dyn_stream_ovf,
-            stream_sol0);
+        mwj_stop,
+        merge_out,
+        dyn_stream_ovf,
+        stream_sol0);
 
 #ifndef __SYNTHESIS__
 
     mwj_edgebuild_t.join();
     mwj_findmin_t.join();
-    mwj_readmin_t.join();
+    mwj_readmin_counter_t.join();
+    mwj_readmin_edge_t.join();
     mwj_tuplebuild_t.join();
     mwj_intersect_t.join(); 
     mwj_verify_t.join();
@@ -2232,6 +2319,7 @@ void multiwayJoinWrap(
         ap_uint<DDR_W> *htb_buf0,
         ap_uint<DDR_W> *htb_buf1,
         ap_uint<DDR_W> *htb_buf2,
+        ap_uint<DDR_W> *htb_buf3,
         T_BLOOM *bloom_p,
         row_t *res_buf,
         AdjHT *hTables0,
@@ -2254,6 +2342,7 @@ void multiwayJoinWrap(
 #pragma HLS STABLE variable=htb_buf0
 #pragma HLS STABLE variable=htb_buf1
 #pragma HLS STABLE variable=htb_buf2
+#pragma HLS STABLE variable=htb_buf3
 #pragma HLS STABLE variable=hTables0
 #pragma HLS STABLE variable=hTables1
 #pragma HLS STABLE variable=qVertices0
@@ -2281,6 +2370,7 @@ void multiwayJoinWrap(
         K_FUN_LOG>(
                 htb_buf1,
                 htb_buf2,
+                htb_buf3,
                 bloom_p,
                 res_buf,
                 hTables0,
@@ -2301,6 +2391,7 @@ void subgraphIsomorphism(
         row_t htb_buf0[HASHTABLES_SPACE],
         row_t htb_buf1[HASHTABLES_SPACE],
         row_t htb_buf2[HASHTABLES_SPACE],
+        row_t htb_buf3[HASHTABLES_SPACE],
         row_t bloom_p[BLOOM_SPACE],
         row_t res_buf[RESULTS_SPACE],
         const unsigned short numQueryVert,
@@ -2331,7 +2422,10 @@ void subgraphIsomorphism(
 #pragma HLS INTERFACE mode=m_axi port=htb_buf1 bundle=cache \
     max_widen_bitwidth=128 num_write_outstanding=1 max_write_burst_length=2 \
     latency=1
-#pragma HLS INTERFACE mode=m_axi port=htb_buf2 bundle=readmin \
+#pragma HLS INTERFACE mode=m_axi port=htb_buf2 bundle=readmin_c \
+    max_widen_bitwidth=128 num_write_outstanding=1 max_write_burst_length=2 \
+    latency=20
+#pragma HLS INTERFACE mode=m_axi port=htb_buf3 bundle=readmin_e \
     max_widen_bitwidth=128 num_write_outstanding=1 max_write_burst_length=2 \
     latency=1
 #pragma HLS INTERFACE mode=m_axi port=res_buf bundle=fifo \
@@ -2340,7 +2434,7 @@ void subgraphIsomorphism(
 #pragma HLS INTERFACE mode=m_axi port=bloom_p bundle=bloom \
     max_widen_bitwidth=128 latency=20
 
-#pragma HLS alias ports=htb_buf0,htb_buf1,htb_buf2 distance=0
+#pragma HLS alias ports=htb_buf0,htb_buf1,htb_buf2,htb_buf3 distance=0
 
 #pragma HLS INTERFACE mode=s_axilite port=numQueryVert
 #pragma HLS INTERFACE mode=s_axilite port=hash1_w
@@ -2377,6 +2471,7 @@ void subgraphIsomorphism(
             htb_buf0,
             htb_buf1,
             htb_buf2,
+            htb_buf3,
             bloom_p,
             res_buf,
             hTables0,
@@ -2404,6 +2499,7 @@ void subgraphIsomorphism(
         row_t htb_buf0[HASHTABLES_SPACE],
         row_t htb_buf1[HASHTABLES_SPACE],
         row_t htb_buf2[HASHTABLES_SPACE],
+        row_t htb_buf3[HASHTABLES_SPACE],
         row_t bloom_p[BLOOM_SPACE],
         row_t res_buf[RESULTS_SPACE],
         const unsigned short numQueryVert,
@@ -2432,16 +2528,19 @@ void subgraphIsomorphism(
 #pragma HLS INTERFACE mode=m_axi port=htb_buf1 bundle=cache \
     max_widen_bitwidth=128 num_write_outstanding=1 max_write_burst_length=2 \
     latency=1
-#pragma HLS INTERFACE mode=m_axi port=htb_buf2 bundle=readmin \
+#pragma HLS INTERFACE mode=m_axi port=htb_buf2 bundle=readmin_c \
     max_widen_bitwidth=128 num_write_outstanding=1 max_write_burst_length=2 \
     latency=1
+#pragma HLS INTERFACE mode=m_axi port=htb_buf3 bundle=readmin_e \
+    max_widen_bitwidth=128 num_write_outstanding=1 max_write_burst_length=2 \
+    latency=20
 #pragma HLS INTERFACE mode=m_axi port=res_buf bundle=fifo \
     max_widen_bitwidth=128 max_read_burst_length=32 max_write_burst_length=32 \
     latency=1
 #pragma HLS INTERFACE mode=m_axi port=bloom_p bundle=bloom \
     max_widen_bitwidth=128 latency=20
 
-#pragma HLS alias ports=htb_buf0,htb_buf1,htb_buf2 distance=0
+#pragma HLS alias ports=htb_buf0,htb_buf1,htb_buf2,htb_buf3 distance=0
 
 #pragma HLS INTERFACE mode=s_axilite port=numQueryVert
 #pragma HLS INTERFACE mode=s_axilite port=numQueryEdges
@@ -2510,6 +2609,7 @@ void subgraphIsomorphism(
             htb_buf0,
             htb_buf1,
             htb_buf2,
+            htb_buf3,
             bloom_p,
             res_buf,
             hTables0,
