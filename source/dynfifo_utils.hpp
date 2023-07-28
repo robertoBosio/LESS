@@ -86,7 +86,15 @@ void MMU_fast(
         hls::stream<bool> &stop_req_stream)
 {
 
-    enum State_fast { bypass, stall, shift, stall_ddr };
+    enum State_slow
+    {
+        bypass = 0,
+        stall = 1,
+        shift = 2,
+        stall_ddr = 3
+    };
+    typedef ap_uint<2> state_type;
+    state_type state = bypass;
 
     unsigned int p_counter {DATA_PER_WORD};
     unsigned int ddr_data {0};
@@ -94,7 +102,6 @@ void MMU_fast(
     DATA_T buff_w;
     bool flagbuff_r {false};
     bool flagbuff_w {false};
-    State_fast state {bypass};
 
 /* #ifndef __SYNTHESIS__ */
 /* std::this_thread::sleep_for(std::chrono::milliseconds(100)); */
@@ -216,12 +223,21 @@ void MMU_slow(
         hls::stream<bool> &overflow_stream)
 {
 
-    enum State_slow { bypass, stall, burst_read, burst_write, stall_ddr };
+    enum State_slow
+    {
+        bypass = 0,
+        stall = 1,
+        burst_read = 2,
+        burst_write = 3,
+        stall_ddr = 4
+    };
+    typedef ap_uint<3> state_type;
+    state_type state = bypass;
+
     unsigned int mem_tail {0};
     unsigned int mem_head {0};
     unsigned long max_space {0};
     unsigned long space_used {0};
-    State_slow state {bypass};
 
 MMU_SLOW_TASK_LOOP:
     while(true) {

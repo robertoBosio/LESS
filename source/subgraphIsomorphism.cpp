@@ -2424,7 +2424,7 @@ void subgraphIsomorphism(
     latency=1
 #pragma HLS INTERFACE mode=m_axi port=htb_buf2 bundle=readmin_c \
     max_widen_bitwidth=128 num_write_outstanding=1 max_write_burst_length=2 \
-    latency=20
+    latency=1
 #pragma HLS INTERFACE mode=m_axi port=htb_buf3 bundle=readmin_e \
     max_widen_bitwidth=128 num_write_outstanding=1 max_write_burst_length=2 \
     latency=1
@@ -2533,7 +2533,7 @@ void subgraphIsomorphism(
     latency=1
 #pragma HLS INTERFACE mode=m_axi port=htb_buf3 bundle=readmin_e \
     max_widen_bitwidth=128 num_write_outstanding=1 max_write_burst_length=2 \
-    latency=20
+    latency=1
 #pragma HLS INTERFACE mode=m_axi port=res_buf bundle=fifo \
     max_widen_bitwidth=128 max_read_burst_length=32 max_write_burst_length=32 \
     latency=1

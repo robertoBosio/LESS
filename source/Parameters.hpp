@@ -87,3 +87,7 @@ typedef ap_axiu<LABEL_WIDTH, 0, 0, 0> T_LABEL;
 typedef ap_uint<DDR_WORD> row_t;
 typedef ap_uint<(1UL << BLOOM_FILTER_WIDTH)> bloom_t;
 typedef ap_uint<(DDR_WORD << CACHE_WORDS_PER_LINE)> edge_block_t;
+typedef ap_uint<VERTEX_WIDTH_BIT> vertex_t;
+
+// Useful typename for streams
+typedef ap_uint<(1UL << BLOOM_FILTER_WIDTH) * (1UL << K_FUNCTIONS)> bloom_flat_t;
