@@ -62,6 +62,9 @@
 #define PROPOSE_BATCH_LOG   6
 #define MERGE_IN_STREAMS    2
 #define CACHE_WORDS_PER_LINE 3
+#define MAX_HASH_TABLE_BIT  20
+#define HASH_LOOKUP3_BIT    32
+
 #include <ap_axi_sdata.h>
 
 /* Functionality definition */

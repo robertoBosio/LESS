@@ -178,7 +178,7 @@ template<typename T_DDR,
          size_t CNT_LOG,
          size_t ROW_LOG,
          size_t NODE_W,
-         size_t HASH_W>
+         size_t MAX_HASH_W>
 void
 increaseCounter(T_DDR* htb_buf,
                 AdjHT* hTables,
@@ -225,7 +225,7 @@ INCREASE_COUNTER_DDR_LOOP:
 template <typename T_DDR,
          size_t CNT_LOG,
          size_t ROW_LOG,
-         size_t HASH_W>
+         size_t MAX_HASH_W>
 void counterToOffset(
         const unsigned long htb_size,
         const unsigned short numTables,
@@ -279,38 +279,52 @@ COUNTER_TO_OFFSET_READ_LOOP:
     }
 }
 
-/* Transform counters to offsets. */
+/* Reads edges from each table and divide the indexed vertices based
+on indexing hash to create bloom filters */
 template<typename T_DDR,
          size_t CNT_LOG,
          size_t ROW_LOG,
          size_t NODE_W,
          size_t EDGE_LOG,
-         size_t HASH_W,
+         size_t LKP3_HASH_W,
+         size_t MAX_HASH_W,
          size_t FULL_HASH_W>
 void
 bloom_read(AdjHT* hTables,
            T_DDR* htb_buf,
            const unsigned short numTables,
            const unsigned char hash1_w,
-           hls::stream<bloom_tuple_t<FULL_HASH_W> >& stream_tuple_out,
+           hls::stream<bloom_tuple_t<FULL_HASH_W>>& stream_tuple_out,
            hls::stream<bool>& stream_tuple_end_out)
 {
     constexpr size_t EDGE_W = 1UL << EDGE_LOG;
     hls::stream<ap_uint<NODE_W>, 4> hash_in0, hash_in1;
-    hls::stream<ap_uint<FULL_HASH_W>, 4> hash_out0, hash_out1;
+    hls::stream<ap_uint<FULL_HASH_W>, 4> hash_out0;
+    hls::stream<ap_uint<LKP3_HASH_W>, 4> hash_out1;
     ap_uint<EDGE_W> edge;
     ap_uint<NODE_W> indexing_v, indexed_v;
     ap_uint<FULL_HASH_W> indexed_h;
-    ap_uint<HASH_W> indexing_h, prev_indexing_h;
+    ap_uint<MAX_HASH_W> indexing_h, prev_indexing_h;
     bloom_tuple_t<FULL_HASH_W> tuple_out;
     T_DDR row;
     unsigned int counter;
-    bool not_first;
 
-    not_first = false;
-    prev_indexing_h = 0;
 BLOOM_READ_TABLES_LOOP:
     for (unsigned int ntb = 0; ntb < numTables; ntb++) {
+
+        /* First iteration to initialize prev_indexing_h */
+        row = htb_buf[hTables[ntb].start_edges];
+        edge = row.range((1UL << EDGE_LOG) - 1, 0);
+        indexing_v = edge.range(NODE_W * 2 - 1, NODE_W);
+        indexed_v = edge.range(NODE_W - 1, 0);
+        hash_in0.write(indexed_v);
+        hash_in1.write(indexing_v);
+        xf::database::hashLookup3<NODE_W>(hash_in0, hash_out0);
+        xf::database::hashLookup3<NODE_W>(hash_in1, hash_out1);
+        indexed_h = hash_out0.read();
+        indexing_h = hash_out1.read();
+
+        prev_indexing_h = indexing_h.range(hash1_w - 1, 0);
         counter = 0;
 
         /* Read all the edges in a table and divide them by hash1 */
@@ -331,32 +345,40 @@ BLOOM_READ_TABLES_LOOP:
                 xf::database::hashLookup3<NODE_W>(hash_in0, hash_out0);
                 xf::database::hashLookup3<NODE_W>(hash_in1, hash_out1);
                 indexed_h = hash_out0.read();
-                indexing_h = hash_out1.read().range(hash1_w - 1, 0);
+                indexing_h = hash_out1.read();
 
+                indexing_h = indexing_h.range(hash1_w - 1, 0);
                 tuple_out.address = ntb * (1UL << hash1_w) + prev_indexing_h;
                 tuple_out.indexed_h = indexed_h;
-                tuple_out.write = (indexing_h != prev_indexing_h) && not_first;
-                tuple_out.valid = counter < hTables[ntb].n_edges;
+                tuple_out.write = (indexing_h != prev_indexing_h);
+                tuple_out.valid = (counter < hTables[ntb].n_edges);
                 stream_tuple_out.write(tuple_out);
                 stream_tuple_end_out.write(false);
 
                 if (counter < hTables[ntb].n_edges)
                   prev_indexing_h = indexing_h;
                 counter++;
-                not_first = true;
             }
         }
+
+        /* Write explicitly the last bloom filter since
+        the difference between prev_indexing_h and indexing_h
+        does not work at the end of the table */
+        tuple_out.address = ntb * (1UL << hash1_w) + prev_indexing_h;
+        tuple_out.indexed_h = indexed_h;
+        tuple_out.write = true;
+        tuple_out.valid = true;
+        stream_tuple_out.write(tuple_out);
+        stream_tuple_end_out.write(false);
     }
-    tuple_out.address = (numTables - 1) * (1UL << hash1_w) + prev_indexing_h;
-    tuple_out.indexed_h = indexed_h;
-    tuple_out.write = true;
-    tuple_out.valid = true;
-    stream_tuple_out.write(tuple_out);
-    stream_tuple_end_out.write(false);
+
     stream_tuple_end_out.write(true);
 }
 
-template<typename T_BLOOM, size_t BLOOM_LOG, size_t FULL_HASH_W, size_t K_FUN_LOG>
+template<typename T_BLOOM,
+         size_t BLOOM_LOG,
+         size_t FULL_HASH_W,
+         size_t K_FUN_LOG>
 void
 bloom_write(T_BLOOM* bloom_p,
             hls::stream<bloom_tuple_t<FULL_HASH_W>>& stream_tuple_in,
@@ -373,7 +395,7 @@ bloom_write(T_BLOOM* bloom_p,
     }
 
     bool last = stream_tuple_end_in.read();
-BLOOM_TASK_LOOP:
+BLOOM_WRITE_TASK_LOOP:
     while (!last) {
 #pragma HLS pipeline II = 8
         tuple_in = stream_tuple_in.read();
@@ -409,7 +431,7 @@ template<typename T_DDR,
          size_t CNT_LOG,
          size_t ROW_LOG,
          size_t NODE_W,
-         size_t HASH_W>
+         size_t MAX_HASH_W>
 void
 storeEdges(AdjHT* hTables,
            T_DDR* htb_buf,
@@ -467,11 +489,11 @@ STORE_EDGES_INCREASE_COUNTER_DDR_LOOP:
     }
 }
 
-// template<typename T_BLOOM, size_t BLOOM_LOG, size_t HASH_W, size_t K_FUN_LOG>
+// template<typename T_BLOOM, size_t BLOOM_LOG, size_t MAX_HASH_W, size_t K_FUN_LOG>
 // void
 // updateBloom(T_BLOOM* bloom_p,
 //             hls::stream<unsigned int>& stream_bloom_a,
-//             hls::stream<ap_uint<HASH_W>>& stream_index,
+//             hls::stream<ap_uint<MAX_HASH_W>>& stream_index,
 //             hls::stream<bool>& stream_end)
 // {
 //     constexpr size_t K_FUN = (1UL << K_FUN_LOG);
@@ -482,7 +504,7 @@ STORE_EDGES_INCREASE_COUNTER_DDR_LOOP:
 //     {
 // #pragma HLS pipeline off
 //         unsigned int bloom_a = stream_bloom_a.read();
-//         ap_uint<HASH_W> hash_v = stream_index.read();
+//         ap_uint<MAX_HASH_W> hash_v = stream_index.read();
 
 // #ifndef __SYNTHESIS__
 //         if (((bloom_a << K_FUN_LOG) + K_FUN) >= BLOOM_SPACE){
@@ -494,8 +516,8 @@ STORE_EDGES_INCREASE_COUNTER_DDR_LOOP:
 //         for (int g = 0; g < K_FUN; g++){
 // #pragma HLS unroll
 //             T_BLOOM set = bloom_p[(bloom_a << K_FUN_LOG) + g];
-//             ap_uint<BLOOM_LOG> idx = hash_v.range((HASH_W / K_FUN) * (g + 1) - 1,
-//                     (HASH_W / K_FUN) * (g + 1) - BLOOM_LOG);
+//             ap_uint<BLOOM_LOG> idx = hash_v.range((MAX_HASH_W / K_FUN) * (g + 1) - 1,
+//                     (MAX_HASH_W / K_FUN) * (g + 1) - BLOOM_LOG);
 //             set[idx] = 1;
 //             bloom_p[(bloom_a << K_FUN_LOG) + g] = set;
 //         }
@@ -503,7 +525,11 @@ STORE_EDGES_INCREASE_COUNTER_DDR_LOOP:
 //     }
 // }
 
-template<size_t NODE_W, size_t LAB_W, size_t HASH_W, size_t MAX_LABELS>
+template<size_t NODE_W,
+         size_t LAB_W,
+         size_t LKP3_HASH_W,
+         size_t MAX_HASH_W,
+         size_t MAX_LABELS>
 void
 edgeToHashFirst(row_t* edge_buf,
                 const unsigned char hash1_w,
@@ -547,16 +573,16 @@ COUNT_OCCURENCIES_TOP_LOOP:
             vertexIndexed = nodedst;
 
             /* Compute indices for hash table */
-            ap_uint<64> hash_out;
+            ap_uint<LKP3_HASH_W> hash_out;
             xf::database::details::hashlookup3_core<NODE_W>(vertexIndexing,
                                                             hash_out);
 
-            ap_uint<HASH_W> indexAdj = hash_out.range(HASH_W - 1, 0);
+            ap_uint<MAX_HASH_W> indexAdj = hash_out.range(MAX_HASH_W - 1, 0);
 
             xf::database::details::hashlookup3_core<NODE_W>(vertexIndexed,
                                                             hash_out);
 
-            ap_uint<HASH_W> indexEdge = hash_out.range(HASH_W - 1, 0);
+            ap_uint<MAX_HASH_W> indexEdge = hash_out.range(MAX_HASH_W - 1, 0);
 
             // stream_b_addr.write(index * (1UL << hash1_w) +
             // indexAdj.range(hash1_w - 1, 0)); stream_b_index.write(hash_out);
@@ -581,16 +607,16 @@ COUNT_OCCURENCIES_TOP_LOOP:
             vertexIndexed = nodesrc;
 
             /* Compute indices for hash table */
-            ap_uint<64> hash_out;
+            ap_uint<LKP3_HASH_W> hash_out;
             xf::database::details::hashlookup3_core<NODE_W>(vertexIndexing,
                                                             hash_out);
 
-            ap_uint<HASH_W> indexAdj = hash_out.range(HASH_W - 1, 0);
+            ap_uint<MAX_HASH_W> indexAdj = hash_out.range(MAX_HASH_W - 1, 0);
 
             xf::database::details::hashlookup3_core<NODE_W>(vertexIndexed,
                                                             hash_out);
 
-            ap_uint<HASH_W> indexEdge = hash_out.range(HASH_W - 1, 0);
+            ap_uint<MAX_HASH_W> indexEdge = hash_out.range(MAX_HASH_W - 1, 0);
 
             // stream_b_addr.write(index * (1UL << hash1_w) +
             // indexAdj.range(hash1_w - 1, 0)); stream_b_index.write(hash_out);
@@ -619,7 +645,8 @@ template <typename T_DDR,
         //   size_t BLOOM_LOG,
         //   size_t K_FUN_LOG,
           size_t NODE_W,
-          size_t HASH_W,
+          size_t LKP3_HASH_W,
+          size_t MAX_HASH_W,
           size_t LAB_W,
           size_t STREAM_D,
           size_t MAX_LABELS>
@@ -643,26 +670,27 @@ void countEdges(
     // hls::stream<bool> stream_b_end("Bloom end");
 
     // Compute hash values of vertices and find the correct table //
-    edgeToHashFirst<NODE_W, LAB_W, HASH_W, MAX_LABELS>(edge_p,
-                                                       hash1_w,
-                                                       hash2_w,
-                                                       labelToTable,
-                                                       numDataEdges,
-                                                       // stream_b_addr,
-                                                       // stream_b_index,
-                                                       // stream_b_end,
-                                                       stream_tuple,
-                                                       stream_tuple_end);
+    edgeToHashFirst<NODE_W, LAB_W, LKP3_HASH_W, MAX_HASH_W, MAX_LABELS>(
+      edge_p,
+      hash1_w,
+      hash2_w,
+      labelToTable,
+      numDataEdges,
+      // stream_b_addr,
+      // stream_b_index,
+      // stream_b_end,
+      stream_tuple,
+      stream_tuple_end);
 
     // Update specific counter //
-    increaseCounter<T_DDR, CNT_LOG, ROW_LOG, NODE_W, HASH_W>(
+    increaseCounter<T_DDR, CNT_LOG, ROW_LOG, NODE_W, MAX_HASH_W>(
       htb_p, hTables, stream_tuple, stream_tuple_end);
 
     // Update indexed bloom filters //
     // updateBloom<
     //     T_BLOOM,
     //     BLOOM_LOG,
-    //     HASH_W,
+    //     MAX_HASH_W,
     //     K_FUN_LOG>(
     //     bloom_p,
     //     stream_b_addr,
@@ -673,7 +701,8 @@ void countEdges(
 template<size_t EDGE_LOG,
          size_t NODE_W,
          size_t LAB_W,
-         size_t HASH_W,
+         size_t LKP3_HASH_W,
+         size_t MAX_HASH_W,
          size_t MAX_LABELS>
 void
 edgeToHashSecond(row_t* edge_buf,
@@ -712,18 +741,18 @@ COUNT_OCCURENCIES_TOP_LOOP:
             vertexIndexed = nodedst;
 
             /* Compute indices for hash table */
-            ap_uint<64> hash_out;
+            ap_uint<LKP3_HASH_W> hash_out;
             xf::database::details::hashlookup3_core<NODE_W>(
                 vertexIndexing,
                 hash_out);
 
-            ap_uint<HASH_W> indexAdj = hash_out.range(HASH_W - 1, 0);
+            ap_uint<MAX_HASH_W> indexAdj = hash_out.range(MAX_HASH_W - 1, 0);
 
             xf::database::details::hashlookup3_core<NODE_W>(
                 vertexIndexed,
                 hash_out);
 
-            ap_uint<HASH_W> indexEdge = hash_out.range(HASH_W - 1, 0);
+            ap_uint<MAX_HASH_W> indexEdge = hash_out.range(MAX_HASH_W - 1, 0);
             
             indexAdj = indexAdj.range(hash1_w - 1, 0);
             indexEdge = indexEdge.range(hash2_w - 1, 0);
@@ -745,18 +774,18 @@ COUNT_OCCURENCIES_TOP_LOOP:
             vertexIndexed = nodesrc;
 
             /* Compute indices for hash table */
-            ap_uint<64> hash_out;
+            ap_uint<LKP3_HASH_W> hash_out;
             xf::database::details::hashlookup3_core<NODE_W>(
                 vertexIndexing,
                 hash_out);
 
-            ap_uint<HASH_W> indexAdj = hash_out.range(HASH_W - 1, 0);
+            ap_uint<MAX_HASH_W> indexAdj = hash_out.range(MAX_HASH_W - 1, 0);
 
             xf::database::details::hashlookup3_core<NODE_W>(
                 vertexIndexed,
                 hash_out);
 
-            ap_uint<HASH_W> indexEdge = hash_out.range(HASH_W - 1, 0);
+            ap_uint<MAX_HASH_W> indexEdge = hash_out.range(MAX_HASH_W - 1, 0);
 
             indexAdj = indexAdj.range(hash1_w - 1, 0);
             indexEdge = indexEdge.range(hash2_w - 1, 0);
@@ -779,7 +808,8 @@ template <typename T_DDR,
           size_t ROW_LOG,
           size_t NODE_W,
           size_t LAB_W,
-          size_t HASH_W,
+          size_t LKP3_HASH_W,
+          size_t MAX_HASH_W,
           size_t STREAM_D,
           size_t MAX_LABELS>
 void writeEdges(
@@ -799,24 +829,28 @@ void writeEdges(
     hls::stream<bool, STREAM_D> stream_tuple_end("Stream offset tuple end");
 
     /* Write edges based on precomputed offsets */
-    edgeToHashSecond<EDGE_LOG, NODE_W, LAB_W, HASH_W, MAX_LABELS>(
-      edge_p,
-      hash1_w,
-      hash2_w,
-      labelToTable,
-      numDataEdges,
-      stream_tuple,
-      stream_tuple_end);
+    edgeToHashSecond<EDGE_LOG,
+                     NODE_W,
+                     LAB_W,
+                     LKP3_HASH_W,
+                     MAX_HASH_W,
+                     MAX_LABELS>(edge_p,
+                                 hash1_w,
+                                 hash2_w,
+                                 labelToTable,
+                                 numDataEdges,
+                                 stream_tuple,
+                                 stream_tuple_end);
 
     storeEdges<T_DDR,
                ap_uint<(1UL << EDGE_LOG)>,
-               ap_uint<HASH_W>,
+               ap_uint<MAX_HASH_W>,
                ap_uint<(1UL << CNT_LOG)>,
                EDGE_LOG,
                CNT_LOG,
                ROW_LOG,
                NODE_W,
-               HASH_W>(hTables, htb_p, stream_tuple, stream_tuple_end);
+               MAX_HASH_W>(hTables, htb_p, stream_tuple, stream_tuple_end);
 }
 
 template <typename T_DDR,
@@ -825,8 +859,9 @@ template <typename T_DDR,
           size_t ROW_LOG,
           size_t NODE_W,
           size_t EDGE_LOG,
+          size_t LKP3_HASH_W,
+          size_t MAX_HASH_W,
           size_t FULL_HASH_W,
-          size_t HASH_W,
           size_t BLOOM_LOG,
           size_t K_FUN_LOG,
           size_t STREAM_D>
@@ -842,57 +877,48 @@ void writeBloom(
     hls::stream<bloom_tuple_t<FULL_HASH_W>, STREAM_D> stream_tuple("Bloom tuples");
     hls::stream<bool, STREAM_D> stream_tuple_end("Bloom tuple end");
 
-    /* Write edges based on precomputed offsets */
+    /* Read edges in each table */
     bloom_read<T_DDR,
                CNT_LOG,
                ROW_LOG,
                NODE_W,
                EDGE_LOG,
-               HASH_W,
-               FULL_HASH_W>
-               (
-        hTables,
-        htb_p,
-        numTables,
-        hash1_w,
-        stream_tuple,
-        stream_tuple_end);
+               LKP3_HASH_W,
+               MAX_HASH_W,
+               FULL_HASH_W>(
+      hTables, htb_p, numTables, hash1_w, stream_tuple, stream_tuple_end);
 
-    bloom_write<T_BLOOM,
-                BLOOM_LOG,
-                FULL_HASH_W,
-                K_FUN_LOG>(
-        bloom_p,
-        stream_tuple,
-        stream_tuple_end);
+    bloom_write<T_BLOOM, BLOOM_LOG, FULL_HASH_W, K_FUN_LOG>(
+      bloom_p, stream_tuple, stream_tuple_end);
 }
 
 /* Reads two times the data graph and fills the data stuctures */
-template <typename T_DDR,
-          typename T_BLOOM,
-          size_t EDGE_LOG,
-          size_t CNT_LOG,
-          size_t BLOOM_LOG,
-          size_t K_FUN_LOG,
-          size_t ROW_LOG,
-          size_t NODE_W,
-          size_t HASH_W,
-          size_t FULL_HASH_W,
-          size_t LAB_W,
-          size_t STREAM_D,
-          size_t HTB_SPACE,
-          size_t MAX_LABELS>
-void fillTables(
-    row_t *edge_buf,
-    T_DDR *htb_buf,
-    T_DDR *bloom_p,
-    AdjHT *hTables0,
-    AdjHT *hTables1,
-    const ap_uint<8> labelToTable[MAX_LABELS][MAX_LABELS],
-    const unsigned long numDataEdges,
-    const unsigned short numTables,
-    const unsigned char hash1_w,
-    const unsigned char hash2_w)
+template<typename T_DDR,
+         typename T_BLOOM,
+         size_t EDGE_LOG,
+         size_t CNT_LOG,
+         size_t BLOOM_LOG,
+         size_t K_FUN_LOG,
+         size_t ROW_LOG,
+         size_t NODE_W,
+         size_t LKP3_HASH_W,
+         size_t MAX_HASH_W,
+         size_t FULL_HASH_W,
+         size_t LAB_W,
+         size_t STREAM_D,
+         size_t HTB_SPACE,
+         size_t MAX_LABELS>
+void
+fillTables(row_t* edge_buf,
+           T_DDR* htb_buf,
+           T_DDR* bloom_p,
+           AdjHT* hTables0,
+           AdjHT* hTables1,
+           const ap_uint<8> labelToTable[MAX_LABELS][MAX_LABELS],
+           const unsigned long numDataEdges,
+           const unsigned short numTables,
+           const unsigned char hash1_w,
+           const unsigned char hash2_w)
 {
 
     /* Resetting portion of memory dedicated to counters 
@@ -919,7 +945,8 @@ STORE_HASHTABLES_POINTER_LOOP:
             //    BLOOM_LOG,
             //    K_FUN_LOG,
                NODE_W,
-               HASH_W,
+               LKP3_HASH_W,
+               MAX_HASH_W,
                LAB_W,
                STREAM_D,
                MAX_LABELS>(
@@ -936,18 +963,20 @@ STORE_HASHTABLES_POINTER_LOOP:
     counterToOffset<T_DDR,
                     CNT_LOG,
                     ROW_LOG,
-                    HASH_W>(
+                    MAX_HASH_W>(
         htb_size,
         numTables,
         hTables0,
         htb_buf);
 
-    start_addr = (start_addr + (1UL << CACHE_WORDS_PER_LINE)) & ~((1UL << CACHE_WORDS_PER_LINE) - 1);
+    start_addr = (start_addr + (1UL << CACHE_WORDS_PER_LINE)) &
+                 ~((1UL << CACHE_WORDS_PER_LINE) - 1);
 STORE_EDGES_POINTER_LOOP:
-    for (unsigned short ntb = 0; ntb < numTables; ntb++){
+    for (unsigned short ntb = 0; ntb < numTables; ntb++) {
         hTables0[ntb].start_edges = start_addr;
         start_addr += (hTables0[ntb].n_edges >> (ROW_LOG - EDGE_LOG)) + 1;
-        start_addr = (start_addr + (1UL << CACHE_WORDS_PER_LINE)) & ~((1UL << CACHE_WORDS_PER_LINE) - 1);
+        start_addr = (start_addr + (1UL << CACHE_WORDS_PER_LINE)) &
+                     ~((1UL << CACHE_WORDS_PER_LINE) - 1);
 #ifndef __SYNTHESIS__
         assert(start_addr < HTB_SPACE);
 #endif
@@ -962,7 +991,8 @@ STORE_EDGES_POINTER_LOOP:
                ROW_LOG,
                NODE_W,
                LAB_W,
-               HASH_W,
+               LKP3_HASH_W,
+               MAX_HASH_W,
                STREAM_D,
                MAX_LABELS>(
         edge_buf,
@@ -979,8 +1009,9 @@ STORE_EDGES_POINTER_LOOP:
                ROW_LOG,
                NODE_W,
                EDGE_LOG,
+               LKP3_HASH_W,
+               MAX_HASH_W,
                FULL_HASH_W,
-               HASH_W,
                BLOOM_LOG,
                K_FUN_LOG,
                STREAM_D>(
@@ -1104,7 +1135,8 @@ template<typename T_DDR,
          size_t K_FUN_LOG,
          size_t ROW_LOG,
          size_t NODE_W,
-         size_t HASH_W,
+         size_t LKP3_HASH_W,
+         size_t MAX_HASH_W,
          size_t FULL_HASH_W,
          size_t LAB_W,
          size_t STREAM_D,
@@ -1150,7 +1182,8 @@ preprocess(row_t* edge_buf,
                K_FUN_LOG,
                ROW_LOG,
                NODE_W,
-               HASH_W,
+               LKP3_HASH_W,
+               MAX_HASH_W,
                FULL_HASH_W,
                LAB_W,
                STREAM_D,

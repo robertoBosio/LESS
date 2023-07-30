@@ -295,7 +295,7 @@ PROPOSE_FIFO_NEW_SOLUTION_LOOP:
     }
 }
 
-template<size_t HASH_W, size_t FULL_HASH_W>
+template<size_t LKP3_HASH_W, size_t MAX_HASH_W, size_t FULL_HASH_W>
 void
 mwj_edgebuild(const unsigned char hash1_w,
               QueryVertex* qVertices,
@@ -308,8 +308,6 @@ mwj_edgebuild(const unsigned char hash1_w,
               hls::stream<bool>& stream_sol_end_out)
 {
     ap_uint<V_ID_W> curEmb[MAX_QV];
-    hls::stream<ap_uint<V_ID_W>, 4> hash_in0, hash_in1;
-    hls::stream<ap_uint<FULL_HASH_W>, 4> hash_out0, hash_out1;
     unsigned char curQV = 0;
     bool stop, last;
     findmin_tuple_t tuple_out;
@@ -339,8 +337,8 @@ EDGEBUILD_MAIN_LOOP:
                 unsigned char iv_pos = qVertices[curQV].vertex_indexing[g];
 
                 //Computing addresses of indexed sets
-                ap_uint<FULL_HASH_W> hash_out;
-                ap_uint<HASH_W> hash_trimmed;
+                ap_uint<LKP3_HASH_W> hash_out;
+                ap_uint<MAX_HASH_W> hash_trimmed;
                 xf::database::details::hashlookup3_core<V_ID_W>(curEmb[iv_pos], hash_out);
                 hash_trimmed = hash_out;
                 hash_trimmed = hash_trimmed.range(hash1_w - 1, 0);
@@ -449,7 +447,8 @@ FINDMIN_TASK_LOOP:
 template <typename T_BLOOM,
           size_t BLOOM_LOG,
           size_t K_FUN_LOG,
-          size_t HASH_W,
+          size_t LKP3_HASH_W,
+          size_t MAX_HASH_W,
           size_t FULL_HASH_W>
 void mwj_readmin_counter(
     const unsigned char hash1_w,
@@ -477,8 +476,8 @@ READMIN_COUNTER_TASK_LOOP:
                 stream_filter_out.write(stream_filter_in.read());
             }
 
-            ap_uint<FULL_HASH_W> hash_out;
-            ap_uint<HASH_W> hash_trimmed;
+            ap_uint<LKP3_HASH_W> hash_out;
+            ap_uint<MAX_HASH_W> hash_trimmed;
             xf::database::details::hashlookup3_core<V_ID_W>(tuple_in.indexing_v, hash_out);
             volatile unsigned int start_off = 0;
             volatile unsigned int end_off;
@@ -754,7 +753,10 @@ BATCHBUILD_ADD_SOLUTION_LOOP:
     stream_batch_end_out.write(true);
 }
 
-template<size_t BATCH_SIZE_LOG, size_t HASH_W, size_t FULL_HASH_W>
+template<size_t BATCH_SIZE_LOG,
+         size_t LKP3_HASH_W,
+         size_t MAX_HASH_W,
+         size_t FULL_HASH_W>
 void
 mwj_tuplebuild(const unsigned char hash1_w,
                const unsigned char hash2_w,
@@ -777,7 +779,7 @@ mwj_tuplebuild(const unsigned char hash1_w,
     ap_uint<V_ID_W> curEmb[MAX_QV];
     ap_uint<V_ID_W> vToVerify;
     hls::stream<ap_uint<V_ID_W>, 4> hash_in0, hash_in1;
-    hls::stream<ap_uint<FULL_HASH_W>, 4> hash_out0, hash_out1;
+    hls::stream<ap_uint<LKP3_HASH_W>, 4> hash_out0, hash_out1;
     unsigned long addr_counter;
     intersect_tuple_t tuple_out;
     unsigned char curQV {0};
@@ -816,8 +818,8 @@ TUPLEBUILD_MAIN_LOOP_FIRST_IT:
                     hash_in1.write(curEmb[ivPos]);
                     xf::database::hashLookup3<V_ID_W>(hash_in0, hash_out0);
                     xf::database::hashLookup3<V_ID_W>(hash_in1, hash_out1);
-                    ap_uint<HASH_W> indexed_h = hash_out0.read();
-                    ap_uint<HASH_W> indexing_h = hash_out1.read();
+                    ap_uint<MAX_HASH_W> indexed_h = hash_out0.read();
+                    ap_uint<MAX_HASH_W> indexing_h = hash_out1.read();
                     
                     addr_counter = indexing_h.range(hash1_w - 1, 0);
                     addr_counter <<= hash2_w;
@@ -865,8 +867,8 @@ TUPLEBUILD_EDGE_LOOP_AFTER_IT:
                     hash_in1.write(curEmb[ivPos]);
                     xf::database::hashLookup3<V_ID_W>(hash_in0, hash_out0);
                     xf::database::hashLookup3<V_ID_W>(hash_in1, hash_out1);
-                    ap_uint<HASH_W> indexed_h = hash_out0.read();
-                    ap_uint<HASH_W> indexing_h = hash_out1.read();
+                    ap_uint<MAX_HASH_W> indexed_h = hash_out0.read();
+                    ap_uint<MAX_HASH_W> indexing_h = hash_out1.read();
                     
                     addr_counter = indexing_h.range(hash1_w - 1, 0);
                     addr_counter <<= hash2_w;
@@ -1521,7 +1523,7 @@ void mwj_stop(
     }
 }
 
-template<size_t HASH_W, size_t FULL_HASH_W>
+template<size_t LKP3_HASH_W, size_t MAX_HASH_W, size_t FULL_HASH_W>
 void
 mwj_batch(const unsigned char hash1_w,
           AdjHT* hTables,
@@ -1538,7 +1540,7 @@ mwj_batch(const unsigned char hash1_w,
     ap_uint<V_ID_W*2> edge;
     ap_uint<V_ID_W> vertex, vertexCheck;
     ap_uint<V_ID_W> set[MAX_CL];
-    ap_uint<HASH_W> hash_buff, hash_new;
+    ap_uint<MAX_HASH_W> hash_buff, hash_new;
     unsigned char set_counter = 0;
     bool flag_buff = false;
     bool flag_new = true;
@@ -1572,11 +1574,11 @@ PROPOSE_READ_MIN_INDEXING_LOOP:
             if (cnt < window_right){
                 edge = row.range((1UL << E_W) - 1, 0);
                 vertex = edge.range(V_ID_W * 2 - 1, V_ID_W);
-                ap_uint<FULL_HASH_W> hash_out;
+                ap_uint<LKP3_HASH_W> hash_out;
                 xf::database::details::hashlookup3_core<V_ID_W>(
                         vertex,
                         hash_out);
-                hash_new = hash_out.range(HASH_W - 1, 0);
+                hash_new = hash_out.range(MAX_HASH_W - 1, 0);
                 hash_new = hash_new.range(hash1_w - 1, 0);
 
                 if (flag_buff && hash_buff == hash_new){
@@ -1694,7 +1696,8 @@ void verifycache_wrapper(
 template <typename T_BLOOM,
           size_t BLOOM_LOG,
           size_t K_FUN_LOG,
-          size_t HASH_W,
+          size_t LKP3_HASH_W,
+          size_t MAX_HASH_W,
           size_t FULL_HASH_W>
 void multiwayJoin(
     ap_uint<DDR_W> *htb_buf0,
@@ -2070,7 +2073,7 @@ void multiwayJoin(
     //     streams_stop[STOP_S - 1],
     //     dyn_stream_ovf);
 
-    mwj_edgebuild<HASH_W, FULL_HASH_W>(hash1_w,
+    mwj_edgebuild<LKP3_HASH_W, MAX_HASH_W, FULL_HASH_W>(hash1_w,
                                        qVertices0,
                                        p0_stream_sol,
                                        p0_stream_sol_end,
@@ -2085,7 +2088,7 @@ void multiwayJoin(
                                                p_stream_tuple,
                                                p_stream_filter);
 
-    mwj_readmin_counter<T_BLOOM, BLOOM_LOG, K_FUN_LOG, HASH_W, FULL_HASH_W>(
+    mwj_readmin_counter<T_BLOOM, BLOOM_LOG, K_FUN_LOG, LKP3_HASH_W, MAX_HASH_W, FULL_HASH_W>(
       hash1_w,
       hash2_w,
       hTables0,
@@ -2105,7 +2108,7 @@ void multiwayJoin(
       re_stream_set_end,
       re_stream_tuple);
 
-    mwj_tuplebuild<PROPOSE_BATCH_LOG, HASH_W, FULL_HASH_W>(
+    mwj_tuplebuild<PROPOSE_BATCH_LOG, LKP3_HASH_W, MAX_HASH_W, FULL_HASH_W>(
         hash1_w,
         hash2_w,
         qVertices0,
@@ -2171,7 +2174,7 @@ void multiwayJoin(
     //     std::ref(streams_stop[STOP_S - 1]),
     //     std::ref(dyn_stream_ovf));
 
-    std::thread mwj_edgebuild_t(mwj_edgebuild<HASH_W, FULL_HASH_W>,
+    std::thread mwj_edgebuild_t(mwj_edgebuild<LKP3_HASH_W, MAX_HASH_W, FULL_HASH_W>,
                                 hash1_w,
                                 qVertices0,
                                 std::ref(p0_stream_sol),
@@ -2189,17 +2192,21 @@ void multiwayJoin(
                               std::ref(p_stream_tuple),
                               std::ref(p_stream_filter));
 
-    std::thread mwj_readmin_counter_t(
-      mwj_readmin_counter<T_BLOOM, BLOOM_LOG, K_FUN_LOG, HASH_W, FULL_HASH_W>,
-      hash1_w,
-      hash2_w,
-      hTables0,
-      htb_buf1,
-      std::ref(p_stream_tuple),
-      std::ref(p_stream_filter),
-      std::ref(streams_stop[2]),
-      std::ref(rc_stream_tuple),
-      std::ref(rc_stream_filter));
+    std::thread mwj_readmin_counter_t(mwj_readmin_counter<T_BLOOM,
+                                                          BLOOM_LOG,
+                                                          K_FUN_LOG,
+                                                          LKP3_HASH_W,
+                                                          MAX_HASH_W,
+                                                          FULL_HASH_W>,
+                                      hash1_w,
+                                      hash2_w,
+                                      hTables0,
+                                      htb_buf1,
+                                      std::ref(p_stream_tuple),
+                                      std::ref(p_stream_filter),
+                                      std::ref(streams_stop[2]),
+                                      std::ref(rc_stream_tuple),
+                                      std::ref(rc_stream_filter));
 
     std::thread mwj_readmin_edge_t(
       mwj_readmin_edge<T_BLOOM, BLOOM_LOG, K_FUN_LOG, FULL_HASH_W>,
@@ -2212,7 +2219,7 @@ void multiwayJoin(
       std::ref(re_stream_tuple));
 
     std::thread mwj_tuplebuild_t(
-      mwj_tuplebuild<PROPOSE_BATCH_LOG, HASH_W, FULL_HASH_W>,
+      mwj_tuplebuild<PROPOSE_BATCH_LOG, LKP3_HASH_W, MAX_HASH_W, FULL_HASH_W>,
       hash1_w,
       hash2_w,
       qVertices0,
@@ -2306,7 +2313,8 @@ void multiwayJoin(
 template <typename T_BLOOM,
         size_t BLOOM_LOG, 
         size_t K_FUN_LOG,
-        size_t HASH_W,
+        size_t LKP3_HASH_W,
+        size_t MAX_HASH_W,
         size_t FULL_HASH_W>
 void multiwayJoinWrap(
         ap_uint<DDR_W> *htb_buf0,
@@ -2349,10 +2357,10 @@ void multiwayJoinWrap(
     hls::stream<bool, S_D> stream_batch_end("Stream batch end");
     hls::stream<ap_uint<V_ID_W>, S_D> stream_batch("Stream batch");
 
-    mwj_batch<HASH_W, FULL_HASH_W>(
+    mwj_batch<LKP3_HASH_W, MAX_HASH_W, FULL_HASH_W>(
       hash1_w, hTables0, qVertices0, htb_buf0, stream_batch_end, stream_batch);
 
-    multiwayJoin<T_BLOOM, BLOOM_LOG, K_FUN_LOG, HASH_W, FULL_HASH_W>(
+    multiwayJoin<T_BLOOM, BLOOM_LOG, K_FUN_LOG, LKP3_HASH_W, MAX_HASH_W, FULL_HASH_W>(
       htb_buf1,
       htb_buf2,
       htb_buf3,
@@ -2449,23 +2457,27 @@ void subgraphIsomorphism(
     ap_wait();
 #endif /* DEBUG_INTERFACE */
 
-    multiwayJoinWrap<bloom_t, BLOOM_FILTER_WIDTH, K_FUNCTIONS, 20, 64>(
-      htb_buf0,
-      htb_buf1,
-      htb_buf2,
-      htb_buf3,
-      bloom_p,
-      res_buf,
-      hTables0,
-      hTables1,
-      qVertices0,
-      qVertices1,
-      numQueryVert,
-      hash1_w,
-      hash2_w,
-      dynfifo_space,
-      dynfifo_diagnostic,
-      localResult);
+    multiwayJoinWrap<bloom_t,
+                     BLOOM_FILTER_WIDTH,
+                     K_FUNCTIONS,
+                     HASH_LOOKUP3_BIT,
+                     MAX_HASH_TABLE_BIT,
+                     64>(htb_buf0,
+                         htb_buf1,
+                         htb_buf2,
+                         htb_buf3,
+                         bloom_p,
+                         res_buf,
+                         hTables0,
+                         hTables1,
+                         qVertices0,
+                         qVertices1,
+                         numQueryVert,
+                         hash1_w,
+                         hash2_w,
+                         dynfifo_space,
+                         dynfifo_diagnostic,
+                         localResult);
 
     result = localResult;
 
@@ -2559,7 +2571,8 @@ void subgraphIsomorphism(
                K_FUNCTIONS,
                DDR_BIT,
                VERTEX_WIDTH_BIT,
-               20,
+               HASH_LOOKUP3_BIT,
+               MAX_HASH_TABLE_BIT,
                64,
                LABEL_WIDTH,
                DEFAULT_STREAM_DEPTH,
@@ -2584,23 +2597,27 @@ void subgraphIsomorphism(
     ap_wait();
 #endif /* DEBUG_INTERFACE */
 
-    multiwayJoinWrap<bloom_t, BLOOM_FILTER_WIDTH, K_FUNCTIONS, 20, 64>(
-      htb_buf0,
-      htb_buf1,
-      htb_buf2,
-      htb_buf3,
-      bloom_p,
-      res_buf,
-      hTables0,
-      hTables1,
-      qVertices0,
-      qVertices1,
-      numQueryVert,
-      hash1_w,
-      hash2_w,
-      dynfifo_space,
-      dynfifo_diagnostic,
-      localResult);
+    multiwayJoinWrap<bloom_t,
+                     BLOOM_FILTER_WIDTH,
+                     K_FUNCTIONS,
+                     HASH_LOOKUP3_BIT,
+                     MAX_HASH_TABLE_BIT,
+                     64>(htb_buf0,
+                         htb_buf1,
+                         htb_buf2,
+                         htb_buf3,
+                         bloom_p,
+                         res_buf,
+                         hTables0,
+                         hTables1,
+                         qVertices0,
+                         qVertices1,
+                         numQueryVert,
+                         hash1_w,
+                         hash2_w,
+                         dynfifo_space,
+                         dynfifo_diagnostic,
+                         localResult);
 
     result = localResult;
 
