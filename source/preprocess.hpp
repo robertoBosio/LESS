@@ -19,22 +19,52 @@
 #include "debug.hpp"
 #endif /* DEBUG_STATS */
 
+#pragma GCC diagnostic push
+#pragma GCC diagnostic error "-Wpedantic"
+#pragma GCC diagnostic error "-Wall"
+#pragma GCC diagnostic error "-Wextra"
+#pragma GCC diagnostic ignored "-Wunused-label"
+#pragma GCC diagnostic ignored "-Wsign-compare"
+// #pragma GCC diagnostic ignored "-Wunused-parameter"
+
+template<size_t HASH_W>
+struct bloom_tuple_t
+{
+  ap_uint<HASH_W> indexed_h;
+  unsigned int address;
+  bool write;
+  bool valid;
+};
+
+struct counter_tuple_t
+{
+  unsigned int address;
+  unsigned char tb_index;
+};
+
+template<size_t EDGE_W>
+struct store_tuple_t
+{
+  ap_uint<EDGE_W> edge;
+  unsigned int address;
+  unsigned char tb_index;
+};
+
 /* Builds the table descriptors based on the information
  * from the query graph. */
-template <size_t MAX_QV,
+template<size_t MAX_QV,
          size_t MAX_TB,
          size_t NODE_W,
          size_t LAB_W,
          size_t MAX_LABELS>
-void buildTableDescriptors(
-        row_t *edge_buf,
-        QueryVertex *qVertices0,
-        QueryVertex *qVertices1,
-        // TableDescriptor *tDescriptors,
-        ap_uint<8> labelToTable[MAX_LABELS][MAX_LABELS],
-        unsigned short &numTables,
-        unsigned short numQueryVert,
-        unsigned short numQueryEdge)
+void
+buildTableDescriptors(row_t* edge_buf,
+                      QueryVertex* qVertices0,
+                      QueryVertex* qVertices1,
+                      ap_uint<8> labelToTable[MAX_LABELS][MAX_LABELS],
+                      unsigned short& numTables,
+                      unsigned short numQueryVert,
+                      unsigned short numQueryEdge)
 {
     /* Translate from id of vertex to position in the order */
     unsigned short fromNumToPos[MAX_QV];
@@ -46,186 +76,148 @@ void buildTableDescriptors(
     /* Filling information about query vertices and coping
      * the vertex order needed by multiway join */
 FILL_ORDER_LOOP:
-    for (int g = 0; g < numQueryVert; g++){
-		ap_uint<NODE_W> nodesrc = edge_buf[g].range(SRC_NODE + NODE_W - 1, SRC_NODE);
+    for (int g = 0; g < numQueryVert; g++) {
+      ap_uint<NODE_W> nodesrc =
+        edge_buf[g].range(SRC_NODE + NODE_W - 1, SRC_NODE);
 #ifndef __SYNTHESIS__
-        assert(numQueryVert < (MAX_QV));
+      assert(numQueryVert < (MAX_QV));
 #endif
-        fromNumToPos[nodesrc] = g;
+      fromNumToPos[nodesrc] = g;
     }
 
     /* Creating table descriptors */
 CREATE_TABDESC_LOOP:
     for (int s = 0; s < numQueryEdge; s++) {
-        bool dirEdge = false;
-        ap_uint<8> index = 0;
-        row_t edge = edge_buf[s + numQueryVert];
-        int temp = LAB_W;
-        ap_uint<LAB_W> labeldst = edge.range(LABELDST_NODE + LAB_W - 1, LABELDST_NODE);
-		ap_uint<LAB_W> labelsrc = edge.range(LABELSRC_NODE + LAB_W - 1, LABELSRC_NODE);
-		ap_uint<NODE_W> nodedst = edge.range(DST_NODE + NODE_W - 1, DST_NODE);
-		ap_uint<NODE_W> nodesrc = edge.range(SRC_NODE + NODE_W - 1, SRC_NODE);
-        unsigned short nodeSrcPos = fromNumToPos[nodesrc];
-        unsigned short nodeDstPos = fromNumToPos[nodedst];
+      bool dirEdge = false;
+      ap_uint<8> index = 0;
+      row_t edge = edge_buf[s + numQueryVert];
+      ap_uint<LAB_W> labeldst =
+        edge.range(LABELDST_NODE + LAB_W - 1, LABELDST_NODE);
+      ap_uint<LAB_W> labelsrc =
+        edge.range(LABELSRC_NODE + LAB_W - 1, LABELSRC_NODE);
+      ap_uint<NODE_W> nodedst = edge.range(DST_NODE + NODE_W - 1, DST_NODE);
+      ap_uint<NODE_W> nodesrc = edge.range(SRC_NODE + NODE_W - 1, SRC_NODE);
+      unsigned short nodeSrcPos = fromNumToPos[nodesrc];
+      unsigned short nodeDstPos = fromNumToPos[nodedst];
 
-        // Direction of the table is used to understand if the 
-        // source vertex is indexed or indexing the table
-        if (nodeSrcPos < nodeDstPos)
-            dirEdge = true;
-
-#ifndef __SYNTHESIS__
-        std::cout << (unsigned int)nodesrc << "(" << (int)labelsrc << ")"
-            << " -> " <<  (unsigned int)nodedst << "(" << (int)labeldst << ")" 
-            << std::endl;
-#endif
-
-        /* Understanding if table already exists */
-//         unsigned int g = 0;
-// FIND_CORRECT_TABLE_LOOP:
-//         for (; g < numTables; g++){
-//             if (tDescriptors[g].src_label == labelsrc 
-//                     && tDescriptors[g].dst_label == labeldst 
-//                     && tDescriptors[g].dir == dirEdge)
-//                 break;
-//         }
-
-        // Saving the index of the table in the labels matrix
-        // which is indexed by [indexing label][indexed label]
-        if (dirEdge)
-        {
-            index = labelToTable[labelsrc][labeldst];
-            if (index == 0)
-            {
-                index = ++numTables;
-            }
-            labelToTable[labelsrc][labeldst] = index;
-        }
-        else
-        {
-            index = labelToTable[labeldst][labelsrc];
-            if (index == 0)
-            {
-                index = ++numTables;
-            }
-            labelToTable[labeldst][labelsrc] = index;
-        }
-     
-//         /* Add new table descriptor */   
-//         if (g == numTables){
-// #ifndef __SYNTHESIS__
-//             assert(numTables < MAX_TB);
-// #endif
-//             tDescriptors[g].src_label = labelsrc;
-//             tDescriptors[g].dst_label = labeldst;
-//             tDescriptors[g].dir = dirEdge;
-//             numTables++;
-//         }
+      // Direction of the table is used to understand if the
+      // source vertex is indexed or indexing the table
+      if (nodeSrcPos < nodeDstPos)
+        dirEdge = true;
 
 #ifndef __SYNTHESIS__
-        if (dirEdge){
-        std::cout << "Table " << (int)index - 1 << ": " << (int)labelsrc << 
-             " -> " << (int)labeldst << std::endl;
-        } else {
-        std::cout << "Table " << (int)index - 1 << ": " << (int)labeldst << 
-             " <- " << (int)labelsrc << std::endl;
-        }
+      std::cout << (unsigned int)nodesrc << "(" << (int)labelsrc << ")"
+                << " -> " << (unsigned int)nodedst << "(" << (int)labeldst
+                << ")" << std::endl;
 #endif
 
-        /* Linking vertices to tables */
-        if (dirEdge){
-            unsigned char idx = qVertices0[nodeSrcPos].numTablesIndexing;
-            qVertices0[nodeSrcPos].tables_indexing[idx] = index - 1;
-            qVertices1[nodeSrcPos].tables_indexing[idx] = index - 1;
-            qVertices0[nodeSrcPos].numTablesIndexing++;
-            qVertices1[nodeSrcPos].numTablesIndexing++;
-
-            idx = qVertices0[nodeDstPos].numTablesIndexed;
-            qVertices0[nodeDstPos].tables_indexed[idx] = index - 1;
-            qVertices0[nodeDstPos].vertex_indexing[idx] = nodeSrcPos;
-            qVertices1[nodeDstPos].tables_indexed[idx] = index - 1;
-            qVertices1[nodeDstPos].vertex_indexing[idx] = nodeSrcPos;
-            
-            qVertices0[nodeDstPos].numTablesIndexed++;
-            qVertices1[nodeDstPos].numTablesIndexed++;
-        } else {
-            unsigned char idx = qVertices0[nodeDstPos].numTablesIndexing;
-            qVertices0[nodeDstPos].tables_indexing[idx] = index - 1;
-            qVertices1[nodeDstPos].tables_indexing[idx] = index - 1;
-            qVertices0[nodeDstPos].numTablesIndexing++;
-            qVertices1[nodeDstPos].numTablesIndexing++;
-
-            idx = qVertices0[nodeSrcPos].numTablesIndexed;
-            qVertices0[nodeSrcPos].tables_indexed[idx] = index - 1;
-            qVertices0[nodeSrcPos].vertex_indexing[idx] = nodeDstPos;
-            qVertices1[nodeSrcPos].tables_indexed[idx] = index - 1;
-            qVertices1[nodeSrcPos].vertex_indexing[idx] = nodeDstPos;
-            
-            qVertices0[nodeSrcPos].numTablesIndexed++;
-            qVertices1[nodeSrcPos].numTablesIndexed++;
+      // Saving the index of the table in the labels matrix
+      // which is indexed by [indexing label][indexed label]
+      if (dirEdge) {
+        index = labelToTable[labelsrc][labeldst];
+        if (index == 0) {
+          index = ++numTables;
         }
+        labelToTable[labelsrc][labeldst] = index;
+      } else {
+        index = labelToTable[labeldst][labelsrc];
+        if (index == 0) {
+          index = ++numTables;
+        }
+        labelToTable[labeldst][labelsrc] = index;
+      }
+
+#ifndef __SYNTHESIS__
+      if (dirEdge) {
+        std::cout << "Table " << (int)index - 1 << ": " << (int)labelsrc
+                  << " -> " << (int)labeldst << std::endl;
+      } else {
+        std::cout << "Table " << (int)index - 1 << ": " << (int)labeldst
+                  << " <- " << (int)labelsrc << std::endl;
+      }
+#endif
+
+      /* Linking vertices to tables */
+      if (dirEdge) {
+        unsigned char idx = qVertices0[nodeSrcPos].numTablesIndexing;
+        qVertices0[nodeSrcPos].tables_indexing[idx] = index - 1;
+        qVertices1[nodeSrcPos].tables_indexing[idx] = index - 1;
+        qVertices0[nodeSrcPos].numTablesIndexing++;
+        qVertices1[nodeSrcPos].numTablesIndexing++;
+
+        idx = qVertices0[nodeDstPos].numTablesIndexed;
+        qVertices0[nodeDstPos].tables_indexed[idx] = index - 1;
+        qVertices0[nodeDstPos].vertex_indexing[idx] = nodeSrcPos;
+        qVertices1[nodeDstPos].tables_indexed[idx] = index - 1;
+        qVertices1[nodeDstPos].vertex_indexing[idx] = nodeSrcPos;
+
+        qVertices0[nodeDstPos].numTablesIndexed++;
+        qVertices1[nodeDstPos].numTablesIndexed++;
+      } else {
+        unsigned char idx = qVertices0[nodeDstPos].numTablesIndexing;
+        qVertices0[nodeDstPos].tables_indexing[idx] = index - 1;
+        qVertices1[nodeDstPos].tables_indexing[idx] = index - 1;
+        qVertices0[nodeDstPos].numTablesIndexing++;
+        qVertices1[nodeDstPos].numTablesIndexing++;
+
+        idx = qVertices0[nodeSrcPos].numTablesIndexed;
+        qVertices0[nodeSrcPos].tables_indexed[idx] = index - 1;
+        qVertices0[nodeSrcPos].vertex_indexing[idx] = nodeDstPos;
+        qVertices1[nodeSrcPos].tables_indexed[idx] = index - 1;
+        qVertices1[nodeSrcPos].vertex_indexing[idx] = nodeDstPos;
+
+        qVertices0[nodeSrcPos].numTablesIndexed++;
+        qVertices1[nodeSrcPos].numTablesIndexed++;
+      }
     }
 }
 
-
 /* Translating counter addresses to ram addresses and
  * increasing of one the counter specified. */
-template <typename T_DDR,
+template<typename T_DDR,
          size_t CNT_LOG,
          size_t ROW_LOG,
          size_t NODE_W,
          size_t HASH_W>
-void increaseCounter(
-        T_DDR *htb_buf,
-        AdjHT *hTables,
-        const unsigned char hash1_w,
-        const unsigned char hash2_w,
-        hls::stream<ap_uint<HASH_W>> &stream_index1,
-        hls::stream<ap_uint<HASH_W>> &stream_index2,
-        hls::stream<unsigned short> &stream_ntable,
-        hls::stream<bool> &stream_end)
+void
+increaseCounter(T_DDR* htb_buf,
+                AdjHT* hTables,
+                hls::stream<counter_tuple_t>& stream_tuple,
+                hls::stream<bool>& stream_tuple_end)
 {
-    const size_t CNT_ROW = 1UL << (ROW_LOG - CNT_LOG);
-    T_DDR ram_row, mask;
-    ap_uint<HASH_W> index1;
-    ap_uint<HASH_W> index2;
+    T_DDR row;
     ap_uint<(1UL << CNT_LOG)> counter;
     unsigned short ntb;
     ap_uint<64> addr_outrow;
     ap_uint<64> addr_inrow;
     ap_uint<64> addr_counter;
+    counter_tuple_t tuple;
 
-    bool last = stream_end.read();
+    bool last = stream_tuple_end.read();
 INCREASE_COUNTER_DDR_LOOP:
-    while(!last){
-        index1 = stream_index1.read();
-        index2 = stream_index2.read();
-        ntb = stream_ntable.read();
-
-        index1 = index1.range(hash1_w - 1, 0);
-        index2 = index2.range(hash2_w - 1, 0);
-
-        /* Address in the matrix [HASH1_W][HASH2_W] */
-        addr_counter = index1;
-        addr_counter <<= hash2_w;
-        addr_counter += index2;
+    while (!last) {
+        tuple = stream_tuple.read();
+        addr_counter = tuple.address;
+        ntb = tuple.tb_index;
 
         /* Compute address of row storing the counter */
-        addr_outrow = hTables[ntb].start_offset + (addr_counter >> (ROW_LOG - CNT_LOG));
+        addr_outrow =
+          hTables[ntb].start_offset + (addr_counter >> (ROW_LOG - CNT_LOG));
 
         /* Compute address of counter inside the row */
         addr_inrow = addr_counter.range((ROW_LOG - CNT_LOG) - 1, 0);
 
-        /* Read, modify and write the counter */
-        ram_row = htb_buf[addr_outrow];
-        mask = ram_row >> (addr_inrow << CNT_LOG);
-        mask += 1;
-        mask <<= (addr_inrow << CNT_LOG);
-        ram_row <<= ((CNT_ROW - addr_inrow) << CNT_LOG);
-        ram_row >>= ((CNT_ROW - addr_inrow) << CNT_LOG);
-        htb_buf[addr_outrow] = ram_row | mask;
+        /* Read, increase by 1 and write the counter */
+        row = htb_buf[addr_outrow];
+        counter = row.range(((addr_inrow + 1) << CNT_LOG) - 1,
+                                addr_inrow << CNT_LOG);
+        counter += 1;
+        row.range(((addr_inrow + 1) << CNT_LOG) - 1,
+                      addr_inrow << CNT_LOG) = counter;
+        htb_buf[addr_outrow] = row;
 
-        hTables[ntb].n_edges++;     
-        last = stream_end.read();
+        hTables[ntb].n_edges++;
+        last = stream_tuple_end.read();
     }
 }
 
@@ -240,7 +232,6 @@ void counterToOffset(
         AdjHT *hTables,
         T_DDR *htb_buf)
 {
-    const size_t CNT_ROW = 1UL << (ROW_LOG - CNT_LOG);
     T_DDR row[32];
     T_DDR row_new;
 
@@ -280,174 +271,276 @@ COUNTER_TO_OFFSET_READ_LOOP:
 #endif /* DEBUG_STATS */
 
             for (unsigned char g = 0; g < 32; g++)
+            {
 #pragma HLS unroll
                 htb_buf[start + hTables[ntb].start_offset + g] = row[g];
+            }
         }
-}       
+    }
+}
+
+/* Transform counters to offsets. */
+template<typename T_DDR,
+         size_t CNT_LOG,
+         size_t ROW_LOG,
+         size_t NODE_W,
+         size_t EDGE_LOG,
+         size_t HASH_W,
+         size_t FULL_HASH_W>
+void
+bloom_read(AdjHT* hTables,
+           T_DDR* htb_buf,
+           const unsigned short numTables,
+           const unsigned char hash1_w,
+           hls::stream<bloom_tuple_t<FULL_HASH_W> >& stream_tuple_out,
+           hls::stream<bool>& stream_tuple_end_out)
+{
+    constexpr size_t EDGE_W = 1UL << EDGE_LOG;
+    hls::stream<ap_uint<NODE_W>, 4> hash_in0, hash_in1;
+    hls::stream<ap_uint<FULL_HASH_W>, 4> hash_out0, hash_out1;
+    ap_uint<EDGE_W> edge;
+    ap_uint<NODE_W> indexing_v, indexed_v;
+    ap_uint<FULL_HASH_W> indexed_h;
+    ap_uint<HASH_W> indexing_h, prev_indexing_h;
+    bloom_tuple_t<FULL_HASH_W> tuple_out;
+    T_DDR row;
+    unsigned int counter;
+    bool not_first;
+
+    not_first = false;
+    prev_indexing_h = 0;
+BLOOM_READ_TABLES_LOOP:
+    for (unsigned int ntb = 0; ntb < numTables; ntb++) {
+        counter = 0;
+
+        /* Read all the edges in a table and divide them by hash1 */
+    BLOOM_READ_EDGES_BLOCK:
+        for (unsigned int start = 0; start <= (hTables[ntb].n_edges >> 1);
+             start++) {
+#pragma HLS pipeline II = 2
+            row = htb_buf[hTables[ntb].start_edges + start];
+
+            for (int i = 0; i < EDGE_ROW; i++) {
+#pragma HLS unroll
+                edge = row.range(((i + 1) << EDGE_LOG) - 1, i << EDGE_LOG);
+                indexing_v = edge.range(NODE_W * 2 - 1, NODE_W);
+                indexed_v = edge.range(NODE_W - 1, 0);
+
+                hash_in0.write(indexed_v);
+                hash_in1.write(indexing_v);
+                xf::database::hashLookup3<NODE_W>(hash_in0, hash_out0);
+                xf::database::hashLookup3<NODE_W>(hash_in1, hash_out1);
+                indexed_h = hash_out0.read();
+                indexing_h = hash_out1.read().range(hash1_w - 1, 0);
+
+                tuple_out.address = ntb * (1UL << hash1_w) + prev_indexing_h;
+                tuple_out.indexed_h = indexed_h;
+                tuple_out.write = (indexing_h != prev_indexing_h) && not_first;
+                tuple_out.valid = counter < hTables[ntb].n_edges;
+                stream_tuple_out.write(tuple_out);
+                stream_tuple_end_out.write(false);
+
+                if (counter < hTables[ntb].n_edges)
+                  prev_indexing_h = indexing_h;
+                counter++;
+                not_first = true;
+            }
+        }
+    }
+    tuple_out.address = (numTables - 1) * (1UL << hash1_w) + prev_indexing_h;
+    tuple_out.indexed_h = indexed_h;
+    tuple_out.write = true;
+    tuple_out.valid = true;
+    stream_tuple_out.write(tuple_out);
+    stream_tuple_end_out.write(false);
+    stream_tuple_end_out.write(true);
+}
+
+template<typename T_BLOOM, size_t BLOOM_LOG, size_t FULL_HASH_W, size_t K_FUN_LOG>
+void
+bloom_write(T_BLOOM* bloom_p,
+            hls::stream<bloom_tuple_t<FULL_HASH_W>>& stream_tuple_in,
+            hls::stream<bool>& stream_tuple_end_in)
+{
+    constexpr size_t K_FUN = (1UL << K_FUN_LOG);
+    T_BLOOM filter[K_FUN];
+    bloom_tuple_t<FULL_HASH_W> tuple_in;
+#pragma HLS array_partition variable = filter type = complete
+
+    for (int g = 0; g < K_FUN; g++) {
+#pragma HLS unroll
+        filter[g] = 0;
+    }
+
+    bool last = stream_tuple_end_in.read();
+BLOOM_TASK_LOOP:
+    while (!last) {
+#pragma HLS pipeline II = 8
+        tuple_in = stream_tuple_in.read();
+
+        if (tuple_in.valid) {
+            if (tuple_in.write) {
+                for (int g = 0; g < K_FUN; g++) {
+#pragma HLS unroll
+                  bloom_p[(tuple_in.address << K_FUN_LOG) + g] = filter[g];
+                  filter[g] = 0;
+                }
+            }
+
+            for (int g = 0; g < K_FUN; g++) {
+#pragma HLS unroll
+                ap_uint<BLOOM_LOG> idx = tuple_in.indexed_h.range(
+                  (FULL_HASH_W / K_FUN) * (g + 1) - 1,
+                  (FULL_HASH_W / K_FUN) * (g + 1) - BLOOM_LOG);
+                filter[g][idx] = 1;
+            }
+        }
+
+        last = stream_tuple_end_in.read();
+    }
 }
 
 /* Store edges based on offsets */
-template <typename T_DDR,
+template<typename T_DDR,
+         typename T_EDGE,
+         typename T_HASH,
+         typename T_CNT,
          size_t EDGE_LOG,
          size_t CNT_LOG,
          size_t ROW_LOG,
          size_t NODE_W,
          size_t HASH_W>
-void storeEdges(
-        AdjHT                                       *hTables,
-        T_DDR                                       *htb_buf,
-        const unsigned char                         hash1_w,
-        const unsigned char                         hash2_w,
-        hls::stream<ap_uint<(1UL << EDGE_LOG)>>     &stream_edge,
-        hls::stream<ap_uint<HASH_W>>                &stream_index1,
-        hls::stream<ap_uint<HASH_W>>                &stream_index2,
-        hls::stream<unsigned short>                 &stream_ntable,
-        hls::stream<bool>                           &stream_end)
+void
+storeEdges(AdjHT* hTables,
+           T_DDR* htb_buf,
+           hls::stream<store_tuple_t<(1UL << EDGE_LOG)> >& stream_tuple,
+           hls::stream<bool>& stream_tuple_end)
 {
-    const size_t CNT_ROW = 1UL << (ROW_LOG - CNT_LOG);
-    T_DDR row, mask;
-    ap_uint<HASH_W> index1;
-    ap_uint<HASH_W> index2;
-    ap_uint<(1UL << EDGE_LOG)> edge;
-    ap_uint<(1UL << CNT_LOG)> offset;
+    T_DDR row_off, row_edge;
+    T_EDGE edge;
+    T_CNT offset;
     unsigned short ntb;
-    ap_uint<64> addr_outrow;
+    ap_uint<64> addr_row_off, addr_row_edge;
     ap_uint<64> addr_inrow;
     ap_uint<64> addr_offset;
+    store_tuple_t<(1UL << EDGE_LOG)> tuple;
 
-    bool last = stream_end.read();
+    bool last = stream_tuple_end.read();
 STORE_EDGES_INCREASE_COUNTER_DDR_LOOP:
-    while(!last){
-        index1 = stream_index1.read();
-        index2 = stream_index2.read();
-        ntb = stream_ntable.read();
-        edge = stream_edge.read();
-        
-        index1 = index1.range(hash1_w - 1, 0);
-        index2 = index2.range(hash2_w - 1, 0);
-
-        /* Address in the matrix [HASH1_W][HASH2_W] */
-        addr_offset = index1;
-        addr_offset <<= hash2_w;
-        addr_offset += index2;
+    while (!last) {
+        tuple = stream_tuple.read();
+        ntb = tuple.tb_index;
+        edge = tuple.edge;
+        addr_offset = tuple.address;
 
         /* Compute address of row storing the offset */
-        addr_outrow = hTables[ntb].start_offset + (addr_offset >> (ROW_LOG - CNT_LOG));
+        addr_row_off =
+            hTables[ntb].start_offset + (addr_offset >> (ROW_LOG - CNT_LOG));
 
         /* Compute address of offset inside the row */
         addr_inrow = addr_offset.range((ROW_LOG - CNT_LOG) - 1, 0);
 
-        // Select the correct offset from the word by shifting
-        // to the right and masking instead of using range().
-        row = htb_buf[addr_outrow];
-        mask = row >> (addr_inrow << CNT_LOG);
-        offset = mask & ((1UL << (1UL << CNT_LOG)) - 1);
+        // Select the correct offset from the word
+        row_off = htb_buf[addr_row_off];
+        offset = row_off.range(((addr_inrow + 1) << CNT_LOG) - 1,
+                                addr_inrow << CNT_LOG);
+        row_off.range(((addr_inrow + 1) << CNT_LOG) - 1,
+                      addr_inrow << CNT_LOG) = offset + 1;
 
-        // Add 1 to the offset to move it forward
-        mask += 1;
-
-        // Rewrite the offset in the word
-        mask <<= (addr_inrow << CNT_LOG);
-        row <<= ((CNT_ROW - addr_inrow) << CNT_LOG);
-        row >>= ((CNT_ROW - addr_inrow) << CNT_LOG);
-        htb_buf[addr_outrow] = row | mask;
-        
         /* Compute address of row that will store the edge */
-        addr_outrow = hTables[ntb].start_edges 
-            + (offset >> (ROW_LOG - EDGE_LOG));
+        addr_row_edge =
+            hTables[ntb].start_edges + (offset >> (ROW_LOG - EDGE_LOG));
 
         /* Compute address of the edge inside the row */
         addr_inrow = offset.range((ROW_LOG - EDGE_LOG) - 1, 0);
 
         /* Read, modify and write the edge */
-        row = htb_buf[addr_outrow];
-        mask = edge;
-        mask <<= (addr_inrow << EDGE_LOG);
-        htb_buf[addr_outrow] = row | mask;
+        row_edge = htb_buf[addr_row_edge];
+        row_edge.range(((addr_inrow + 1) << EDGE_LOG) - 1,
+                      addr_inrow << EDGE_LOG) = edge;
 
-        last = stream_end.read();
+        /* Store offset and edge modified */
+        htb_buf[addr_row_edge] = row_edge;
+        htb_buf[addr_row_off] = row_off;
+
+        last = stream_tuple_end.read();
     }
 }
 
-template <typename T_BLOOM,
-        size_t BLOOM_LOG,
-        size_t HASH_W,
-        size_t K_FUN_LOG>
-void updateBloom(
-        T_BLOOM                       *bloom_p,
-        hls::stream<unsigned int>     &stream_bloom_a,
-        hls::stream<ap_uint<HASH_W>>  &stream_index,
-        hls::stream<bool>             &stream_end)
-{
-    constexpr size_t K_FUN = (1UL << K_FUN_LOG);
+// template<typename T_BLOOM, size_t BLOOM_LOG, size_t HASH_W, size_t K_FUN_LOG>
+// void
+// updateBloom(T_BLOOM* bloom_p,
+//             hls::stream<unsigned int>& stream_bloom_a,
+//             hls::stream<ap_uint<HASH_W>>& stream_index,
+//             hls::stream<bool>& stream_end)
+// {
+//     constexpr size_t K_FUN = (1UL << K_FUN_LOG);
     
-    bool last = stream_end.read();
-BLOOM_TASK_LOOP:
-    while (!last)
-    {
-#pragma HLS pipeline off
-        unsigned int bloom_a = stream_bloom_a.read();
-        ap_uint<HASH_W> hash_v = stream_index.read();
+//     bool last = stream_end.read();
+// BLOOM_TASK_LOOP:
+//     while (!last)
+//     {
+// #pragma HLS pipeline off
+//         unsigned int bloom_a = stream_bloom_a.read();
+//         ap_uint<HASH_W> hash_v = stream_index.read();
 
-#ifndef __SYNTHESIS__
-        if (((bloom_a << K_FUN_LOG) + K_FUN) >= BLOOM_SPACE){
-            std::cout << bloom_a << std::endl;
-        }
-        assert(((bloom_a << K_FUN_LOG) + K_FUN) < BLOOM_SPACE);
-#endif
+// #ifndef __SYNTHESIS__
+//         if (((bloom_a << K_FUN_LOG) + K_FUN) >= BLOOM_SPACE){
+//             std::cout << bloom_a << std::endl;
+//         }
+//         assert(((bloom_a << K_FUN_LOG) + K_FUN) < BLOOM_SPACE);
+// #endif
 
-        for (int g = 0; g < K_FUN; g++){
-#pragma HLS unroll
-            T_BLOOM set = bloom_p[(bloom_a << K_FUN_LOG) + g];
-            ap_uint<BLOOM_LOG> idx = hash_v.range((HASH_W / K_FUN) * (g + 1) - 1,
-                    (HASH_W / K_FUN) * (g + 1) - BLOOM_LOG);
-            set[idx] = 1;
-            bloom_p[(bloom_a << K_FUN_LOG) + g] = set;
-        }
-        last = stream_end.read();
-    }
-}
+//         for (int g = 0; g < K_FUN; g++){
+// #pragma HLS unroll
+//             T_BLOOM set = bloom_p[(bloom_a << K_FUN_LOG) + g];
+//             ap_uint<BLOOM_LOG> idx = hash_v.range((HASH_W / K_FUN) * (g + 1) - 1,
+//                     (HASH_W / K_FUN) * (g + 1) - BLOOM_LOG);
+//             set[idx] = 1;
+//             bloom_p[(bloom_a << K_FUN_LOG) + g] = set;
+//         }
+//         last = stream_end.read();
+//     }
+// }
 
-template <size_t NODE_W,
-          size_t LAB_W,
-          size_t HASH_W,
-          size_t MAX_LABELS>
-void edgeToHashFirst(
-    row_t *edge_buf,
-    // TableDescriptor *tDescriptors,
-    const ap_uint<8> labelToTable[MAX_LABELS][MAX_LABELS],
-    const unsigned short numTables,
-    const unsigned int numDataEdges,
+template<size_t NODE_W, size_t LAB_W, size_t HASH_W, size_t MAX_LABELS>
+void
+edgeToHashFirst(row_t* edge_buf,
+                const unsigned char hash1_w,
+                const unsigned char hash2_w,
+                const ap_uint<8> labelToTable[MAX_LABELS][MAX_LABELS],
+                const unsigned int numDataEdges,
 
-    hls::stream<unsigned int> &stream_b_addr,
-    hls::stream<ap_uint<64>> &stream_b_index,
-    hls::stream<bool> &stream_b_end,
-    hls::stream<ap_uint<HASH_W>> &stream_c_index1,
-    hls::stream<ap_uint<HASH_W>> &stream_c_index2,
-    hls::stream<unsigned short> &stream_c_ntable,
-    hls::stream<bool> &stream_c_end,
-    const unsigned char hash1_w)
+                // hls::stream<unsigned int> &stream_b_addr,
+                // hls::stream<ap_uint<64>> &stream_b_index,
+                // hls::stream<bool> &stream_b_end,
+                hls::stream<counter_tuple_t>& stream_tuple,
+                hls::stream<bool>& stream_tuple_end)
 {
     constexpr size_t SRC_NODE = 0;
     constexpr size_t DST_NODE = 32;
     constexpr size_t LABELSRC_NODE = 64;
     constexpr size_t LABELDST_NODE = 96;
+    counter_tuple_t tuple;
 
 COUNT_OCCURENCIES_TOP_LOOP:
     for (int s = 0; s < numDataEdges; s++) {
+#pragma HLS pipeline II = 2
         row_t edge = edge_buf[s];
 
-        ap_uint<LAB_W> labeldst = edge.range(LABELDST_NODE + LAB_W - 1, LABELDST_NODE);
-		ap_uint<LAB_W> labelsrc = edge.range(LABELSRC_NODE + LAB_W - 1, LABELSRC_NODE);
-		ap_uint<NODE_W> nodedst = edge.range(DST_NODE + NODE_W - 1, DST_NODE);
-		ap_uint<NODE_W> nodesrc = edge.range(SRC_NODE + NODE_W - 1, SRC_NODE);
+        ap_uint<LAB_W> labeldst =
+          edge.range(LABELDST_NODE + LAB_W - 1, LABELDST_NODE);
+        ap_uint<LAB_W> labelsrc =
+          edge.range(LABELSRC_NODE + LAB_W - 1, LABELSRC_NODE);
+        ap_uint<NODE_W> nodedst = edge.range(DST_NODE + NODE_W - 1, DST_NODE);
+        ap_uint<NODE_W> nodesrc = edge.range(SRC_NODE + NODE_W - 1, SRC_NODE);
 
         // Retrieve index of table with source as indexing vertex
         ap_uint<8> index0 = labelToTable[labelsrc][labeldst];
         // Retrieve index of table with destination as indexing vertex
         ap_uint<8> index1 = labelToTable[labeldst][labelsrc];
 
-        if (index0 != 0){
+        if (index0 != 0) {
             ap_uint<NODE_W> vertexIndexing, vertexIndexed;
             ap_uint<8> index = index0 - 1;
             vertexIndexing = nodesrc;
@@ -455,29 +548,33 @@ COUNT_OCCURENCIES_TOP_LOOP:
 
             /* Compute indices for hash table */
             ap_uint<64> hash_out;
-            xf::database::details::hashlookup3_core<NODE_W>(
-                vertexIndexing,
-                hash_out);
+            xf::database::details::hashlookup3_core<NODE_W>(vertexIndexing,
+                                                            hash_out);
 
             ap_uint<HASH_W> indexAdj = hash_out.range(HASH_W - 1, 0);
 
-            xf::database::details::hashlookup3_core<NODE_W>(
-                vertexIndexed,
-                hash_out);
+            xf::database::details::hashlookup3_core<NODE_W>(vertexIndexed,
+                                                            hash_out);
 
             ap_uint<HASH_W> indexEdge = hash_out.range(HASH_W - 1, 0);
 
-            stream_b_addr.write(index * (1UL << hash1_w) + indexAdj.range(hash1_w - 1, 0));
-            stream_b_index.write(hash_out);
-            stream_b_end.write(false);
+            // stream_b_addr.write(index * (1UL << hash1_w) +
+            // indexAdj.range(hash1_w - 1, 0)); stream_b_index.write(hash_out);
+            // stream_b_end.write(false);
 
-            stream_c_index1.write(indexAdj);
-            stream_c_index2.write(indexEdge);
-            stream_c_ntable.write(index);
-            stream_c_end.write(false);
-        } 
-        
-        if (index1 != 0){
+            indexAdj = indexAdj.range(hash1_w - 1, 0);
+            indexEdge = indexEdge.range(hash2_w - 1, 0);
+
+            /* Address in the matrix [HASH1_W][HASH2_W] */
+            tuple.address = indexAdj;
+            tuple.address <<= hash2_w;
+            tuple.address += indexEdge;
+            tuple.tb_index = index;
+            stream_tuple.write(tuple);
+            stream_tuple_end.write(false);
+        }
+
+        if (index1 != 0) {
             ap_uint<NODE_W> vertexIndexing, vertexIndexed;
             ap_uint<8> index = index1 - 1;
             vertexIndexing = nodedst;
@@ -485,118 +582,42 @@ COUNT_OCCURENCIES_TOP_LOOP:
 
             /* Compute indices for hash table */
             ap_uint<64> hash_out;
-            xf::database::details::hashlookup3_core<NODE_W>(
-                vertexIndexing,
-                hash_out);
+            xf::database::details::hashlookup3_core<NODE_W>(vertexIndexing,
+                                                            hash_out);
 
             ap_uint<HASH_W> indexAdj = hash_out.range(HASH_W - 1, 0);
 
-            xf::database::details::hashlookup3_core<NODE_W>(
-                vertexIndexed,
-                hash_out);
+            xf::database::details::hashlookup3_core<NODE_W>(vertexIndexed,
+                                                            hash_out);
 
             ap_uint<HASH_W> indexEdge = hash_out.range(HASH_W - 1, 0);
 
-            stream_b_addr.write(index * (1UL << hash1_w) + indexAdj.range(hash1_w - 1, 0));
-            stream_b_index.write(hash_out);
-            stream_b_end.write(false);
+            // stream_b_addr.write(index * (1UL << hash1_w) +
+            // indexAdj.range(hash1_w - 1, 0)); stream_b_index.write(hash_out);
+            // stream_b_end.write(false);
 
-            stream_c_index1.write(indexAdj);
-            stream_c_index2.write(indexEdge);
-            stream_c_ntable.write(index);
-            stream_c_end.write(false);
-        } 
+            indexAdj = indexAdj.range(hash1_w - 1, 0);
+            indexEdge = indexEdge.range(hash2_w - 1, 0);
 
-        /* Finding correct table */
-//         unsigned int g = 0;
-// COUNT_OCCURENCIES_FIND_TABLE_LOOP:
-//         for (; g < numTables; g++){
-//             if (tDescriptors[g].src_label == labelsrc &&
-//                     tDescriptors[g].dst_label == labeldst){
-
-//                 ap_uint<NODE_W> vertexIndexing, vertexIndexed; 
-//                 if(tDescriptors[g].dir){
-//                     vertexIndexing = nodesrc;
-//                     vertexIndexed = nodedst;
-//                 } else {
-//                     vertexIndexing = nodedst;
-//                     vertexIndexed = nodesrc;
-//                 }
-
-//                 /* Compute indices for hash table */
-//                 ap_uint<64> hash_out;
-//                 xf::database::details::hashlookup3_core<NODE_W>(
-//                         vertexIndexing,
-//                         hash_out);
-
-//                 ap_uint<HASH_W> indexAdj = hash_out.range(HASH_W - 1, 0); 
-
-//                 xf::database::details::hashlookup3_core<NODE_W>(
-//                         vertexIndexed,
-//                         hash_out);
-
-//                 ap_uint<HASH_W> indexEdge = hash_out.range(HASH_W - 1, 0); 
-
-//                 stream_b_addr.write(g * (1UL << hash1_w) + indexAdj.range(hash1_w - 1, 0));
-//                 stream_b_index.write(hash_out);
-//                 stream_b_end.write(false);
-
-//                 stream_c_index1.write(indexAdj);
-//                 stream_c_index2.write(indexEdge);
-//                 stream_c_ntable.write(g);
-//                 stream_c_end.write(false);
-//             }
-
-// #if UNDIRECTED   
-//             if (tDescriptors[g].src_label == labeldst &&
-//                     tDescriptors[g].dst_label == labelsrc){
-
-//                 ap_uint<NODE_W> vertexIndexing, vertexIndexed; 
-//                 if(!tDescriptors[g].dir){
-//                     vertexIndexing = nodesrc;
-//                     vertexIndexed = nodedst;
-//                 } else {
-//                     vertexIndexing = nodedst;
-//                     vertexIndexed = nodesrc;
-//                 }
-                
-//                 /* Compute indices for hash table */
-//                 ap_uint<64> hash_out;
-//                 xf::database::details::hashlookup3_core<NODE_W>(
-//                         vertexIndexing,
-//                         hash_out);
-
-//                 ap_uint<HASH_W> indexAdj = hash_out.range(HASH_W - 1, 0); 
-
-//                 xf::database::details::hashlookup3_core<NODE_W>(
-//                         vertexIndexed,
-//                         hash_out);
-
-//                 ap_uint<HASH_W> indexEdge = hash_out.range(HASH_W - 1, 0); 
-                
-//                 stream_b_addr.write(g * (1UL << hash1_w) + indexAdj.range(hash1_w - 1, 0));
-//                 stream_b_index.write(hash_out);
-//                 stream_b_end.write(false);
-
-//                 stream_c_index1.write(indexAdj);
-//                 stream_c_index2.write(indexEdge);
-//                 stream_c_ntable.write(g);
-//                 stream_c_end.write(false);
-//             }
-// #endif
-
-//         }
+            /* Address in the matrix [HASH1_W][HASH2_W] */
+            tuple.address = indexAdj;
+            tuple.address <<= hash2_w;
+            tuple.address += indexEdge;
+            tuple.tb_index = index;
+            stream_tuple.write(tuple);
+            stream_tuple_end.write(false);
+        }
     }
-    stream_b_end.write(true);
-    stream_c_end.write(true);
+    // stream_b_end.write(true);
+    stream_tuple_end.write(true);
 }
 
 template <typename T_DDR,
-          typename T_BLOOM,
+        //   typename T_BLOOM,
           size_t CNT_LOG,
           size_t ROW_LOG,
-          size_t BLOOM_LOG,
-          size_t K_FUN_LOG,
+        //   size_t BLOOM_LOG,
+        //   size_t K_FUN_LOG,
           size_t NODE_W,
           size_t HASH_W,
           size_t LAB_W,
@@ -605,99 +626,74 @@ template <typename T_DDR,
 void countEdges(
     row_t *edge_p,
     T_DDR *htb_p,
-    T_DDR *bloom_p,
-    // TableDescriptor *tDescriptors,
+    // T_DDR *bloom_p,
     const ap_uint<8> labelToTable[MAX_LABELS][MAX_LABELS],
     AdjHT *hTables,
-    const unsigned short numTables,
     const unsigned long numDataEdges,
     const unsigned char hash1_w,
     const unsigned char hash2_w)
 {
 
 #pragma HLS DATAFLOW
-    hls::stream<ap_uint<HASH_W>, STREAM_D> stream_c_index1("Counters index 1");
-    hls::stream<ap_uint<HASH_W>, STREAM_D> stream_c_index2("Counters index 2");
-    hls::stream<unsigned short, STREAM_D> stream_c_ntable("Counters table");
-    hls::stream<bool> stream_c_end("Counters end");
+    hls::stream<counter_tuple_t, STREAM_D> stream_tuple("Stream tuple counter");
+    hls::stream<bool, STREAM_D> stream_tuple_end("Stream tuple counter end");
 
-    hls::stream<unsigned int, STREAM_D> stream_b_addr("Bloom filter address");
-    hls::stream<ap_uint<64>, STREAM_D> stream_b_index("Bloom index");
-    hls::stream<bool> stream_b_end("Bloom end");
+    // hls::stream<unsigned int, STREAM_D> stream_b_addr("Bloom filter address");
+    // hls::stream<ap_uint<64>, STREAM_D> stream_b_index("Bloom index");
+    // hls::stream<bool> stream_b_end("Bloom end");
 
     // Compute hash values of vertices and find the correct table //
-    edgeToHashFirst<
-        NODE_W,
-        LAB_W,
-        HASH_W,
-        MAX_LABELS>(
-            edge_p,
-            // tDescriptors,
-            labelToTable,
-            numTables,
-            numDataEdges,
-            stream_b_addr,
-            stream_b_index,
-            stream_b_end,
-            stream_c_index1,
-            stream_c_index2,
-            stream_c_ntable,
-            stream_c_end,
-            hash1_w);
+    edgeToHashFirst<NODE_W, LAB_W, HASH_W, MAX_LABELS>(edge_p,
+                                                       hash1_w,
+                                                       hash2_w,
+                                                       labelToTable,
+                                                       numDataEdges,
+                                                       // stream_b_addr,
+                                                       // stream_b_index,
+                                                       // stream_b_end,
+                                                       stream_tuple,
+                                                       stream_tuple_end);
 
     // Update specific counter //
-    increaseCounter<
-        T_DDR,
-        CNT_LOG,
-        ROW_LOG,
-        NODE_W,
-        HASH_W>(
-            htb_p,
-            hTables,
-            hash1_w,
-            hash2_w,
-            stream_c_index1,
-            stream_c_index2,
-            stream_c_ntable,
-            stream_c_end);
+    increaseCounter<T_DDR, CNT_LOG, ROW_LOG, NODE_W, HASH_W>(
+      htb_p, hTables, stream_tuple, stream_tuple_end);
 
     // Update indexed bloom filters //
-    updateBloom<
-        T_BLOOM,
-        BLOOM_LOG,
-        HASH_W,
-        K_FUN_LOG>(
-        bloom_p,
-        stream_b_addr,
-        stream_b_index,
-        stream_b_end);
+    // updateBloom<
+    //     T_BLOOM,
+    //     BLOOM_LOG,
+    //     HASH_W,
+    //     K_FUN_LOG>(
+    //     bloom_p,
+    //     stream_b_addr,
+    //     stream_b_index,
+    //     stream_b_end);
 }
 
-template <size_t EDGE_LOG,
-          size_t NODE_W,
-          size_t LAB_W,
-          size_t HASH_W,
-          size_t MAX_LABELS>
-void edgeToHashSecond(
-    row_t *edge_buf,
-    // TableDescriptor *tDescriptors,
-    const ap_uint<8> labelToTable[MAX_LABELS][MAX_LABELS],
-    const unsigned short numTables,
-    const unsigned int numDataEdges,
+template<size_t EDGE_LOG,
+         size_t NODE_W,
+         size_t LAB_W,
+         size_t HASH_W,
+         size_t MAX_LABELS>
+void
+edgeToHashSecond(row_t* edge_buf,
+                 const unsigned char hash1_w,
+                 const unsigned char hash2_w,
+                 const ap_uint<8> labelToTable[MAX_LABELS][MAX_LABELS],
+                 const unsigned long numDataEdges,
 
-    hls::stream<ap_uint<(1UL << EDGE_LOG)>> &stream_c_edge,
-    hls::stream<ap_uint<HASH_W>> &stream_c_index1,
-    hls::stream<ap_uint<HASH_W>> &stream_c_index2,
-    hls::stream<unsigned short> &stream_c_ntable,
-    hls::stream<bool> &stream_c_end)
+                 hls::stream<store_tuple_t<(1UL << EDGE_LOG)> >& stream_tuple,
+                 hls::stream<bool>& stream_tuple_end)
 {
     constexpr size_t SRC_NODE = 0;
     constexpr size_t DST_NODE = 32;
     constexpr size_t LABELSRC_NODE = 64;
     constexpr size_t LABELDST_NODE = 96;
+    store_tuple_t<(1UL << EDGE_LOG)> tuple;
 
 COUNT_OCCURENCIES_TOP_LOOP:
     for (int s = 0; s < numDataEdges; s++) {
+#pragma HLS pipeline II = 2
         row_t edge = edge_buf[s];
         ap_uint<LAB_W> labeldst = edge.range(LABELDST_NODE + LAB_W - 1, LABELDST_NODE);
 		ap_uint<LAB_W> labelsrc = edge.range(LABELSRC_NODE + LAB_W - 1, LABELSRC_NODE);
@@ -729,11 +725,17 @@ COUNT_OCCURENCIES_TOP_LOOP:
 
             ap_uint<HASH_W> indexEdge = hash_out.range(HASH_W - 1, 0);
             
-            stream_c_index1.write(indexAdj);
-            stream_c_index2.write(indexEdge);
-            stream_c_ntable.write(index);
-            stream_c_edge.write(vertexIndexing.concat(vertexIndexed));
-            stream_c_end.write(false);
+            indexAdj = indexAdj.range(hash1_w - 1, 0);
+            indexEdge = indexEdge.range(hash2_w - 1, 0);
+
+            /* Address in the matrix [HASH1_W][HASH2_W] */
+            tuple.address = indexAdj;
+            tuple.address <<= hash2_w;
+            tuple.address += indexEdge;
+            tuple.tb_index = index;
+            tuple.edge = vertexIndexing.concat(vertexIndexed);
+            stream_tuple.write(tuple);
+            stream_tuple_end.write(false);
         } 
         
         if (index1 != 0){
@@ -756,89 +758,19 @@ COUNT_OCCURENCIES_TOP_LOOP:
 
             ap_uint<HASH_W> indexEdge = hash_out.range(HASH_W - 1, 0);
 
-            stream_c_index1.write(indexAdj);
-            stream_c_index2.write(indexEdge);
-            stream_c_ntable.write(index);
-            stream_c_edge.write(vertexIndexing.concat(vertexIndexed));
-            stream_c_end.write(false);
+            indexAdj = indexAdj.range(hash1_w - 1, 0);
+            indexEdge = indexEdge.range(hash2_w - 1, 0);
+            
+            tuple.address = indexAdj;
+            tuple.address <<= hash2_w;
+            tuple.address += indexEdge;
+            tuple.tb_index = index;
+            tuple.edge = vertexIndexing.concat(vertexIndexed);
+            stream_tuple.write(tuple);
+            stream_tuple_end.write(false);
         } 
-
-
-        /* Finding correct table */
-//         unsigned int g = 0;
-// COUNT_OCCURENCIES_FIND_TABLE_LOOP:
-//         for (; g < numTables; g++){
-//             if (tDescriptors[g].src_label == labelsrc &&
-//                     tDescriptors[g].dst_label == labeldst){
-
-//                 ap_uint<NODE_W> vertexIndexing, vertexIndexed; 
-//                 if(tDescriptors[g].dir){
-//                     vertexIndexing = nodesrc;
-//                     vertexIndexed = nodedst;
-//                 } else {
-//                     vertexIndexing = nodedst;
-//                     vertexIndexed = nodesrc;
-//                 }
-
-//                 /* Compute indices for hash table */
-//                 ap_uint<64> hash_out;
-//                 xf::database::details::hashlookup3_core<NODE_W>(
-//                         vertexIndexing,
-//                         hash_out);
-
-//                 ap_uint<HASH_W> indexAdj = hash_out.range(HASH_W - 1, 0); 
-
-//                 xf::database::details::hashlookup3_core<NODE_W>(
-//                         vertexIndexed,
-//                         hash_out);
-
-//                 ap_uint<HASH_W> indexEdge = hash_out.range(HASH_W - 1, 0); 
-
-//                 stream_c_index1.write(indexAdj);
-//                 stream_c_index2.write(indexEdge);
-//                 stream_c_ntable.write(g);
-//                 stream_c_edge.write(vertexIndexing.concat(vertexIndexed));
-//                 stream_c_end.write(false);
-//             }
-
-// #if UNDIRECTED   
-//             if (tDescriptors[g].src_label == labeldst &&
-//                     tDescriptors[g].dst_label == labelsrc){
-
-//                 ap_uint<NODE_W> vertexIndexing, vertexIndexed; 
-//                 if(!tDescriptors[g].dir){
-//                     vertexIndexing = nodesrc;
-//                     vertexIndexed = nodedst;
-//                 } else {
-//                     vertexIndexing = nodedst;
-//                     vertexIndexed = nodesrc;
-//                 }
-                
-//                 /* Compute indices for hash table */
-//                 ap_uint<64> hash_out;
-//                 xf::database::details::hashlookup3_core<NODE_W>(
-//                         vertexIndexing,
-//                         hash_out);
-
-//                 ap_uint<HASH_W> indexAdj = hash_out.range(HASH_W - 1, 0); 
-
-//                 xf::database::details::hashlookup3_core<NODE_W>(
-//                         vertexIndexed,
-//                         hash_out);
-
-//                 ap_uint<HASH_W> indexEdge = hash_out.range(HASH_W - 1, 0); 
-                
-//                 stream_c_index1.write(indexAdj);
-//                 stream_c_index2.write(indexEdge);
-//                 stream_c_ntable.write(g);
-//                 stream_c_edge.write(vertexIndexing.concat(vertexIndexed));
-//                 stream_c_end.write(false);
-//             }
-// #endif
-
-//         }
     }
-    stream_c_end.write(true);
+    stream_tuple_end.write(true);
 }
 
 template <typename T_DDR,
@@ -853,10 +785,8 @@ template <typename T_DDR,
 void writeEdges(
     row_t *edge_p,
     T_DDR *htb_p,
-    // TableDescriptor *tDescriptors,
     const ap_uint<8> labelToTable[MAX_LABELS][MAX_LABELS],
     AdjHT *hTables,
-    const unsigned short numTables,
     const unsigned long numDataEdges,
     const unsigned char hash1_w,
     const unsigned char hash2_w)
@@ -864,46 +794,77 @@ void writeEdges(
 
 #pragma HLS DATAFLOW
 
-    hls::stream<ap_uint<(1UL << EDGE_LOG)>, STREAM_D> stream_o_edge("Offset edge");
-    hls::stream<ap_uint<HASH_W>, STREAM_D> stream_o_index1("Offsets index 1");
-    hls::stream<ap_uint<HASH_W>, STREAM_D> stream_o_index2("Offsets index 2");
-    hls::stream<unsigned short, STREAM_D> stream_o_ntable("Offset table");
-    hls::stream<bool> stream_o_end("Offset end");
-    
-    /* Write edges based on precomputed offsets */
-    edgeToHashSecond<
-        EDGE_LOG,
-        NODE_W,
-        LAB_W,
-        HASH_W,
-        MAX_LABELS>(
-            edge_p,
-            // tDescriptors,
-            labelToTable,
-            numTables,
-            numDataEdges,
-            stream_o_edge,
-            stream_o_index1,
-            stream_o_index2,
-            stream_o_ntable,
-            stream_o_end);
+    hls::stream<store_tuple_t<(1UL << EDGE_LOG)>, STREAM_D> stream_tuple(
+      "Stream offset tuple");
+    hls::stream<bool, STREAM_D> stream_tuple_end("Stream offset tuple end");
 
-    storeEdges<
-        T_DDR,
-        EDGE_LOG,
-        CNT_LOG,
-        ROW_LOG,
-        NODE_W,
-        HASH_W>(
-            hTables,
-            htb_p,
-            hash1_w,
-            hash2_w,
-            stream_o_edge,
-            stream_o_index1,
-            stream_o_index2,
-            stream_o_ntable,
-            stream_o_end);
+    /* Write edges based on precomputed offsets */
+    edgeToHashSecond<EDGE_LOG, NODE_W, LAB_W, HASH_W, MAX_LABELS>(
+      edge_p,
+      hash1_w,
+      hash2_w,
+      labelToTable,
+      numDataEdges,
+      stream_tuple,
+      stream_tuple_end);
+
+    storeEdges<T_DDR,
+               ap_uint<(1UL << EDGE_LOG)>,
+               ap_uint<HASH_W>,
+               ap_uint<(1UL << CNT_LOG)>,
+               EDGE_LOG,
+               CNT_LOG,
+               ROW_LOG,
+               NODE_W,
+               HASH_W>(hTables, htb_p, stream_tuple, stream_tuple_end);
+}
+
+template <typename T_DDR,
+          typename T_BLOOM,
+          size_t CNT_LOG,
+          size_t ROW_LOG,
+          size_t NODE_W,
+          size_t EDGE_LOG,
+          size_t FULL_HASH_W,
+          size_t HASH_W,
+          size_t BLOOM_LOG,
+          size_t K_FUN_LOG,
+          size_t STREAM_D>
+void writeBloom(
+    T_BLOOM *bloom_p,
+    T_DDR *htb_p,
+    AdjHT *hTables,
+    const unsigned char numTables,
+    const unsigned char hash1_w)
+{
+#pragma HLS DATAFLOW
+
+    hls::stream<bloom_tuple_t<FULL_HASH_W>, STREAM_D> stream_tuple("Bloom tuples");
+    hls::stream<bool, STREAM_D> stream_tuple_end("Bloom tuple end");
+
+    /* Write edges based on precomputed offsets */
+    bloom_read<T_DDR,
+               CNT_LOG,
+               ROW_LOG,
+               NODE_W,
+               EDGE_LOG,
+               HASH_W,
+               FULL_HASH_W>
+               (
+        hTables,
+        htb_p,
+        numTables,
+        hash1_w,
+        stream_tuple,
+        stream_tuple_end);
+
+    bloom_write<T_BLOOM,
+                BLOOM_LOG,
+                FULL_HASH_W,
+                K_FUN_LOG>(
+        bloom_p,
+        stream_tuple,
+        stream_tuple_end);
 }
 
 /* Reads two times the data graph and fills the data stuctures */
@@ -916,6 +877,7 @@ template <typename T_DDR,
           size_t ROW_LOG,
           size_t NODE_W,
           size_t HASH_W,
+          size_t FULL_HASH_W,
           size_t LAB_W,
           size_t STREAM_D,
           size_t HTB_SPACE,
@@ -938,8 +900,10 @@ void fillTables(
      * for each table, then it should be divided by the number
      * of counters stored in each row which is 1 << (ROW_LOG - CNT_LOG)*/
     const unsigned long htb_size = (1UL << (hash1_w + hash2_w - (DDR_BIT - COUNTER_WIDTH)));
-    unsigned long end_addr = numTables * htb_size;
     unsigned long start_addr = 0;
+#ifndef __SYNTHESIS__
+    unsigned long end_addr = numTables * htb_size;
+#endif
 
 STORE_HASHTABLES_POINTER_LOOP:
     for (unsigned int ntb = 0; ntb < numTables; ntb++){
@@ -948,37 +912,35 @@ STORE_HASHTABLES_POINTER_LOOP:
         start_addr += htb_size;
     }
 
-    countEdges<
-         T_DDR,
-         T_BLOOM,
-         CNT_LOG,
-         ROW_LOG,
-         BLOOM_LOG,
-         K_FUN_LOG,
-         NODE_W,
-         HASH_W,
-         LAB_W,
-         STREAM_D,
-         MAX_LABELS>(
-            edge_buf,
-            htb_buf,
-            bloom_p,
-            labelToTable,
-            hTables0,
-            numTables,
-            numDataEdges,
-            hash1_w,
-            hash2_w);
-    
+    countEdges<T_DDR,
+            //    T_BLOOM,
+               CNT_LOG,
+               ROW_LOG,
+            //    BLOOM_LOG,
+            //    K_FUN_LOG,
+               NODE_W,
+               HASH_W,
+               LAB_W,
+               STREAM_D,
+               MAX_LABELS>(
+        edge_buf,
+        htb_buf,
+        // bloom_p,
+        labelToTable,
+        hTables0,
+        numDataEdges,
+        hash1_w,
+        hash2_w);
+
     /* From counts to offsets */
     counterToOffset<T_DDR,
-         CNT_LOG,
-         ROW_LOG,
-         HASH_W>(
-            htb_size,
-            numTables,
-            hTables0,
-            htb_buf);
+                    CNT_LOG,
+                    ROW_LOG,
+                    HASH_W>(
+        htb_size,
+        numTables,
+        hTables0,
+        htb_buf);
 
     start_addr = (start_addr + (1UL << CACHE_WORDS_PER_LINE)) & ~((1UL << CACHE_WORDS_PER_LINE) - 1);
 STORE_EDGES_POINTER_LOOP:
@@ -994,25 +956,39 @@ STORE_EDGES_POINTER_LOOP:
         hTables1[ntb].n_edges = hTables0[ntb].n_edges;
     }
 
-    writeEdges<
-         T_DDR,
-         EDGE_LOG,
-         CNT_LOG,
-         ROW_LOG,
-         NODE_W,
-         LAB_W,
-         HASH_W,
-         STREAM_D,
-         MAX_LABELS>(
-            edge_buf,
-            htb_buf,
-            // tDescriptors,
-            labelToTable,
-            hTables0,
-            numTables,
-            numDataEdges,
-            hash1_w,
-            hash2_w);
+    writeEdges<T_DDR,
+               EDGE_LOG,
+               CNT_LOG,
+               ROW_LOG,
+               NODE_W,
+               LAB_W,
+               HASH_W,
+               STREAM_D,
+               MAX_LABELS>(
+        edge_buf,
+        htb_buf,
+        labelToTable,
+        hTables0,
+        numDataEdges,
+        hash1_w,
+        hash2_w);
+
+    writeBloom<T_DDR,
+               T_BLOOM,
+               CNT_LOG,
+               ROW_LOG,
+               NODE_W,
+               EDGE_LOG,
+               FULL_HASH_W,
+               HASH_W,
+               BLOOM_LOG,
+               K_FUN_LOG,
+               STREAM_D>(
+        bloom_p,
+        htb_buf,
+        hTables0,
+        numTables,
+        hash1_w);
 
 #ifndef __SYNTHESIS__
     end_addr = start_addr * (1UL << (ROW_LOG - 3)) + ((numTables * ((1 << hash1_w) + 1)) << (BLOOM_LOG - 3));
@@ -1096,41 +1072,31 @@ STORE_EDGES_POINTER_LOOP:
         f << std::endl;
     }
     f.close();
-    */      
-    
-    /* for (unsigned int tab = 0; tab < numTables; tab++){ */
-/* std::cout << "Table " << tab << " indexing set"; */
-/* ap_uint<1024> row = bloom_indexing[tab]; */
-/* std::cout << std::endl << "\t"; */
-/* for(int g = 0; g < 16; g++){ */
-/* unsigned long bloom_f = */
-/* row.range(((g + 1)*64) - 1, g*64); */
-/* std::cout << std::hex << (unsigned long)bloom_f << " "; */
-/* } */
-/* std::cout << std::endl; */
-/* } */
+    */
 
 #if DEBUG_STATS
     constexpr size_t K_FUN = (1UL << K_FUN_LOG);
-    for (unsigned int tab = 0; tab < numTables; tab++){
-        for(unsigned long addr = 0; addr < (1UL << hash1_w); addr++){
+    for (unsigned int tab = 0; tab < numTables; tab++) {
+        for (unsigned long addr = 0; addr < (1UL << hash1_w); addr++) {
             T_BLOOM row = bloom_p[addr + tab * (1UL << hash1_w)];
-            for(int g = 0; g < K_FUN; g++){
-                ap_uint<(1UL << (BLOOM_LOG - K_FUN_LOG)) > bloom_f = 
-                    row.range(((g + 1) << (BLOOM_LOG - K_FUN_LOG)) - 1, g << (BLOOM_LOG - K_FUN_LOG));
+            for (int g = 0; g < K_FUN; g++) {
+                ap_uint<(1UL << (BLOOM_LOG - K_FUN_LOG))> bloom_f =
+                  row.range(((g + 1) << (BLOOM_LOG - K_FUN_LOG)) - 1,
+                            g << (BLOOM_LOG - K_FUN_LOG));
                 unsigned int count = 0;
-                while( bloom_f > 0) {
+                while (bloom_f > 0) {
                     count++;
                     bloom_f = bloom_f & (bloom_f - 1);
                 }
-                debug::bloom_fullness += (float)count / ((1UL << hash1_w + 1)*numTables);
+                debug::bloom_fullness +=
+                  (float)count / ((1UL << hash1_w) * numTables);
             }
         }
     }
 #endif /* DEBUG_STATS */
 }
 
-template <typename T_DDR,
+template<typename T_DDR,
          typename T_BLOOM,
          size_t EDGE_LOG,
          size_t CNT_LOG,
@@ -1139,27 +1105,27 @@ template <typename T_DDR,
          size_t ROW_LOG,
          size_t NODE_W,
          size_t HASH_W,
+         size_t FULL_HASH_W,
          size_t LAB_W,
          size_t STREAM_D,
          size_t HTB_SPACE,
          size_t MAX_QV,
          size_t MAX_TB>
-void preprocess(
-        row_t *edge_buf,
-        T_DDR *htb_buf,
-        T_DDR *bloom_p,
-        QueryVertex *qVertices0,
-        QueryVertex *qVertices1,
-        AdjHT *hTables0,
-        AdjHT *hTables1,
-        unsigned short numQueryVert,
-        unsigned short numQueryEdges,
-        unsigned long numDataEdges,
-        const unsigned char hash1_w,
-        const unsigned char hash2_w)
+void
+preprocess(row_t* edge_buf,
+           T_DDR* htb_buf,
+           T_DDR* bloom_p,
+           QueryVertex* qVertices0,
+           QueryVertex* qVertices1,
+           AdjHT* hTables0,
+           AdjHT* hTables1,
+           unsigned short numQueryVert,
+           unsigned short numQueryEdges,
+           unsigned long numDataEdges,
+           const unsigned char hash1_w,
+           const unsigned char hash2_w)
 {
     constexpr size_t MAX_LABELS = (1UL << LAB_W);
-    // TableDescriptor tDescriptors[MAX_TB];
     unsigned short numTables = 0;
     ap_uint<8> labelToTable[MAX_LABELS][MAX_LABELS];
 
@@ -1167,43 +1133,38 @@ void preprocess(
         for (int s = 0; s < MAX_TABLES; s++)
             labelToTable[g][s] = 0;
 
-    buildTableDescriptors<
-        MAX_QV,
-        MAX_TB,
-        NODE_W,
-        LAB_W,
-        MAX_LABELS>(
-        &edge_buf[numDataEdges],
-        qVertices0,
-        qVertices1,
-        // tDescriptors,
-        labelToTable,
-        numTables,
-        numQueryVert,
-        numQueryEdges);
+    buildTableDescriptors<MAX_QV, MAX_TB, NODE_W, LAB_W, MAX_LABELS>(
+      &edge_buf[numDataEdges],
+      qVertices0,
+      qVertices1,
+      labelToTable,
+      numTables,
+      numQueryVert,
+      numQueryEdges);
 
-    fillTables<
-         T_DDR,
-         T_BLOOM,
-         EDGE_LOG,
-         CNT_LOG,
-         BLOOM_LOG,
-         K_FUN_LOG,
-         ROW_LOG,
-         NODE_W,
-         HASH_W,
-         LAB_W,
-         STREAM_D,
-         HTB_SPACE,
-         MAX_LABELS>(
-            edge_buf,
-            htb_buf,
-            bloom_p,
-            hTables0,
-            hTables1,
-            labelToTable,
-            numDataEdges,
-            numTables,
-            hash1_w,
-            hash2_w);
+    fillTables<T_DDR,
+               T_BLOOM,
+               EDGE_LOG,
+               CNT_LOG,
+               BLOOM_LOG,
+               K_FUN_LOG,
+               ROW_LOG,
+               NODE_W,
+               HASH_W,
+               FULL_HASH_W,
+               LAB_W,
+               STREAM_D,
+               HTB_SPACE,
+               MAX_LABELS>(edge_buf,
+                           htb_buf,
+                           bloom_p,
+                           hTables0,
+                           hTables1,
+                           labelToTable,
+                           numDataEdges,
+                           numTables,
+                           hash1_w,
+                           hash2_w);
 }
+
+#pragma GCC diagnostic pop

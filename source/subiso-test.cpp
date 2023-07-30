@@ -326,6 +326,7 @@ int main()
                        K_FUNCTIONS,
                        DDR_BIT,
                        VERTEX_WIDTH_BIT,
+                       20,
                        64,
                        LABEL_WIDTH,
                        DEFAULT_STREAM_DEPTH,
