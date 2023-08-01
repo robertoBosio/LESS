@@ -799,66 +799,29 @@ TUPLEBUILD_COPYING_EMBEDDING_LOOP:
                 last = stream_sol_end_in.read();
             }
             stream_sol_end_out.write(true);
+            
             tuplebuild_tuple_t tuple_in = stream_tuple_in.read();
             unsigned char cycles = qVertices[curQV].numTablesIndexed;
 
-            if (cycles > 0){
-                uint8_t tableIndex = qVertices[curQV].tables_indexed[0];
-                uint8_t ivPos = qVertices[curQV].vertex_indexing[0];
-                bool bit_min = (tuple_in.tb_index == tableIndex && 
-                        tuple_in.iv_pos == ivPos);
+            last = stream_set_end_in.read();
+
+TUPLEBUILD_SAVE_NODE_LOOP:
+            while (!last) {
+#pragma HLS pipeline II = 1
+                vToVerify = stream_set_in.read();
+                buffer[buffer_size++] = vToVerify;
                 last = stream_set_end_in.read();
-
-TUPLEBUILD_MAIN_LOOP_FIRST_IT:
-                while(!last){
-#pragma HLS pipeline II=2
-                    vToVerify = stream_set_in.read();
-                     
-                    hash_in0.write(vToVerify);
-                    hash_in1.write(curEmb[ivPos]);
-                    xf::database::hashLookup3<V_ID_W>(hash_in0, hash_out0);
-                    xf::database::hashLookup3<V_ID_W>(hash_in1, hash_out1);
-                    ap_uint<MAX_HASH_W> indexed_h = hash_out0.read();
-                    ap_uint<MAX_HASH_W> indexing_h = hash_out1.read();
-                    
-                    addr_counter = indexing_h.range(hash1_w - 1, 0);
-                    addr_counter <<= hash2_w;
-                    addr_counter += indexed_h.range(hash2_w - 1, 0);
-
-                    tuple_out.indexed_v = vToVerify;
-                    tuple_out.indexing_v = curEmb[ivPos];
-                    tuple_out.addr_counter = addr_counter;
-                    tuple_out.tb_index = tableIndex;
-                    tuple_out.pos = buffer_size;
-                    tuple_out.bit_last_edge = (qVertices[curQV].numTablesIndexed == 1);
-                    tuple_out.flag = (bit_min)? MIN_SET: CHECK;
-                    tuple_out.skip_counter = false;
-
-                    stream_tuple_out.write(tuple_out);
-                    stream_tuple_end_out.write(false);
-
-                    if (addr_counter == 0)
-                        tuple_out.skip_counter = true; 
-                    tuple_out.addr_counter = addr_counter - 1;
-
-                    stream_tuple_out.write(tuple_out);
-                    stream_tuple_end_out.write(false);
-
-                    buffer[buffer_size++] = vToVerify;
-                    last = stream_set_end_in.read();
-                }
             }
 
-TUPLEBUILD_EDGE_LOOP_AFTER_IT:
-            for (int g = 0; g < cycles - 1; g++){
+TUPLEBUILD_EDGE_LOOP:
+            for (int g = 0; g < cycles; g++){
 #pragma HLS pipeline II=2
-                uint8_t tableIndex = qVertices[curQV].tables_indexed[g + 1];
-                uint8_t ivPos = qVertices[curQV].vertex_indexing[g + 1];
-                bool bit_last = (g == cycles - 2);
+                uint8_t tableIndex = qVertices[curQV].tables_indexed[g];
+                uint8_t ivPos = qVertices[curQV].vertex_indexing[g];
+                bool bit_last = (g == cycles - 1);
                 bool bit_min = (tuple_in.tb_index == tableIndex && 
                         tuple_in.iv_pos == ivPos);
 
-                // bool bit_min = false;
                 for (int buffer_p = 0; buffer_p < buffer_size; buffer_p++){
 #pragma HLS loop_flatten
                     vToVerify = buffer[buffer_p];
@@ -1370,7 +1333,7 @@ void mwj_assembly(
     ap_uint<V_ID_W> curQV;
     ap_uint<V_ID_W> curEmb[MAX_QV];
     bool last_sol, last_set, stop, last_start;
-    // bool last_start, token_new_start;
+    bool token_new_start;
     T_NODE node;
 
 #if COUNT_ONLY
@@ -1379,7 +1342,7 @@ void mwj_assembly(
 
     last_start = stream_batch_end.read();
     last_start = stream_batch_end.read();
-    // token_new_start = false;
+    token_new_start = false;
     stream_partial_out.write(0 | MASK_NEW_SOLUTION);
     stream_partial_out.write(stream_batch.read() | MASK_END_EXTENSION);
     stream_req.write(true);
@@ -1414,13 +1377,13 @@ ASSEMBLY_SET_LOOP:
                 /* Write in the correct stream */
                 if (curQV == nQueryVer - 1){
 #if COUNT_ONLY
-                    // if (!last_start && token_new_start){
-                    //     last_start = stream_batch_end.read();
-                    //     token_new_start = false;
-                    //     stream_partial_out.write(0 | MASK_NEW_SOLUTION);
-                    //     stream_partial_out.write(stream_batch.read() | MASK_END_EXTENSION);
-                    //     stream_req.write(true);
-                    // }
+                    if (!last_start && token_new_start){
+                        last_start = stream_batch_end.read();
+                        token_new_start = false;
+                        stream_partial_out.write(0 | MASK_NEW_SOLUTION);
+                        stream_partial_out.write(stream_batch.read() | MASK_END_EXTENSION);
+                        stream_req.write(true);
+                    }
                     // for (int g = 0; g < nQueryVer - 1; g++){
                     //     f << curEmb[g] << " ";
                     // }
@@ -1440,7 +1403,7 @@ ASSEMBLY_WRITE_FINAL_LOOP:
                     result.write(node);
 #endif
                 } else {
-                    // token_new_start = true;
+                    token_new_start = true;
                     stream_partial_out.write((last_set)? (vToVerify | MASK_END_EXTENSION) : vToVerify);
                     stream_req.write(true);
                 }
@@ -1460,7 +1423,7 @@ ASSEMBLY_WRITE_FINAL_LOOP:
             // Test if there are some node from start batch 
             if (!last_start){
                 last_start = stream_batch_end.read();
-                // token_new_start = true;
+                token_new_start = true;
                 stream_partial_out.write(0 | MASK_NEW_SOLUTION);
                 stream_partial_out.write(stream_batch.read() | MASK_END_EXTENSION);
                 stream_req.write(true);

@@ -4,7 +4,7 @@
 == Synthesis Summary Report of 'subgraphIsomorphism'
 ================================================================
 + General Information: 
-    * Date:           Sun Jul 30 12:37:12 2023
+    * Date:           Tue Aug  1 12:51:02 2023
     * Version:        2022.2 (Build 3670227 on Oct 13 2022)
     * Project:        subgraphiso-kria
     * Solution:       solution1 (Vivado IP Flow Target)
@@ -19,7 +19,7 @@
     |                                       Modules                                       |  Issue |       | Latency |  Latency  | Iteration|         |  Trip |          |           |         |             |             |     |
     |                                       & Loops                                       |  Type  | Slack | (cycles)|    (ns)   |  Latency | Interval| Count | Pipelined|   BRAM    |   DSP   |      FF     |     LUT     | URAM|
     +-------------------------------------------------------------------------------------+--------+-------+---------+-----------+----------+---------+-------+----------+-----------+---------+-------------+-------------+-----+
-    |+ subgraphIsomorphism                                                                |  Timing|  -1.75|        -|          -|         -|        -|      -|        no|  190 (65%)|  64 (5%)|  97522 (41%)|  96459 (82%)|    -|
+    |+ subgraphIsomorphism                                                                |  Timing|  -1.75|        -|          -|         -|        -|      -|        no|  190 (65%)|  64 (5%)|  94784 (40%)|  94161 (80%)|    -|
     | + subgraphIsomorphism_Pipeline_1                                                    |       -|   0.58|       18|     54.054|         -|       18|      -|        no|          -|        -|      6 (~0%)|     48 (~0%)|    -|
     |  o Loop 1                                                                           |       -|   1.80|       16|     48.048|         1|        1|     16|       yes|          -|        -|            -|            -|    -|
     | + subgraphIsomorphism_Pipeline_2                                                    |       -|   0.58|       18|     54.054|         -|       18|      -|        no|          -|        -|      6 (~0%)|     48 (~0%)|    -|
@@ -33,12 +33,12 @@
     |   o CREATE_TABDESC_LOOP                                                             |      II|   1.80|   262143|  7.872e+05|         8|        4|  65535|       yes|          -|        -|            -|            -|    -|
     | + subgraphIsomorphism_Pipeline_STORE_HASHTABLES_POINTER_LOOP                        |       -|   0.27|    65537|  1.968e+05|         -|    65537|      -|        no|          -|        -|     99 (~0%)|    154 (~0%)|    -|
     |  o STORE_HASHTABLES_POINTER_LOOP                                                    |       -|   1.80|    65535|  1.968e+05|         2|        1|  65535|       yes|          -|        -|            -|            -|    -|
-    | + countEdges_ap_uint_128_5ul_7ul_32ul_32ul_20ul_5ul_32ul_32ul_s*                    |  Timing|  -0.00|        -|          -|         -|        -|      -|  dataflow|     3 (1%)|        -|    3176 (1%)|    6149 (5%)|    -|
-    |  + edgeToHashFirst_32ul_5ul_32ul_20ul_32ul_s                                        |  Timing|  -0.00|        -|          -|         -|        -|      -|        no|          -|        -|   1680 (~0%)|    2499 (2%)|    -|
-    |   + edgeToHashFirst_32ul_5ul_32ul_20ul_32ul_Pipeline_COUNT_OCCURENCIES_TOP_LOOP     |  Timing|  -0.00|        -|          -|         -|        -|      -|        no|          -|        -|   1590 (~0%)|    2215 (1%)|    -|
+    | + countEdges_ap_uint_128_5ul_7ul_32ul_64ul_20ul_5ul_32ul_32ul_s*                    |  Timing|  -0.00|        -|          -|         -|        -|      -|  dataflow|     3 (1%)|        -|    3304 (1%)|    6149 (5%)|    -|
+    |  + edgeToHashFirst_32ul_5ul_64ul_20ul_32ul_s                                        |  Timing|  -0.00|        -|          -|         -|        -|      -|        no|          -|        -|   1808 (~0%)|    2499 (2%)|    -|
+    |   + edgeToHashFirst_32ul_5ul_64ul_20ul_32ul_Pipeline_COUNT_OCCURENCIES_TOP_LOOP     |  Timing|  -0.00|        -|          -|         -|        -|      -|        no|          -|        -|   1718 (~0%)|    2215 (1%)|    -|
     |    o COUNT_OCCURENCIES_TOP_LOOP                                                     |       -|   1.80|        -|          -|        16|        2|      -|       yes|          -|        -|            -|            -|    -|
-    |     + hashlookup3_core_32_s                                                         |       -|   0.78|        6|     18.018|         -|        1|      -|       yes|          -|        -|    449 (~0%)|    575 (~0%)|    -|
-    |     + hashlookup3_core_32_s                                                         |       -|   0.78|        6|     18.018|         -|        1|      -|       yes|          -|        -|    449 (~0%)|    575 (~0%)|    -|
+    |     + hashlookup3_core_32_s                                                         |       -|   0.78|        6|     18.018|         -|        1|      -|       yes|          -|        -|    481 (~0%)|    575 (~0%)|    -|
+    |     + hashlookup3_core_32_s                                                         |       -|   0.78|        6|     18.018|         -|        1|      -|       yes|          -|        -|    481 (~0%)|    575 (~0%)|    -|
     |  + increaseCounter_ap_uint_128_5ul_7ul_32ul_20ul_s                                  |  Timing|  -0.00|        -|          -|         -|        -|      -|        no|          -|        -|   1242 (~0%)|    3489 (2%)|    -|
     |   + increaseCounter_Pipeline_INCREASE_COUNTER_DDR_LOOP                              |  Timing|  -0.00|        -|          -|         -|        -|      -|        no|          -|        -|   1236 (~0%)|    3381 (2%)|    -|
     |    o INCREASE_COUNTER_DDR_LOOP                                                      |      II|   1.80|        -|          -|        24|       18|      -|       yes|          -|        -|            -|            -|    -|
@@ -49,34 +49,38 @@
     |     o COUNTER_TO_OFFSET_READ_LOOP                                                   |       -|   1.80|       35|    105.105|         5|        1|     32|       yes|          -|        -|            -|            -|    -|
     | + subgraphIsomorphism_Pipeline_STORE_EDGES_POINTER_LOOP                             |       -|   0.27|    65539|  1.968e+05|         -|    65539|      -|        no|          -|        -|    252 (~0%)|    225 (~0%)|    -|
     |  o STORE_EDGES_POINTER_LOOP                                                         |       -|   1.80|    65537|  1.968e+05|         4|        1|  65535|       yes|          -|        -|            -|            -|    -|
-    | + writeEdges_ap_uint_128_6ul_5ul_7ul_32ul_5ul_32ul_20ul_32ul_32ul_s*                |  Timing|  -0.00|        -|          -|         -|        -|      -|  dataflow|     6 (2%)|        -|    4142 (1%)|    8070 (6%)|    -|
-    |  + edgeToHashSecond_6ul_32ul_5ul_32ul_20ul_32ul_s                                   |  Timing|  -0.00|        -|          -|         -|        -|      -|        no|          -|        -|   2178 (~0%)|    2667 (2%)|    -|
-    |   + edgeToHashSecond_Pipeline_COUNT_OCCURENCIES_TOP_LOOP                            |  Timing|  -0.00|        -|          -|         -|        -|      -|        no|          -|        -|   2088 (~0%)|    2383 (2%)|    -|
+    | + writeEdges_ap_uint_128_6ul_5ul_7ul_32ul_5ul_64ul_20ul_32ul_32ul_s*                |  Timing|  -0.00|        -|          -|         -|        -|      -|  dataflow|     6 (2%)|        -|    4270 (1%)|    8070 (6%)|    -|
+    |  + edgeToHashSecond_6ul_32ul_5ul_64ul_20ul_32ul_s                                   |  Timing|  -0.00|        -|          -|         -|        -|      -|        no|          -|        -|   2306 (~0%)|    2667 (2%)|    -|
+    |   + edgeToHashSecond_Pipeline_COUNT_OCCURENCIES_TOP_LOOP                            |  Timing|  -0.00|        -|          -|         -|        -|      -|        no|          -|        -|   2216 (~0%)|    2383 (2%)|    -|
     |    o COUNT_OCCURENCIES_TOP_LOOP                                                     |       -|   1.80|        -|          -|        16|        2|      -|       yes|          -|        -|            -|            -|    -|
-    |     + hashlookup3_core_32_s                                                         |       -|   0.78|        6|     18.018|         -|        1|      -|       yes|          -|        -|    449 (~0%)|    575 (~0%)|    -|
-    |     + hashlookup3_core_32_s                                                         |       -|   0.78|        6|     18.018|         -|        1|      -|       yes|          -|        -|    449 (~0%)|    575 (~0%)|    -|
+    |     + hashlookup3_core_32_s                                                         |       -|   0.78|        6|     18.018|         -|        1|      -|       yes|          -|        -|    481 (~0%)|    575 (~0%)|    -|
+    |     + hashlookup3_core_32_s                                                         |       -|   0.78|        6|     18.018|         -|        1|      -|       yes|          -|        -|    481 (~0%)|    575 (~0%)|    -|
     |  + storeEdges_ap_uint_ap_uint_ap_uint_ap_uint_32_6ul_5ul_7ul_32ul_20ul_s            |  Timing|  -0.00|        -|          -|         -|        -|      -|        no|          -|        -|   1710 (~0%)|    5242 (4%)|    -|
     |   + storeEdges_Pipeline_STORE_EDGES_INCREASE_COUNTER_DDR_LOOP                       |  Timing|  -0.00|        -|          -|         -|        -|      -|        no|          -|        -|   1704 (~0%)|    5134 (4%)|    -|
     |    o STORE_EDGES_INCREASE_COUNTER_DDR_LOOP                                          |      II|   1.80|        -|          -|        25|       19|      -|       yes|          -|        -|            -|            -|    -|
-    | + writeBloom*                                                                       |  Timing|  -0.00|        -|          -|         -|        -|      -|  dataflow|     6 (2%)|        -|    7113 (3%)|    5850 (4%)|    -|
-    |  + bloom_read_ap_uint_128_5ul_7ul_32ul_6ul_32ul_20ul_64ul_s                         |  Timing|  -0.00|        -|          -|         -|        -|      -|        no|          -|        -|    3385 (1%)|    4906 (4%)|    -|
+    | + writeBloom*                                                                       |  Timing|  -0.00|        -|          -|         -|        -|      -|  dataflow|     6 (2%)|        -|    6732 (2%)|    4343 (3%)|    -|
+    |  + bloom_read_ap_uint_128_5ul_7ul_32ul_6ul_64ul_20ul_64ul_s                         |  Timing|  -0.00|        -|          -|         -|        -|      -|        no|          -|        -|    3004 (1%)|    3399 (2%)|    -|
     |   o BLOOM_READ_TABLES_LOOP                                                          |       -|   1.80|        -|          -|         -|        -|      -|        no|          -|        -|            -|            -|    -|
-    |    + bloom_read_Pipeline_BLOOM_READ_EDGES_BLOCK                                     |  Timing|  -0.00|        -|          -|         -|        -|      -|        no|          -|        -|   2024 (~0%)|    2695 (2%)|    -|
-    |     o BLOOM_READ_EDGES_BLOCK                                                        |       -|   1.80|        -|          -|        16|        2|      -|       yes|          -|        -|            -|            -|    -|
+    |    + hashlookup3_core_32_s                                                          |       -|   0.78|        6|     18.018|         -|        1|      -|       yes|          -|        -|    481 (~0%)|    575 (~0%)|    -|
+    |    + hashlookup3_core_32_s                                                          |       -|   0.78|        6|     18.018|         -|        1|      -|       yes|          -|        -|    481 (~0%)|    575 (~0%)|    -|
+    |    + bloom_read_Pipeline_BLOOM_READ_EDGES_BLOCK                                     |  Timing|  -0.00|        -|          -|         -|        -|      -|        no|          -|        -|   1000 (~0%)|    907 (~0%)|    -|
+    |     o BLOOM_READ_EDGES_BLOCK                                                        |       -|   1.80|        -|          -|        17|        2|      -|       yes|          -|        -|            -|            -|    -|
+    |      + hashlookup3_core_32_s                                                        |       -|   0.78|        6|     18.018|         -|        1|      -|       yes|          -|        -|    481 (~0%)|    575 (~0%)|    -|
+    |      + hashlookup3_core_32_s                                                        |       -|   0.78|        6|     18.018|         -|        1|      -|       yes|          -|        -|    481 (~0%)|    575 (~0%)|    -|
     |  + entry_proc                                                                       |       -|   0.90|        0|      0.000|         -|        0|      -|        no|          -|        -|      3 (~0%)|     29 (~0%)|    -|
     |  + bloom_write_ap_uint_128_7ul_64ul_3ul_s                                           |  Timing|  -0.00|        -|          -|         -|        -|      -|        no|          -|        -|    3372 (1%)|    687 (~0%)|    -|
     |   + bloom_write_ap_uint_128_7ul_64ul_3ul_Pipeline_BLOOM_WRITE_TASK_LOOP             |  Timing|  -0.00|        -|          -|         -|        -|      -|        no|          -|        -|    3302 (1%)|    588 (~0%)|    -|
     |    o BLOOM_WRITE_TASK_LOOP                                                          |       -|   1.80|        -|          -|        36|        8|      -|       yes|          -|        -|            -|            -|    -|
-    | + multiwayJoinWrap_ap_uint_128_7ul_3ul_32ul_20ul_64ul_s*                            |  Timing|  -1.75|        -|          -|         -|        -|      -|  dataflow|  160 (55%)|  64 (5%)|  73731 (31%)|  60842 (51%)|    -|
-    |  + mwj_batch_32ul_20ul_64ul_s                                                       |  Timing|  -0.00|        -|          -|         -|        -|      -|        no|    1 (~0%)|        -|   1309 (~0%)|    2335 (1%)|    -|
-    |   + mwj_batch_32ul_20ul_64ul_Pipeline_PROPOSE_TBINDEXING_LOOP                       |       -|   0.11|      261|    783.783|         -|      261|      -|        no|          -|        -|    228 (~0%)|    198 (~0%)|    -|
+    | + multiwayJoinWrap_ap_uint_128_7ul_3ul_64ul_20ul_64ul_s*                            |  Timing|  -1.75|        -|          -|         -|        -|      -|  dataflow|  160 (55%)|  64 (5%)|  71118 (30%)|  60051 (51%)|    -|
+    |  + mwj_batch_64ul_20ul_64ul_s                                                       |  Timing|  -0.00|        -|          -|         -|        -|      -|        no|    1 (~0%)|        -|   1251 (~0%)|    2202 (1%)|    -|
+    |   + mwj_batch_64ul_20ul_64ul_Pipeline_PROPOSE_TBINDEXING_LOOP                       |       -|   0.11|      261|    783.783|         -|      261|      -|        no|          -|        -|    228 (~0%)|    198 (~0%)|    -|
     |    o PROPOSE_TBINDEXING_LOOP                                                        |       -|   1.80|      259|    777.777|         6|        1|    255|       yes|          -|        -|            -|            -|    -|
     |   o PROPOSE_READ_MIN_INDEXING_LOOP                                                  |       -|   1.80|        -|          -|         -|        -|      -|        no|          -|        -|            -|            -|    -|
-    |    + mwj_batch_32ul_20ul_64ul_Pipeline_EXTRACT_BAGTOSET_SETCHECKER_LOOP             |       -|   0.38|        -|          -|         -|        -|      -|        no|          -|        -|     55 (~0%)|    111 (~0%)|    -|
+    |    + mwj_batch_64ul_20ul_64ul_Pipeline_EXTRACT_BAGTOSET_SETCHECKER_LOOP             |       -|   0.38|        -|          -|         -|        -|      -|        no|          -|        -|     55 (~0%)|    111 (~0%)|    -|
     |     o EXTRACT_BAGTOSET_SETCHECKER_LOOP                                              |      II|   1.80|        -|          -|         3|        3|      -|       yes|          -|        -|            -|            -|    -|
-    |    + mwj_batch_32ul_20ul_64ul_Pipeline_EXTRACT_BAGTOSET_SETCHECKER_LOOP18           |       -|   0.38|        -|          -|         -|        -|      -|        no|          -|        -|     55 (~0%)|    111 (~0%)|    -|
+    |    + mwj_batch_64ul_20ul_64ul_Pipeline_EXTRACT_BAGTOSET_SETCHECKER_LOOP18           |       -|   0.38|        -|          -|         -|        -|      -|        no|          -|        -|     55 (~0%)|    111 (~0%)|    -|
     |     o EXTRACT_BAGTOSET_SETCHECKER_LOOP                                              |      II|   1.80|        -|          -|         3|        3|      -|       yes|          -|        -|            -|            -|    -|
-    |  + multiwayJoin_ap_uint_128_7ul_3ul_32ul_20ul_64ul_s*                               |  Timing|  -1.75|        -|          -|         -|        -|      -|  dataflow|  159 (55%)|  64 (5%)|  72222 (30%)|  58305 (49%)|    -|
+    |  + multiwayJoin_ap_uint_128_7ul_3ul_64ul_20ul_64ul_s*                               |  Timing|  -1.75|        -|          -|         -|        -|      -|  dataflow|  159 (55%)|  64 (5%)|  69667 (29%)|  57647 (49%)|    -|
     |   + run_mem_if                                                                      |  Timing|  -0.00|        -|          -|         -|        -|      -|        no|          -|        -|   2027 (~0%)|    258 (~0%)|    -|
     |    o MEM_IF_LOOP                                                                    |       -|   1.80|        -|          -|        18|        -|      -|        no|          -|        -|            -|            -|    -|
     |   + MMU_fast_ap_uint_32_4ul_s                                                       |  Timing|  -1.75|        -|          -|         -|        -|      -|        no|          -|        -|    134 (~0%)|    888 (~0%)|    -|
@@ -84,14 +88,14 @@
     |   + MMU_slow_ap_uint_128_64ul_4194304ul_32ul_s                                      |  Timing|  -0.00|        -|          -|         -|        -|      -|        no|          -|        -|   1039 (~0%)|    1256 (1%)|    -|
     |    o MMU_SLOW_TASK_LOOP                                                             |      II|   1.80|        -|          -|        47|       32|      -|       yes|          -|        -|            -|            -|    -|
     |   + KPN_1*                                                                          |  Timing|  -0.81|        -|          -|         -|        -|      -|  dataflow|    13 (4%)|        -|    4447 (1%)|    5161 (4%)|    -|
-    |    + mwj_bypass_sol_4                                                               |  Timing|  -0.00|        1|      3.003|         -|        1|      -|  yes(flp)|          -|        -|     37 (~0%)|     79 (~0%)|    -|
+    |    + mwj_bypass_sol_3                                                               |  Timing|  -0.00|        1|      3.003|         -|        1|      -|  yes(flp)|          -|        -|     37 (~0%)|     79 (~0%)|    -|
     |    + mwj_bypass_sol                                                                 |  Timing|  -0.00|        1|      3.003|         -|        1|      -|  yes(flp)|          -|        -|     37 (~0%)|     79 (~0%)|    -|
+    |    + mwj_bypass_sol_4                                                               |  Timing|  -0.00|        1|      3.003|         -|        1|      -|  yes(flp)|          -|        -|      5 (~0%)|     79 (~0%)|    -|
+    |    + mwj_bypass_sol_1                                                               |  Timing|  -0.00|        1|      3.003|         -|        1|      -|  yes(flp)|          -|        -|      5 (~0%)|     79 (~0%)|    -|
     |    + mwj_bypass_sol_5                                                               |  Timing|  -0.00|        1|      3.003|         -|        1|      -|  yes(flp)|          -|        -|      5 (~0%)|     79 (~0%)|    -|
+    |    + mwj_offset                                                                     |  Timing|  -0.00|        3|      9.009|         -|        2|      -|  yes(flp)|          -|        -|    378 (~0%)|    200 (~0%)|    -|
     |    + mwj_bypass_sol_2                                                               |  Timing|  -0.00|        1|      3.003|         -|        1|      -|  yes(flp)|          -|        -|      5 (~0%)|     79 (~0%)|    -|
     |    + mwj_bypass_sol_6                                                               |  Timing|  -0.00|        1|      3.003|         -|        1|      -|  yes(flp)|          -|        -|      5 (~0%)|     79 (~0%)|    -|
-    |    + mwj_offset                                                                     |  Timing|  -0.00|        3|      9.009|         -|        2|      -|  yes(flp)|          -|        -|    378 (~0%)|    200 (~0%)|    -|
-    |    + mwj_bypass_sol_3                                                               |  Timing|  -0.00|        1|      3.003|         -|        1|      -|  yes(flp)|          -|        -|      5 (~0%)|     79 (~0%)|    -|
-    |    + mwj_bypass_sol_7                                                               |  Timing|  -0.00|        1|      3.003|         -|        1|      -|  yes(flp)|          -|        -|      5 (~0%)|     79 (~0%)|    -|
     |    + mwj_compact                                                                    |  Timing|  -0.00|        1|      3.003|         -|        1|      -|  yes(flp)|          -|        -|     48 (~0%)|    101 (~0%)|    -|
     |    + mwj_propose                                                                    |       -|   0.22|        -|          -|         -|        -|      -|        no|          -|        -|    300 (~0%)|    500 (~0%)|    -|
     |     + mwj_propose_Pipeline_PROPOSE_FIFO_NEW_SOLUTION_LOOP                           |       -|   0.22|        -|          -|         -|        -|      -|        no|          -|        -|     65 (~0%)|    106 (~0%)|    -|
@@ -104,7 +108,7 @@
     |     o HOMOMORPHISM_CHECK_LOOP                                                       |       -|   1.80|        -|          -|       262|        -|      -|        no|          -|        -|            -|            -|    -|
     |      + mwj_homomorphism_Pipeline_VITIS_LOOP_671_1                                   |       -|   0.13|      258|    774.774|         -|      258|      -|        no|          -|        -|     17 (~0%)|     95 (~0%)|    -|
     |       o VITIS_LOOP_671_1                                                            |       -|   1.80|      256|    768.768|         3|        1|    255|       yes|          -|        -|            -|            -|    -|
-    |    + mwj_bypass_sol_8                                                               |  Timing|  -0.00|        1|      3.003|         -|        1|      -|  yes(flp)|          -|        -|      5 (~0%)|     79 (~0%)|    -|
+    |    + mwj_bypass_sol_7                                                               |  Timing|  -0.00|        1|      3.003|         -|        1|      -|  yes(flp)|          -|        -|      5 (~0%)|     79 (~0%)|    -|
     |    + mwj_split_64ul_s                                                               |  Timing|  -0.63|        -|          -|         -|        -|      -|        no|          -|        -|    302 (~0%)|    363 (~0%)|    -|
     |     + mwj_split_64ul_Pipeline_SPLIT_MAIN_LOOP                                       |  Timing|  -0.63|        -|          -|         -|        -|      -|        no|          -|        -|    116 (~0%)|    210 (~0%)|    -|
     |      o SPLIT_MAIN_LOOP                                                              |       -|   1.80|        -|          -|         2|        1|      -|       yes|          -|        -|            -|            -|    -|
@@ -119,37 +123,35 @@
     |       o BATCHBUILD_MOVING_SET_LOOP                                                  |       -|   1.80|        -|          -|         2|        1|      -|       yes|          -|        -|            -|            -|    -|
     |      + mwj_batchbuild_64ul_Pipeline_BATCHBUILD_ADD_SOLUTION_LOOP                    |       -|   0.22|      257|    771.771|         -|      257|      -|        no|          -|        -|     11 (~0%)|     86 (~0%)|    -|
     |       o BATCHBUILD_ADD_SOLUTION_LOOP                                                |       -|   1.80|      255|    765.765|         2|        1|    255|       yes|          -|        -|            -|            -|    -|
-    |    + mwj_bypass_sol_9                                                               |  Timing|  -0.00|        1|      3.003|         -|        1|      -|  yes(flp)|          -|        -|      5 (~0%)|     79 (~0%)|    -|
-    |   + mwj_edgebuild_32ul_20ul_64ul_s                                                  |  Timing|  -0.00|        -|          -|         -|        -|      -|        no|          -|        -|   1145 (~0%)|    1607 (1%)|    -|
+    |    + mwj_bypass_sol_8                                                               |  Timing|  -0.00|        1|      3.003|         -|        1|      -|  yes(flp)|          -|        -|      5 (~0%)|     79 (~0%)|    -|
+    |   + mwj_edgebuild_64ul_20ul_64ul_s                                                  |  Timing|  -0.00|        -|          -|         -|        -|      -|        no|          -|        -|   1051 (~0%)|    1512 (1%)|    -|
     |    o VITIS_LOOP_320_1                                                               |       -|   1.80|        -|          -|         -|        -|      -|        no|          -|        -|            -|            -|    -|
-    |     + mwj_edgebuild_32ul_20ul_64ul_Pipeline_EDGEBUILD_COPYING_EMBEDDING_LOOP        |  Timing|  -0.00|        -|          -|         -|        -|      -|        no|          -|        -|     21 (~0%)|    117 (~0%)|    -|
+    |     + mwj_edgebuild_64ul_20ul_64ul_Pipeline_EDGEBUILD_COPYING_EMBEDDING_LOOP        |  Timing|  -0.00|        -|          -|         -|        -|      -|        no|          -|        -|     21 (~0%)|    117 (~0%)|    -|
     |      o EDGEBUILD_COPYING_EMBEDDING_LOOP                                             |       -|   1.80|        -|          -|         2|        1|      -|       yes|          -|        -|            -|            -|    -|
-    |     + mwj_edgebuild_32ul_20ul_64ul_Pipeline_EDGEBUILD_MAIN_LOOP                     |       -|   0.11|      268|    804.804|         -|      268|      -|        no|          -|        -|    963 (~0%)|   1132 (~0%)|    -|
-    |      o EDGEBUILD_MAIN_LOOP                                                          |       -|   1.80|      266|    798.798|        13|        1|    255|       yes|          -|        -|            -|            -|    -|
-    |   + verifycache_wrapper_6ul_s                                                       |       -|   0.03|        -|          -|         -|        -|      -|        no|          -|        -|   18854 (8%)|    9682 (8%)|    -|
-    |    + mwj_verify_6ul_s                                                               |       -|   0.03|        -|          -|         -|        -|      -|        no|          -|        -|   18849 (8%)|    9565 (8%)|    -|
-    |     o VERIFY_TASK_LOOP                                                              |       -|   1.80|        -|          -|        13|        1|      -|       yes|          -|        -|            -|            -|    -|
+    |     + mwj_edgebuild_64ul_20ul_64ul_Pipeline_EDGEBUILD_MAIN_LOOP                     |       -|   0.11|      267|    801.801|         -|      267|      -|        no|          -|        -|    869 (~0%)|   1037 (~0%)|    -|
+    |      o EDGEBUILD_MAIN_LOOP                                                          |       -|   1.80|      265|    795.795|        12|        1|    255|       yes|          -|        -|            -|            -|    -|
+    |   + verifycache_wrapper_6ul_s                                                       |       -|   0.03|        -|          -|         -|        -|      -|        no|          -|        -|   17827 (7%)|    9682 (8%)|    -|
+    |    + mwj_verify_6ul_s                                                               |       -|   0.03|        -|          -|         -|        -|      -|        no|          -|        -|   17822 (7%)|    9565 (8%)|    -|
+    |     o VERIFY_TASK_LOOP                                                              |       -|   1.80|        -|          -|        12|        1|      -|       yes|          -|        -|            -|            -|    -|
     |      + write_dep                                                                    |       -|   0.90|        0|      0.000|         -|        1|      -|       yes|          -|        -|      1 (~0%)|     11 (~0%)|    -|
     |      + delay_1ul_bool_s                                                             |       -|   1.80|        1|      3.003|         -|        1|      -|       yes|          -|        -|      3 (~0%)|     14 (~0%)|    -|
     |      + read_dep                                                                     |       -|   0.90|        0|      0.000|         -|        1|      -|       yes|          -|        -|      1 (~0%)|     11 (~0%)|    -|
     |   + mwj_findmin_ap_uint_128_7ul_3ul_s                                               |  Timing|  -0.00|        -|          -|         -|        -|      -|        no|          -|  64 (5%)|   11375 (4%)|    6542 (5%)|    -|
     |    o FINDMIN_TASK_LOOP                                                              |       -|   1.80|        -|          -|        48|        8|      -|       yes|          -|        -|            -|            -|    -|
-    |   + mwj_tuplebuild_6ul_32ul_20ul_64ul_s                                             |  Timing|  -0.00|        -|          -|         -|        -|      -|        no|    1 (~0%)|        -|    2737 (1%)|    3931 (3%)|    -|
+    |   + mwj_tuplebuild_6ul_64ul_20ul_64ul_s                                             |  Timing|  -0.00|        -|          -|         -|        -|      -|        no|    1 (~0%)|        -|   2284 (~0%)|    3106 (2%)|    -|
     |    o VITIS_LOOP_788_1                                                               |       -|   1.80|        -|          -|         -|        -|      -|        no|          -|        -|            -|            -|    -|
-    |     + mwj_tuplebuild_6ul_32ul_20ul_64ul_Pipeline_TUPLEBUILD_COPYING_EMBEDDING_LOOP  |  Timing|  -0.00|        -|          -|         -|        -|      -|        no|          -|        -|     21 (~0%)|    117 (~0%)|    -|
+    |     + mwj_tuplebuild_6ul_64ul_20ul_64ul_Pipeline_TUPLEBUILD_COPYING_EMBEDDING_LOOP  |  Timing|  -0.00|        -|          -|         -|        -|      -|        no|          -|        -|     21 (~0%)|    117 (~0%)|    -|
     |      o TUPLEBUILD_COPYING_EMBEDDING_LOOP                                            |       -|   1.80|        -|          -|         2|        1|      -|       yes|          -|        -|            -|            -|    -|
-    |     + mwj_tuplebuild_6ul_32ul_20ul_64ul_Pipeline_TUPLEBUILD_MAIN_LOOP_FIRST_IT      |  Timing|  -0.00|        -|          -|         -|        -|      -|        no|          -|        -|    614 (~0%)|    926 (~0%)|    -|
-    |      o TUPLEBUILD_MAIN_LOOP_FIRST_IT                                                |       -|   1.80|        -|          -|        17|        2|      -|       yes|          -|        -|            -|            -|    -|
-    |       + hashlookup3_core_32_s                                                       |       -|   0.78|        6|     18.018|         -|        1|      -|       yes|          -|        -|    449 (~0%)|    575 (~0%)|    -|
-    |     + mwj_tuplebuild_6ul_32ul_20ul_64ul_Pipeline_VITIS_LOOP_862_2                   |       -|   0.20|    32022|  9.616e+04|         -|    32022|      -|        no|          -|        -|   1052 (~0%)|    1264 (1%)|    -|
-    |      o TUPLEBUILD_EDGE_LOOP_AFTER_IT_VITIS_LOOP_862_2                               |       -|   1.80|    32020|  9.616e+04|        19|        2|  16002|       yes|          -|        -|            -|            -|    -|
-    |       + hashlookup3_core_32_s                                                       |       -|   0.78|        6|     18.018|         -|        1|      -|       yes|          -|        -|    449 (~0%)|    575 (~0%)|    -|
-    |   + mwj_readmin_counter_ap_uint_128_7ul_3ul_32ul_20ul_64ul_s                        |  Timing|  -0.00|        -|          -|         -|        -|      -|        no|          -|        -|   1482 (~0%)|    2878 (2%)|    -|
-    |    + mwj_readmin_counter_Pipeline_READMIN_COUNTER_TASK_LOOP                         |  Timing|  -0.00|        -|          -|         -|        -|      -|        no|          -|        -|   1406 (~0%)|    2520 (2%)|    -|
-    |     o READMIN_COUNTER_TASK_LOOP                                                     |      II|   1.80|        -|          -|        24|        8|      -|       yes|          -|        -|            -|            -|    -|
-    |   + intersectcache_wrapper_6ul_s                                                    |       -|   0.04|        -|          -|         -|        -|      -|        no|          -|        -|   19721 (8%)|    9625 (8%)|    -|
-    |    + mwj_intersect_6ul_s                                                            |       -|   0.04|        -|          -|         -|        -|      -|        no|          -|        -|   19717 (8%)|    9537 (8%)|    -|
-    |     o INTERSECT_TASK_LOOP                                                           |       -|   1.80|        -|          -|        14|        1|      -|       yes|          -|        -|            -|            -|    -|
+    |     + mwj_tuplebuild_6ul_64ul_20ul_64ul_Pipeline_TUPLEBUILD_SAVE_NODE_LOOP          |       -|   0.47|        -|          -|         -|        -|      -|        no|          -|        -|     52 (~0%)|     88 (~0%)|    -|
+    |      o TUPLEBUILD_SAVE_NODE_LOOP                                                    |       -|   1.80|        -|          -|         3|        1|      -|       yes|          -|        -|            -|            -|    -|
+    |     + mwj_tuplebuild_6ul_64ul_20ul_64ul_Pipeline_VITIS_LOOP_825_2                   |       -|   0.20|    32148|  9.654e+04|         -|    32148|      -|        no|          -|        -|   1691 (~0%)|    2150 (1%)|    -|
+    |      o TUPLEBUILD_EDGE_LOOP_VITIS_LOOP_825_2                                        |       -|   1.80|    32146|  9.653e+04|        19|        2|  16065|       yes|          -|        -|            -|            -|    -|
+    |   + mwj_readmin_counter_ap_uint_128_7ul_3ul_64ul_20ul_64ul_s                        |  Timing|  -0.00|        -|          -|         -|        -|      -|        no|          -|        -|   1518 (~0%)|    2865 (2%)|    -|
+    |    + mwj_readmin_counter_Pipeline_READMIN_COUNTER_TASK_LOOP                         |  Timing|  -0.00|        -|          -|         -|        -|      -|        no|          -|        -|   1442 (~0%)|    2507 (2%)|    -|
+    |     o READMIN_COUNTER_TASK_LOOP                                                     |      II|   1.80|        -|          -|        23|        8|      -|       yes|          -|        -|            -|            -|    -|
+    |   + intersectcache_wrapper_6ul_s                                                    |       -|   0.04|        -|          -|         -|        -|      -|        no|          -|        -|   18663 (7%)|    9625 (8%)|    -|
+    |    + mwj_intersect_6ul_s                                                            |       -|   0.04|        -|          -|         -|        -|      -|        no|          -|        -|   18659 (7%)|    9537 (8%)|    -|
+    |     o INTERSECT_TASK_LOOP                                                           |       -|   1.80|        -|          -|        13|        1|      -|       yes|          -|        -|            -|            -|    -|
     |      + write_dep                                                                    |       -|   0.90|        0|      0.000|         -|        1|      -|       yes|          -|        -|      1 (~0%)|     11 (~0%)|    -|
     |      + delay_1ul_bool_s                                                             |       -|   1.80|        1|      3.003|         -|        1|      -|       yes|          -|        -|      3 (~0%)|     14 (~0%)|    -|
     |      + read_dep                                                                     |       -|   0.90|        0|      0.000|         -|        1|      -|       yes|          -|        -|      1 (~0%)|     11 (~0%)|    -|
@@ -157,15 +159,15 @@
     |    o READMIN_EDGE_TASK_LOOP                                                         |       -|   1.80|        -|          -|         -|        -|      -|        no|          -|        -|            -|            -|    -|
     |     + mwj_readmin_edge_ap_uint_128_7ul_3ul_64ul_Pipeline_READMIN_EDGES_MAIN_LOOP    |  Timing|  -0.00|        -|          -|         -|        -|      -|        no|          -|        -|   1134 (~0%)|   10893 (9%)|    -|
     |      o READMIN_EDGES_MAIN_LOOP                                                      |      II|   1.80|        -|          -|        12|        2|      -|       yes|          -|        -|            -|            -|    -|
-    |   + mwj_assembly                                                                    |  Timing|  -0.00|        -|          -|         -|        -|      -|        no|          -|        -|    393 (~0%)|   1019 (~0%)|    -|
+    |   + mwj_assembly                                                                    |  Timing|  -0.00|        -|          -|         -|        -|      -|        no|          -|        -|    434 (~0%)|    1294 (1%)|    -|
     |    o ASSEMBLY_TASK_LOOP                                                             |       -|   1.80|        -|          -|         -|        -|      -|        no|          -|        -|            -|            -|    -|
     |     + mwj_assembly_Pipeline_ASSEMBLY_COPYING_EMBEDDING_LOOP                         |       -|   0.22|        -|          -|         -|        -|      -|        no|          -|        -|     69 (~0%)|    123 (~0%)|    -|
     |      o ASSEMBLY_COPYING_EMBEDDING_LOOP                                              |       -|   1.80|        -|          -|         2|        1|      -|       yes|          -|        -|            -|            -|    -|
     |     + mwj_assembly_Pipeline_ASSEMBLY_RADIX_LOOP                                     |       -|   0.22|        -|          -|         -|        -|      -|        no|          -|        -|     35 (~0%)|    108 (~0%)|    -|
     |      o ASSEMBLY_RADIX_LOOP                                                          |       -|   1.80|        -|          -|         2|        1|      -|       yes|          -|        -|            -|            -|    -|
-    |     + mwj_assembly_Pipeline_ASSEMBLY_SET_LOOP                                       |       -|   0.45|        -|          -|         -|        -|      -|        no|          -|        -|     39 (~0%)|    230 (~0%)|    -|
-    |      o ASSEMBLY_SET_LOOP                                                            |       -|   1.80|        -|          -|         3|        1|      -|       yes|          -|        -|            -|            -|    -|
-    |   + KPN_1392_1*                                                                     |  Timing|  -0.00|        5|     15.015|         -|        4|      -|  dataflow|          -|        -|    239 (~0%)|    321 (~0%)|    -|
+    |     + mwj_assembly_Pipeline_ASSEMBLY_SET_LOOP                                       |       -|   0.45|        -|          -|         -|        -|      -|        no|          -|        -|     76 (~0%)|    405 (~0%)|    -|
+    |      o ASSEMBLY_SET_LOOP                                                            |      II|   1.80|        -|          -|         3|        2|      -|       yes|          -|        -|            -|            -|    -|
+    |   + KPN_1368_1*                                                                     |  Timing|  -0.00|        5|     15.015|         -|        4|      -|  dataflow|          -|        -|    239 (~0%)|    321 (~0%)|    -|
     |    + mwj_merge_bool_s                                                               |  Timing|  -0.00|        1|      3.003|         -|        1|      -|        no|          -|        -|      5 (~0%)|     56 (~0%)|    -|
     |    + mwj_stop                                                                       |       -|   0.38|        3|      9.009|         -|        3|      -|        no|          -|        -|    135 (~0%)|    179 (~0%)|    -|
     +-------------------------------------------------------------------------------------+--------+-------+---------+-----------+----------+---------+-------+----------+-----------+---------+-------------+-------------+-----+
@@ -325,7 +327,7 @@
 | m_axi_fifo       | COUNT_OCCURENCIES_TOP_LOOP     | read      | variable | 128   | source/preprocess.hpp:724:5           |
 | m_axi_prop_batch | BLOOM_READ_EDGES_BLOCK         | read      | variable | 128   | source/preprocess.hpp:332:9           |
 | m_axi_bloom      |                                | write     | 8        | 128   | source/preprocess.hpp:405:44          |
-| m_axi_prop_batch | PROPOSE_READ_MIN_INDEXING_LOOP | read      | variable | 128   | source/subgraphIsomorphism.cpp:1570:5 |
+| m_axi_prop_batch | PROPOSE_READ_MIN_INDEXING_LOOP | read      | variable | 128   | source/subgraphIsomorphism.cpp:1533:5 |
 | m_axi_cache      |                                | read      | 8        | 128   | source/cache.h:824:12                 |
 | m_axi_fifo       |                                | write     | 32       | 128   | source/dynfifo_utils.hpp:268:44       |
 | m_axi_fifo       |                                | read      | 32       | 128   | source/dynfifo_utils.hpp:290:13       |
@@ -339,7 +341,7 @@
 +------------------+----------+--------------------------------+----------------------------------------------------------------------------------------------------------+------------+---------------------------------------+
 | m_axi_prop_batch | htb_buf  | BLOOM_READ_TABLES_LOOP         | Could not analyze pattern                                                                                | 214-229    | source/preprocess.hpp:313:5           |
 | m_axi_prop_batch | htb_buf  | BLOOM_READ_TABLES_LOOP         | Could not analyze pattern                                                                                | 214-229    | source/preprocess.hpp:313:5           |
-| m_axi_prop_batch | htb_buf  | PROPOSE_READ_MIN_INDEXING_LOOP | Could not widen since type i128 size is greater than or equal to the max_widen_bitwidth threshold of 0   | 214-353    | source/subgraphIsomorphism.cpp:1570:5 |
+| m_axi_prop_batch | htb_buf  | PROPOSE_READ_MIN_INDEXING_LOOP | Could not widen since type i128 size is greater than or equal to the max_widen_bitwidth threshold of 0   | 214-353    | source/subgraphIsomorphism.cpp:1533:5 |
 | m_axi_bloom      | bloom_p  |                                | Could not widen since type i128 size is greater than or equal to the max_widen_bitwidth threshold of 128 | 214-353    | source/subgraphIsomorphism.cpp:405:22 |
 | m_axi_readmin_e  | m_axi    | READMIN_EDGES_MAIN_LOOP        | Could not widen since type i128 size is greater than or equal to the max_widen_bitwidth threshold of 0   | 214-353    | source/subgraphIsomorphism.cpp:587:13 |
 | m_axi_fifo       | mem      |                                | Could not widen since type i128 size is greater than or equal to the max_widen_bitwidth threshold of 128 | 214-353    | source/dynfifo_utils.hpp:268:44       |
@@ -373,9 +375,9 @@
 |   add_ln935_1_fu_638_p2                                                            | -   |        | add_ln935_1                | add | fabric | 0       |
 |   add_ln941_fu_652_p2                                                              | -   |        | add_ln941                  | add | fabric | 0       |
 |  + subgraphIsomorphism_Pipeline_1                                                  | 0   |        |                            |     |        |         |
-|    add_ln2562_fu_68_p2                                                             | -   |        | add_ln2562                 | add | fabric | 0       |
+|    add_ln2525_fu_68_p2                                                             | -   |        | add_ln2525                 | add | fabric | 0       |
 |  + subgraphIsomorphism_Pipeline_2                                                  | 0   |        |                            |     |        |         |
-|    add_ln2562_fu_68_p2                                                             | -   |        | add_ln2562                 | add | fabric | 0       |
+|    add_ln2525_fu_68_p2                                                             | -   |        | add_ln2525                 | add | fabric | 0       |
 |  + subgraphIsomorphism_Pipeline_VITIS_LOOP_1164_1_VITIS_LOOP_1165_2                | 0   |        |                            |     |        |         |
 |    add_ln1164_1_fu_92_p2                                                           | -   |        | add_ln1164_1               | add | fabric | 0       |
 |    add_ln1164_fu_104_p2                                                            | -   |        | add_ln1164                 | add | fabric | 0       |
@@ -410,11 +412,11 @@
 |  + subgraphIsomorphism_Pipeline_STORE_HASHTABLES_POINTER_LOOP                      | 0   |        |                            |     |        |         |
 |    add_ln935_fu_102_p2                                                             | -   |        | add_ln935                  | add | fabric | 0       |
 |    start_addr_1_fu_126_p2                                                          | -   |        | start_addr_1               | add | fabric | 0       |
-|  + countEdges_ap_uint_128_5ul_7ul_32ul_32ul_20ul_5ul_32ul_32ul_s                   | 0   |        |                            |     |        |         |
-|   + edgeToHashFirst_32ul_5ul_32ul_20ul_32ul_s                                      | 0   |        |                            |     |        |         |
+|  + countEdges_ap_uint_128_5ul_7ul_32ul_64ul_20ul_5ul_32ul_32ul_s                   | 0   |        |                            |     |        |         |
+|   + edgeToHashFirst_32ul_5ul_64ul_20ul_32ul_s                                      | 0   |        |                            |     |        |         |
 |     sub_fu_143_p2                                                                  | -   |        | sub                        | add | fabric | 0       |
 |     sub21_fu_153_p2                                                                | -   |        | sub21                      | add | fabric | 0       |
-|    + edgeToHashFirst_32ul_5ul_32ul_20ul_32ul_Pipeline_COUNT_OCCURENCIES_TOP_LOOP   | 0   |        |                            |     |        |         |
+|    + edgeToHashFirst_32ul_5ul_64ul_20ul_32ul_Pipeline_COUNT_OCCURENCIES_TOP_LOOP   | 0   |        |                            |     |        |         |
 |      add_ln553_fu_213_p2                                                           | -   |        | add_ln553                  | add | fabric | 0       |
 |      index_V_fu_409_p2                                                             | -   |        | index_V                    | add | fabric | 0       |
 |      sub_ln628_fu_319_p2                                                           | -   |        | sub_ln628                  | sub | fabric | 0       |
@@ -425,21 +427,21 @@
 |      sub_ln628_9_fu_403_p2                                                         | -   |        | sub_ln628_9                | sub | fabric | 0       |
 |      tuple_address_10_fu_473_p2                                                    | -   |        | tuple_address_10           | add | fabric | 0       |
 |     + hashlookup3_core_32_s (grp_hashlookup3_core_32_s_fu_173)                     | 0   |        |                            |     |        |         |
-|       a_fu_48_p2                                                                   | -   |        | a                          | add | fabric | 0       |
-|       a_28_fu_59_p2                                                                | -   |        | a_28                       | add | fabric | 0       |
-|       b_21_fu_90_p2                                                                | -   |        | b_21                       | sub | fabric | 0       |
-|       c_25_fu_121_p2                                                               | -   |        | c_25                       | sub | fabric | 0       |
-|       a_30_fu_151_p2                                                               | -   |        | a_30                       | sub | fabric | 0       |
-|       b_23_fu_181_p2                                                               | -   |        | b_23                       | sub | fabric | 0       |
-|       c_27_fu_211_p2                                                               | -   |        | c_27                       | sub | fabric | 0       |
+|       a_fu_50_p2                                                                   | -   |        | a                          | add | fabric | 0       |
+|       a_37_fu_61_p2                                                                | -   |        | a_37                       | add | fabric | 0       |
+|       b_32_fu_92_p2                                                                | -   |        | b_32                       | sub | fabric | 0       |
+|       c_20_fu_123_p2                                                               | -   |        | c_20                       | sub | fabric | 0       |
+|       a_39_fu_153_p2                                                               | -   |        | a_39                       | sub | fabric | 0       |
+|       b_34_fu_183_p2                                                               | -   |        | b_34                       | sub | fabric | 0       |
+|       c_22_fu_213_p2                                                               | -   |        | c_22                       | sub | fabric | 0       |
 |     + hashlookup3_core_32_s (grp_hashlookup3_core_32_s_fu_178)                     | 0   |        |                            |     |        |         |
-|       a_fu_48_p2                                                                   | -   |        | a                          | add | fabric | 0       |
-|       a_28_fu_59_p2                                                                | -   |        | a_28                       | add | fabric | 0       |
-|       b_21_fu_90_p2                                                                | -   |        | b_21                       | sub | fabric | 0       |
-|       c_25_fu_121_p2                                                               | -   |        | c_25                       | sub | fabric | 0       |
-|       a_30_fu_151_p2                                                               | -   |        | a_30                       | sub | fabric | 0       |
-|       b_23_fu_181_p2                                                               | -   |        | b_23                       | sub | fabric | 0       |
-|       c_27_fu_211_p2                                                               | -   |        | c_27                       | sub | fabric | 0       |
+|       a_fu_50_p2                                                                   | -   |        | a                          | add | fabric | 0       |
+|       a_37_fu_61_p2                                                                | -   |        | a_37                       | add | fabric | 0       |
+|       b_32_fu_92_p2                                                                | -   |        | b_32                       | sub | fabric | 0       |
+|       c_20_fu_123_p2                                                               | -   |        | c_20                       | sub | fabric | 0       |
+|       a_39_fu_153_p2                                                               | -   |        | a_39                       | sub | fabric | 0       |
+|       b_34_fu_183_p2                                                               | -   |        | b_34                       | sub | fabric | 0       |
+|       c_22_fu_213_p2                                                               | -   |        | c_22                       | sub | fabric | 0       |
 |   + increaseCounter_ap_uint_128_5ul_7ul_32ul_20ul_s                                | 0   |        |                            |     |        |         |
 |    + increaseCounter_Pipeline_INCREASE_COUNTER_DDR_LOOP                            | 0   |        |                            |     |        |         |
 |      add_ln211_1_fu_382_p2                                                         | -   |        | add_ln211_1                | add | fabric | 0       |
@@ -464,8 +466,8 @@
 |    add_ln975_fu_162_p2                                                             | -   |        | add_ln975                  | add | fabric | 0       |
 |    add_ln978_1_fu_196_p2                                                           | -   |        | add_ln978_1                | add | fabric | 0       |
 |    add_ln978_fu_218_p2                                                             | -   |        | add_ln978                  | add | fabric | 0       |
-|  + writeEdges_ap_uint_128_6ul_5ul_7ul_32ul_5ul_32ul_20ul_32ul_32ul_s               | 0   |        |                            |     |        |         |
-|   + edgeToHashSecond_6ul_32ul_5ul_32ul_20ul_32ul_s                                 | 0   |        |                            |     |        |         |
+|  + writeEdges_ap_uint_128_6ul_5ul_7ul_32ul_5ul_64ul_20ul_32ul_32ul_s               | 0   |        |                            |     |        |         |
+|   + edgeToHashSecond_6ul_32ul_5ul_64ul_20ul_32ul_s                                 | 0   |        |                            |     |        |         |
 |     sub_fu_144_p2                                                                  | -   |        | sub                        | add | fabric | 0       |
 |     sub22_fu_154_p2                                                                | -   |        | sub22                      | add | fabric | 0       |
 |    + edgeToHashSecond_Pipeline_COUNT_OCCURENCIES_TOP_LOOP                          | 0   |        |                            |     |        |         |
@@ -479,21 +481,21 @@
 |      sub_ln628_6_fu_419_p2                                                         | -   |        | sub_ln628_6                | sub | fabric | 0       |
 |      tuple_address_5_fu_485_p2                                                     | -   |        | tuple_address_5            | add | fabric | 0       |
 |     + hashlookup3_core_32_s (grp_hashlookup3_core_32_s_fu_177)                     | 0   |        |                            |     |        |         |
-|       a_fu_48_p2                                                                   | -   |        | a                          | add | fabric | 0       |
-|       a_28_fu_59_p2                                                                | -   |        | a_28                       | add | fabric | 0       |
-|       b_21_fu_90_p2                                                                | -   |        | b_21                       | sub | fabric | 0       |
-|       c_25_fu_121_p2                                                               | -   |        | c_25                       | sub | fabric | 0       |
-|       a_30_fu_151_p2                                                               | -   |        | a_30                       | sub | fabric | 0       |
-|       b_23_fu_181_p2                                                               | -   |        | b_23                       | sub | fabric | 0       |
-|       c_27_fu_211_p2                                                               | -   |        | c_27                       | sub | fabric | 0       |
+|       a_fu_50_p2                                                                   | -   |        | a                          | add | fabric | 0       |
+|       a_37_fu_61_p2                                                                | -   |        | a_37                       | add | fabric | 0       |
+|       b_32_fu_92_p2                                                                | -   |        | b_32                       | sub | fabric | 0       |
+|       c_20_fu_123_p2                                                               | -   |        | c_20                       | sub | fabric | 0       |
+|       a_39_fu_153_p2                                                               | -   |        | a_39                       | sub | fabric | 0       |
+|       b_34_fu_183_p2                                                               | -   |        | b_34                       | sub | fabric | 0       |
+|       c_22_fu_213_p2                                                               | -   |        | c_22                       | sub | fabric | 0       |
 |     + hashlookup3_core_32_s (grp_hashlookup3_core_32_s_fu_182)                     | 0   |        |                            |     |        |         |
-|       a_fu_48_p2                                                                   | -   |        | a                          | add | fabric | 0       |
-|       a_28_fu_59_p2                                                                | -   |        | a_28                       | add | fabric | 0       |
-|       b_21_fu_90_p2                                                                | -   |        | b_21                       | sub | fabric | 0       |
-|       c_25_fu_121_p2                                                               | -   |        | c_25                       | sub | fabric | 0       |
-|       a_30_fu_151_p2                                                               | -   |        | a_30                       | sub | fabric | 0       |
-|       b_23_fu_181_p2                                                               | -   |        | b_23                       | sub | fabric | 0       |
-|       c_27_fu_211_p2                                                               | -   |        | c_27                       | sub | fabric | 0       |
+|       a_fu_50_p2                                                                   | -   |        | a                          | add | fabric | 0       |
+|       a_37_fu_61_p2                                                                | -   |        | a_37                       | add | fabric | 0       |
+|       b_32_fu_92_p2                                                                | -   |        | b_32                       | sub | fabric | 0       |
+|       c_20_fu_123_p2                                                               | -   |        | c_20                       | sub | fabric | 0       |
+|       a_39_fu_153_p2                                                               | -   |        | a_39                       | sub | fabric | 0       |
+|       b_34_fu_183_p2                                                               | -   |        | b_34                       | sub | fabric | 0       |
+|       c_22_fu_213_p2                                                               | -   |        | c_22                       | sub | fabric | 0       |
 |   + storeEdges_ap_uint_ap_uint_ap_uint_ap_uint_32_6ul_5ul_7ul_32ul_20ul_s          | 0   |        |                            |     |        |         |
 |    + storeEdges_Pipeline_STORE_EDGES_INCREASE_COUNTER_DDR_LOOP                     | 0   |        |                            |     |        |         |
 |      add_ln466_1_fu_393_p2                                                         | -   |        | add_ln466_1                | add | fabric | 0       |
@@ -504,97 +506,85 @@
 |      ret_V_1_fu_506_p2                                                             | -   |        | ret_V_1                    | add | fabric | 0       |
 |      add_ln480_fu_596_p2                                                           | -   |        | add_ln480                  | add | fabric | 0       |
 |  + writeBloom                                                                      | 0   |        |                            |     |        |         |
-|   + bloom_read_ap_uint_128_5ul_7ul_32ul_6ul_32ul_20ul_64ul_s                       | 0   |        |                            |     |        |         |
-|     sub_fu_331_p2                                                                  | -   |        | sub                        | add | fabric | 0       |
-|     add_ln313_fu_354_p2                                                            | -   |        | add_ln313                  | add | fabric | 0       |
-|     add_ln316_fu_401_p2                                                            | -   |        | add_ln316                  | add | fabric | 0       |
-|     a_50_fu_449_p2                                                                 | -   |        | a_50                       | add | fabric | 0       |
-|     a_52_fu_464_p2                                                                 | -   |        | a_52                       | add | fabric | 0       |
-|     b_40_fu_506_p2                                                                 | -   |        | b_40                       | sub | fabric | 0       |
-|     c_46_fu_568_p2                                                                 | -   |        | c_46                       | sub | fabric | 0       |
-|     a_54_fu_629_p2                                                                 | -   |        | a_54                       | sub | fabric | 0       |
-|     b_42_fu_689_p2                                                                 | -   |        | b_42                       | sub | fabric | 0       |
-|     c_48_fu_749_p2                                                                 | -   |        | c_48                       | sub | fabric | 0       |
-|     a_fu_454_p2                                                                    | -   |        | a                          | add | fabric | 0       |
-|     a_56_fu_475_p2                                                                 | -   |        | a_56                       | add | fabric | 0       |
-|     b_43_fu_537_p2                                                                 | -   |        | b_43                       | sub | fabric | 0       |
-|     c_49_fu_599_p2                                                                 | -   |        | c_49                       | sub | fabric | 0       |
-|     a_58_fu_659_p2                                                                 | -   |        | a_58                       | sub | fabric | 0       |
-|     b_45_fu_719_p2                                                                 | -   |        | b_45                       | sub | fabric | 0       |
-|     c_52_fu_779_p2                                                                 | -   |        | c_52                       | sub | fabric | 0       |
-|     sub_ln628_fu_799_p2                                                            | -   |        | sub_ln628                  | sub | fabric | 0       |
-|     add_ln332_fu_429_p2                                                            | -   |        | add_ln332                  | add | fabric | 0       |
-|     tuple_out_address_fu_828_p2                                                    | -   |        | tuple_out_address          | add | fabric | 0       |
+|   + bloom_read_ap_uint_128_5ul_7ul_32ul_6ul_64ul_20ul_64ul_s                       | 0   |        |                            |     |        |         |
+|     sub_fu_303_p2                                                                  | -   |        | sub                        | add | fabric | 0       |
+|     add_ln313_fu_326_p2                                                            | -   |        | add_ln313                  | add | fabric | 0       |
+|     add_ln316_fu_373_p2                                                            | -   |        | add_ln316                  | add | fabric | 0       |
+|     sub_ln628_fu_428_p2                                                            | -   |        | sub_ln628                  | sub | fabric | 0       |
+|     add_ln332_fu_401_p2                                                            | -   |        | add_ln332                  | add | fabric | 0       |
+|     tuple_out_address_fu_457_p2                                                    | -   |        | tuple_out_address          | add | fabric | 0       |
+|    + hashlookup3_core_32_s (grp_hashlookup3_core_32_s_fu_267)                      | 0   |        |                            |     |        |         |
+|      a_fu_50_p2                                                                    | -   |        | a                          | add | fabric | 0       |
+|      a_37_fu_61_p2                                                                 | -   |        | a_37                       | add | fabric | 0       |
+|      b_32_fu_92_p2                                                                 | -   |        | b_32                       | sub | fabric | 0       |
+|      c_20_fu_123_p2                                                                | -   |        | c_20                       | sub | fabric | 0       |
+|      a_39_fu_153_p2                                                                | -   |        | a_39                       | sub | fabric | 0       |
+|      b_34_fu_183_p2                                                                | -   |        | b_34                       | sub | fabric | 0       |
+|      c_22_fu_213_p2                                                                | -   |        | c_22                       | sub | fabric | 0       |
+|    + hashlookup3_core_32_s (grp_hashlookup3_core_32_s_fu_272)                      | 0   |        |                            |     |        |         |
+|      a_fu_50_p2                                                                    | -   |        | a                          | add | fabric | 0       |
+|      a_37_fu_61_p2                                                                 | -   |        | a_37                       | add | fabric | 0       |
+|      b_32_fu_92_p2                                                                 | -   |        | b_32                       | sub | fabric | 0       |
+|      c_20_fu_123_p2                                                                | -   |        | c_20                       | sub | fabric | 0       |
+|      a_39_fu_153_p2                                                                | -   |        | a_39                       | sub | fabric | 0       |
+|      b_34_fu_183_p2                                                                | -   |        | b_34                       | sub | fabric | 0       |
+|      c_22_fu_213_p2                                                                | -   |        | c_22                       | sub | fabric | 0       |
 |    + bloom_read_Pipeline_BLOOM_READ_EDGES_BLOCK                                    | 0   |        |                            |     |        |         |
-|      add_ln333_fu_349_p2                                                           | -   |        | add_ln333                  | add | fabric | 0       |
-|      grp_fu_302_p2                                                                 | -   |        | a                          | add | fabric | 0       |
-|      a_32_fu_436_p2                                                                | -   |        | a_32                       | add | fabric | 0       |
-|      b_24_fu_479_p2                                                                | -   |        | b_24                       | sub | fabric | 0       |
-|      c_28_fu_565_p2                                                                | -   |        | c_28                       | sub | fabric | 0       |
-|      a_34_fu_688_p2                                                                | -   |        | a_34                       | sub | fabric | 0       |
-|      b_26_fu_810_p2                                                                | -   |        | b_26                       | sub | fabric | 0       |
-|      c_30_fu_930_p2                                                                | -   |        | c_30                       | sub | fabric | 0       |
-|      grp_fu_308_p2                                                                 | -   |        | a_35                       | add | fabric | 0       |
-|      a_37_fu_448_p2                                                                | -   |        | a_37                       | add | fabric | 0       |
-|      b_28_fu_510_p2                                                                | -   |        | b_28                       | sub | fabric | 0       |
-|      c_32_fu_596_p2                                                                | -   |        | c_32                       | sub | fabric | 0       |
-|      a_39_fu_718_p2                                                                | -   |        | a_39                       | sub | fabric | 0       |
-|      b_30_fu_840_p2                                                                | -   |        | b_30                       | sub | fabric | 0       |
-|      c_43_fu_960_p2                                                                | -   |        | c_43                       | sub | fabric | 0       |
-|      sub_ln628_fu_1100_p2                                                          | -   |        | sub_ln628                  | sub | fabric | 0       |
-|      tuple_out_address_fu_1136_p2                                                  | -   |        | tuple_out_address          | add | fabric | 0       |
-|      grp_fu_302_p2                                                                 | -   |        | a_40                       | add | fabric | 0       |
-|      a_42_fu_522_p2                                                                | -   |        | a_42                       | add | fabric | 0       |
-|      b_32_fu_627_p2                                                                | -   |        | b_32                       | sub | fabric | 0       |
-|      c_36_fu_749_p2                                                                | -   |        | c_36                       | sub | fabric | 0       |
-|      a_44_fu_870_p2                                                                | -   |        | a_44                       | sub | fabric | 0       |
-|      b_34_fu_990_p2                                                                | -   |        | b_34                       | sub | fabric | 0       |
-|      c_38_fu_1057_p2                                                               | -   |        | c_38                       | sub | fabric | 0       |
-|      grp_fu_308_p2                                                                 | -   |        | a_45                       | add | fabric | 0       |
-|      a_47_fu_534_p2                                                                | -   |        | a_47                       | add | fabric | 0       |
-|      b_36_fu_658_p2                                                                | -   |        | b_36                       | sub | fabric | 0       |
-|      c_40_fu_780_p2                                                                | -   |        | c_40                       | sub | fabric | 0       |
-|      a_49_fu_900_p2                                                                | -   |        | a_49                       | sub | fabric | 0       |
-|      b_38_fu_1020_p2                                                               | -   |        | b_38                       | sub | fabric | 0       |
-|      c_44_fu_1087_p2                                                               | -   |        | c_44                       | sub | fabric | 0       |
-|      sub_ln628_10_fu_1159_p2                                                       | -   |        | sub_ln628_10               | sub | fabric | 0       |
-|      tuple_out_address_3_fu_1198_p2                                                | -   |        | tuple_out_address_3        | add | fabric | 0       |
-|      counter_3_fu_374_p2                                                           | -   |        | counter_3                  | add | fabric | 0       |
+|      add_ln333_fu_301_p2                                                           | -   |        | add_ln333                  | add | fabric | 0       |
+|      sub_ln628_fu_389_p2                                                           | -   |        | sub_ln628                  | sub | fabric | 0       |
+|      tuple_out_address_fu_418_p2                                                   | -   |        | tuple_out_address          | add | fabric | 0       |
+|      sub_ln628_10_fu_441_p2                                                        | -   |        | sub_ln628_10               | sub | fabric | 0       |
+|      tuple_out_address_3_fu_476_p2                                                 | -   |        | tuple_out_address_3        | add | fabric | 0       |
+|      counter_3_fu_326_p2                                                           | -   |        | counter_3                  | add | fabric | 0       |
+|     + hashlookup3_core_32_s (grp_hashlookup3_core_32_s_fu_254)                     | 0   |        |                            |     |        |         |
+|       a_fu_50_p2                                                                   | -   |        | a                          | add | fabric | 0       |
+|       a_37_fu_61_p2                                                                | -   |        | a_37                       | add | fabric | 0       |
+|       b_32_fu_92_p2                                                                | -   |        | b_32                       | sub | fabric | 0       |
+|       c_20_fu_123_p2                                                               | -   |        | c_20                       | sub | fabric | 0       |
+|       a_39_fu_153_p2                                                               | -   |        | a_39                       | sub | fabric | 0       |
+|       b_34_fu_183_p2                                                               | -   |        | b_34                       | sub | fabric | 0       |
+|       c_22_fu_213_p2                                                               | -   |        | c_22                       | sub | fabric | 0       |
+|     + hashlookup3_core_32_s (grp_hashlookup3_core_32_s_fu_259)                     | 0   |        |                            |     |        |         |
+|       a_fu_50_p2                                                                   | -   |        | a                          | add | fabric | 0       |
+|       a_37_fu_61_p2                                                                | -   |        | a_37                       | add | fabric | 0       |
+|       b_32_fu_92_p2                                                                | -   |        | b_32                       | sub | fabric | 0       |
+|       c_20_fu_123_p2                                                               | -   |        | c_20                       | sub | fabric | 0       |
+|       a_39_fu_153_p2                                                               | -   |        | a_39                       | sub | fabric | 0       |
+|       b_34_fu_183_p2                                                               | -   |        | b_34                       | sub | fabric | 0       |
+|       c_22_fu_213_p2                                                               | -   |        | c_22                       | sub | fabric | 0       |
 |   + bloom_write_ap_uint_128_7ul_64ul_3ul_s                                         | 0   |        |                            |     |        |         |
 |    + bloom_write_ap_uint_128_7ul_64ul_3ul_Pipeline_BLOOM_WRITE_TASK_LOOP           | 0   |        |                            |     |        |         |
 |      add_ln407_fu_498_p2                                                           | -   |        | add_ln407                  | add | fabric | 0       |
-|  + multiwayJoinWrap_ap_uint_128_7ul_3ul_32ul_20ul_64ul_s                           | 64  |        |                            |     |        |         |
-|   + mwj_batch_32ul_20ul_64ul_s                                                     | 0   |        |                            |     |        |         |
-|     sub56_fu_489_p2                                                                | -   |        | sub56                      | add | fabric | 0       |
-|     add_ln1570_fu_441_p2                                                           | -   |        | add_ln1570                 | add | fabric | 0       |
-|     empty_fu_459_p2                                                                | -   |        | empty                      | add | fabric | 0       |
-|     add_ln1570_1_fu_509_p2                                                         | -   |        | add_ln1570_1               | add | fabric | 0       |
-|     a_fu_528_p2                                                                    | -   |        | a                          | add | fabric | 0       |
-|     a_19_fu_539_p2                                                                 | -   |        | a_19                       | add | fabric | 0       |
-|     b_14_fu_570_p2                                                                 | -   |        | b_14                       | sub | fabric | 0       |
-|     c_16_fu_601_p2                                                                 | -   |        | c_16                       | sub | fabric | 0       |
-|     a_21_fu_631_p2                                                                 | -   |        | a_21                       | sub | fabric | 0       |
-|     b_16_fu_669_p2                                                                 | -   |        | b_16                       | sub | fabric | 0       |
-|     c_23_fu_696_p2                                                                 | -   |        | c_23                       | sub | fabric | 0       |
-|     sub_ln628_fu_705_p2                                                            | -   |        | sub_ln628                  | sub | fabric | 0       |
-|     set_counter_6_fu_742_p2                                                        | -   |        | set_counter_6              | add | fabric | 0       |
-|     a_22_fu_774_p2                                                                 | -   |        | a_22                       | add | fabric | 0       |
-|     a_24_fu_788_p2                                                                 | -   |        | a_24                       | add | fabric | 0       |
-|     b_18_fu_819_p2                                                                 | -   |        | b_18                       | sub | fabric | 0       |
-|     c_20_fu_850_p2                                                                 | -   |        | c_20                       | sub | fabric | 0       |
-|     a_26_fu_880_p2                                                                 | -   |        | a_26                       | sub | fabric | 0       |
-|     b_20_fu_918_p2                                                                 | -   |        | b_20                       | sub | fabric | 0       |
-|     c_24_fu_945_p2                                                                 | -   |        | c_24                       | sub | fabric | 0       |
-|     sub_ln628_2_fu_951_p2                                                          | -   |        | sub_ln628_2                | sub | fabric | 0       |
-|     set_counter_7_fu_989_p2                                                        | -   |        | set_counter_7              | add | fabric | 0       |
-|     cnt_2_fu_1001_p2                                                               | -   |        | cnt_2                      | add | fabric | 0       |
-|    + mwj_batch_32ul_20ul_64ul_Pipeline_PROPOSE_TBINDEXING_LOOP                     | 0   |        |                            |     |        |         |
-|      add_ln1550_fu_138_p2                                                          | -   |        | add_ln1550                 | add | fabric | 0       |
-|    + mwj_batch_32ul_20ul_64ul_Pipeline_EXTRACT_BAGTOSET_SETCHECKER_LOOP            | 0   |        |                            |     |        |         |
-|      add_ln1587_fu_89_p2                                                           | -   |        | add_ln1587                 | add | fabric | 0       |
-|    + mwj_batch_32ul_20ul_64ul_Pipeline_EXTRACT_BAGTOSET_SETCHECKER_LOOP18          | 0   |        |                            |     |        |         |
-|      add_ln1587_fu_89_p2                                                           | -   |        | add_ln1587                 | add | fabric | 0       |
-|   + multiwayJoin_ap_uint_128_7ul_3ul_32ul_20ul_64ul_s                              | 64  |        |                            |     |        |         |
+|  + multiwayJoinWrap_ap_uint_128_7ul_3ul_64ul_20ul_64ul_s                           | 64  |        |                            |     |        |         |
+|   + mwj_batch_64ul_20ul_64ul_s                                                     | 0   |        |                            |     |        |         |
+|     sub56_fu_483_p2                                                                | -   |        | sub56                      | add | fabric | 0       |
+|     add_ln1533_fu_435_p2                                                           | -   |        | add_ln1533                 | add | fabric | 0       |
+|     empty_fu_453_p2                                                                | -   |        | empty                      | add | fabric | 0       |
+|     add_ln1533_1_fu_503_p2                                                         | -   |        | add_ln1533_1               | add | fabric | 0       |
+|     a_fu_522_p2                                                                    | -   |        | a                          | add | fabric | 0       |
+|     a_28_fu_533_p2                                                                 | -   |        | a_28                       | add | fabric | 0       |
+|     b_23_fu_564_p2                                                                 | -   |        | b_23                       | sub | fabric | 0       |
+|     c_17_fu_595_p2                                                                 | -   |        | c_17                       | sub | fabric | 0       |
+|     a_30_fu_625_p2                                                                 | -   |        | a_30                       | sub | fabric | 0       |
+|     b_30_fu_663_p2                                                                 | -   |        | b_30                       | sub | fabric | 0       |
+|     sub_ln628_fu_672_p2                                                            | -   |        | sub_ln628                  | sub | fabric | 0       |
+|     set_counter_6_fu_709_p2                                                        | -   |        | set_counter_6              | add | fabric | 0       |
+|     a_31_fu_741_p2                                                                 | -   |        | a_31                       | add | fabric | 0       |
+|     a_33_fu_755_p2                                                                 | -   |        | a_33                       | add | fabric | 0       |
+|     b_27_fu_786_p2                                                                 | -   |        | b_27                       | sub | fabric | 0       |
+|     c_19_fu_817_p2                                                                 | -   |        | c_19                       | sub | fabric | 0       |
+|     a_35_fu_847_p2                                                                 | -   |        | a_35                       | sub | fabric | 0       |
+|     b_31_fu_885_p2                                                                 | -   |        | b_31                       | sub | fabric | 0       |
+|     sub_ln628_2_fu_891_p2                                                          | -   |        | sub_ln628_2                | sub | fabric | 0       |
+|     set_counter_7_fu_929_p2                                                        | -   |        | set_counter_7              | add | fabric | 0       |
+|     cnt_2_fu_941_p2                                                                | -   |        | cnt_2                      | add | fabric | 0       |
+|    + mwj_batch_64ul_20ul_64ul_Pipeline_PROPOSE_TBINDEXING_LOOP                     | 0   |        |                            |     |        |         |
+|      add_ln1513_fu_138_p2                                                          | -   |        | add_ln1513                 | add | fabric | 0       |
+|    + mwj_batch_64ul_20ul_64ul_Pipeline_EXTRACT_BAGTOSET_SETCHECKER_LOOP            | 0   |        |                            |     |        |         |
+|      add_ln1550_fu_89_p2                                                           | -   |        | add_ln1550                 | add | fabric | 0       |
+|    + mwj_batch_64ul_20ul_64ul_Pipeline_EXTRACT_BAGTOSET_SETCHECKER_LOOP18          | 0   |        |                            |     |        |         |
+|      add_ln1550_fu_89_p2                                                           | -   |        | add_ln1550                 | add | fabric | 0       |
+|   + multiwayJoin_ap_uint_128_7ul_3ul_64ul_20ul_64ul_s                              | 64  |        |                            |     |        |         |
 |    + run_mem_if                                                                    | 0   |        |                            |     |        |         |
 |      empty_161_fu_259_p2                                                           | -   |        | empty_161                  | add | fabric | 0       |
 |    + MMU_fast_ap_uint_32_4ul_s                                                     | 0   |        |                            |     |        |         |
@@ -639,23 +629,22 @@
 |        batch_counter_3_fu_152_p2                                                   | -   |        | batch_counter_3            | add | fabric | 0       |
 |      + mwj_batchbuild_64ul_Pipeline_BATCHBUILD_ADD_SOLUTION_LOOP                   | 0   |        |                            |     |        |         |
 |        add_ln745_fu_99_p2                                                          | -   |        | add_ln745                  | add | fabric | 0       |
-|    + mwj_edgebuild_32ul_20ul_64ul_s                                                | 0   |        |                            |     |        |         |
+|    + mwj_edgebuild_64ul_20ul_64ul_s                                                | 0   |        |                            |     |        |         |
 |      sub_fu_230_p2                                                                 | -   |        | sub                        | add | fabric | 0       |
 |      sub41_fu_272_p2                                                               | -   |        | sub41                      | add | fabric | 0       |
-|     + mwj_edgebuild_32ul_20ul_64ul_Pipeline_EDGEBUILD_COPYING_EMBEDDING_LOOP       | 0   |        |                            |     |        |         |
+|     + mwj_edgebuild_64ul_20ul_64ul_Pipeline_EDGEBUILD_COPYING_EMBEDDING_LOOP       | 0   |        |                            |     |        |         |
 |       curQV_4_fu_137_p2                                                            | -   |        | curQV_4                    | add | fabric | 0       |
-|     + mwj_edgebuild_32ul_20ul_64ul_Pipeline_EDGEBUILD_MAIN_LOOP                    | 0   |        |                            |     |        |         |
-|       add_ln335_fu_316_p2                                                          | -   |        | add_ln335                  | add | fabric | 0       |
-|       add_ln336_fu_326_p2                                                          | -   |        | add_ln336                  | add | fabric | 0       |
-|       a_fu_356_p2                                                                  | -   |        | a                          | add | fabric | 0       |
-|       a_15_fu_372_p2                                                               | -   |        | a_15                       | add | fabric | 0       |
-|       b_11_fu_403_p2                                                               | -   |        | b_11                       | sub | fabric | 0       |
-|       c_12_fu_434_p2                                                               | -   |        | c_12                       | sub | fabric | 0       |
-|       a_17_fu_464_p2                                                               | -   |        | a_17                       | sub | fabric | 0       |
-|       b_13_fu_502_p2                                                               | -   |        | b_13                       | sub | fabric | 0       |
-|       c_15_fu_529_p2                                                               | -   |        | c_15                       | sub | fabric | 0       |
-|       sub_ln628_fu_538_p2                                                          | -   |        | sub_ln628                  | sub | fabric | 0       |
-|       address_fu_579_p2                                                            | -   |        | address                    | add | fabric | 0       |
+|     + mwj_edgebuild_64ul_20ul_64ul_Pipeline_EDGEBUILD_MAIN_LOOP                    | 0   |        |                            |     |        |         |
+|       add_ln335_fu_310_p2                                                          | -   |        | add_ln335                  | add | fabric | 0       |
+|       add_ln336_fu_320_p2                                                          | -   |        | add_ln336                  | add | fabric | 0       |
+|       a_fu_350_p2                                                                  | -   |        | a                          | add | fabric | 0       |
+|       a_24_fu_366_p2                                                               | -   |        | a_24                       | add | fabric | 0       |
+|       b_19_fu_397_p2                                                               | -   |        | b_19                       | sub | fabric | 0       |
+|       c_16_fu_428_p2                                                               | -   |        | c_16                       | sub | fabric | 0       |
+|       a_26_fu_458_p2                                                               | -   |        | a_26                       | sub | fabric | 0       |
+|       b_22_fu_496_p2                                                               | -   |        | b_22                       | sub | fabric | 0       |
+|       sub_ln628_fu_505_p2                                                          | -   |        | sub_ln628                  | sub | fabric | 0       |
+|       address_fu_546_p2                                                            | -   |        | address                    | add | fabric | 0       |
 |    + verifycache_wrapper_6ul_s                                                     | 0   |        |                            |     |        |         |
 |     + mwj_verify_6ul_s                                                             | 0   |        |                            |     |        |         |
 |       addr_main_V_fu_6252_p2                                                       | -   |        | addr_main_V                | add | fabric | 0       |
@@ -771,67 +760,58 @@
 |      bloom_s_6_fu_15158_p2                                                         | -   |        | bloom_s_6                  | add | fabric | 0       |
 |      add_ln406_20_fu_15368_p2                                                      | -   |        | add_ln406_20               | add | fabric | 0       |
 |      add_ln406_21_fu_15378_p2                                                      | -   |        | add_ln406_21               | add | fabric | 0       |
-|    + mwj_tuplebuild_6ul_32ul_20ul_64ul_s                                           | 0   |        |                            |     |        |         |
-|      sub119_fu_349_p2                                                              | -   |        | sub119                     | add | fabric | 0       |
-|      sub126_fu_359_p2                                                              | -   |        | sub126                     | add | fabric | 0       |
-|      sub92_fu_465_p2                                                               | -   |        | sub92                      | add | fabric | 0       |
-|      add_ln853_fu_459_p2                                                           | -   |        | add_ln853                  | add | fabric | 0       |
-|      mul_9ns_6ns_15_1_1_U586                                                       | -   |        | mul_ln777                  | mul | auto   | 0       |
-|     + mwj_tuplebuild_6ul_32ul_20ul_64ul_Pipeline_TUPLEBUILD_COPYING_EMBEDDING_LOOP | 0   |        |                            |     |        |         |
+|    + mwj_tuplebuild_6ul_64ul_20ul_64ul_s                                           | 0   |        |                            |     |        |         |
+|      sub57_fu_266_p2                                                               | -   |        | sub57                      | add | fabric | 0       |
+|      sub62_fu_276_p2                                                               | -   |        | sub62                      | add | fabric | 0       |
+|      sub_fu_334_p2                                                                 | -   |        | sub                        | add | fabric | 0       |
+|      mul_8ns_6ns_14_1_1_U573                                                       | -   |        | mul_ln803                  | mul | auto   | 0       |
+|     + mwj_tuplebuild_6ul_64ul_20ul_64ul_Pipeline_TUPLEBUILD_COPYING_EMBEDDING_LOOP | 0   |        |                            |     |        |         |
 |       curQV_2_fu_137_p2                                                            | -   |        | curQV_2                    | add | fabric | 0       |
-|     + mwj_tuplebuild_6ul_32ul_20ul_64ul_Pipeline_TUPLEBUILD_MAIN_LOOP_FIRST_IT     | 0   |        |                            |     |        |         |
-|       buffer_size_V_fu_278_p2                                                      | -   |        | buffer_size_V              | add | fabric | 0       |
-|       sub_ln668_fu_297_p2                                                          | -   |        | sub_ln668                  | sub | fabric | 0       |
-|       sub_ln668_2_fu_306_p2                                                        | -   |        | sub_ln668_2                | sub | fabric | 0       |
-|       addr_counter_fu_361_p2                                                       | -   |        | addr_counter               | add | fabric | 0       |
-|       tuple_out_addr_counter_V_2_fu_390_p2                                         | -   |        | tuple_out_addr_counter_V_2 | add | fabric | 0       |
-|      + hashlookup3_core_32_s (grp_hashlookup3_core_32_s_fu_261)                    | 0   |        |                            |     |        |         |
-|        a_fu_48_p2                                                                  | -   |        | a                          | add | fabric | 0       |
-|        a_28_fu_59_p2                                                               | -   |        | a_28                       | add | fabric | 0       |
-|        b_21_fu_90_p2                                                               | -   |        | b_21                       | sub | fabric | 0       |
-|        c_25_fu_121_p2                                                              | -   |        | c_25                       | sub | fabric | 0       |
-|        a_30_fu_151_p2                                                              | -   |        | a_30                       | sub | fabric | 0       |
-|        b_23_fu_181_p2                                                              | -   |        | b_23                       | sub | fabric | 0       |
-|        c_27_fu_211_p2                                                              | -   |        | c_27                       | sub | fabric | 0       |
-|     + mwj_tuplebuild_6ul_32ul_20ul_64ul_Pipeline_VITIS_LOOP_862_2                  | 0   |        |                            |     |        |         |
-|       add_ln853_fu_365_p2                                                          | -   |        | add_ln853                  | add | fabric | 0       |
-|       add_ln855_fu_397_p2                                                          | -   |        | add_ln855                  | add | fabric | 0       |
-|       add_ln855_1_fu_411_p2                                                        | -   |        | add_ln855_1                | add | fabric | 0       |
-|       add_ln855_2_fu_429_p2                                                        | -   |        | add_ln855_2                | add | fabric | 0       |
-|       sub_ln668_fu_497_p2                                                          | -   |        | sub_ln668                  | sub | fabric | 0       |
-|       sub_ln668_1_fu_506_p2                                                        | -   |        | sub_ln668_1                | sub | fabric | 0       |
-|       addr_counter_fu_574_p2                                                       | -   |        | addr_counter               | add | fabric | 0       |
-|       tuple_out_addr_counter_V_1_fu_601_p2                                         | -   |        | tuple_out_addr_counter_V_1 | add | fabric | 0       |
-|       buffer_p_fu_462_p2                                                           | -   |        | buffer_p                   | add | fabric | 0       |
-|      + hashlookup3_core_32_s (grp_hashlookup3_core_32_s_fu_332)                    | 0   |        |                            |     |        |         |
-|        a_fu_48_p2                                                                  | -   |        | a                          | add | fabric | 0       |
-|        a_28_fu_59_p2                                                               | -   |        | a_28                       | add | fabric | 0       |
-|        b_21_fu_90_p2                                                               | -   |        | b_21                       | sub | fabric | 0       |
-|        c_25_fu_121_p2                                                              | -   |        | c_25                       | sub | fabric | 0       |
-|        a_30_fu_151_p2                                                              | -   |        | a_30                       | sub | fabric | 0       |
-|        b_23_fu_181_p2                                                              | -   |        | b_23                       | sub | fabric | 0       |
-|        c_27_fu_211_p2                                                              | -   |        | c_27                       | sub | fabric | 0       |
-|    + mwj_readmin_counter_ap_uint_128_7ul_3ul_32ul_20ul_64ul_s                      | 0   |        |                            |     |        |         |
+|     + mwj_tuplebuild_6ul_64ul_20ul_64ul_Pipeline_TUPLEBUILD_SAVE_NODE_LOOP         | 0   |        |                            |     |        |         |
+|       buffer_size_V_2_fu_104_p2                                                    | -   |        | buffer_size_V_2            | add | fabric | 0       |
+|     + mwj_tuplebuild_6ul_64ul_20ul_64ul_Pipeline_VITIS_LOOP_825_2                  | 0   |        |                            |     |        |         |
+|       add_ln817_1_fu_400_p2                                                        | -   |        | add_ln817_1                | add | fabric | 0       |
+|       add_ln817_fu_412_p2                                                          | -   |        | add_ln817                  | add | fabric | 0       |
+|       add_ln819_fu_459_p2                                                          | -   |        | add_ln819                  | add | fabric | 0       |
+|       a_fu_505_p2                                                                  | -   |        | a                          | add | fabric | 0       |
+|       a_2_fu_520_p2                                                                | -   |        | a_2                        | add | fabric | 0       |
+|       b_1_fu_562_p2                                                                | -   |        | b_1                        | sub | fabric | 0       |
+|       c_1_fu_624_p2                                                                | -   |        | c_1                        | sub | fabric | 0       |
+|       a_4_fu_685_p2                                                                | -   |        | a_4                        | sub | fabric | 0       |
+|       b_3_fu_745_p2                                                                | -   |        | b_3                        | sub | fabric | 0       |
+|       c_3_fu_805_p2                                                                | -   |        | c_3                        | sub | fabric | 0       |
+|       a_5_fu_510_p2                                                                | -   |        | a_5                        | add | fabric | 0       |
+|       a_7_fu_531_p2                                                                | -   |        | a_7                        | add | fabric | 0       |
+|       b_5_fu_593_p2                                                                | -   |        | b_5                        | sub | fabric | 0       |
+|       c_5_fu_655_p2                                                                | -   |        | c_5                        | sub | fabric | 0       |
+|       a_9_fu_715_p2                                                                | -   |        | a_9                        | sub | fabric | 0       |
+|       b_7_fu_775_p2                                                                | -   |        | b_7                        | sub | fabric | 0       |
+|       c_7_fu_835_p2                                                                | -   |        | c_7                        | sub | fabric | 0       |
+|       sub_ln668_fu_863_p2                                                          | -   |        | sub_ln668                  | sub | fabric | 0       |
+|       sub_ln668_1_fu_872_p2                                                        | -   |        | sub_ln668_1                | sub | fabric | 0       |
+|       addr_counter_fu_940_p2                                                       | -   |        | addr_counter               | add | fabric | 0       |
+|       tuple_out_addr_counter_V_1_fu_967_p2                                         | -   |        | tuple_out_addr_counter_V_1 | add | fabric | 0       |
+|       buffer_p_fu_469_p2                                                           | -   |        | buffer_p                   | add | fabric | 0       |
+|    + mwj_readmin_counter_ap_uint_128_7ul_3ul_64ul_20ul_64ul_s                      | 0   |        |                            |     |        |         |
 |      sub_fu_113_p2                                                                 | -   |        | sub                        | add | fabric | 0       |
 |      sub11_fu_133_p2                                                               | -   |        | sub11                      | add | fabric | 0       |
 |     + mwj_readmin_counter_Pipeline_READMIN_COUNTER_TASK_LOOP                       | 0   |        |                            |     |        |         |
-|       a_fu_321_p2                                                                  | -   |        | a                          | add | fabric | 0       |
-|       a_11_fu_331_p2                                                               | -   |        | a_11                       | add | fabric | 0       |
-|       b_8_fu_362_p2                                                                | -   |        | b_8                        | sub | fabric | 0       |
-|       c_8_fu_393_p2                                                                | -   |        | c_8                        | sub | fabric | 0       |
-|       a_13_fu_423_p2                                                               | -   |        | a_13                       | sub | fabric | 0       |
-|       b_10_fu_461_p2                                                               | -   |        | b_10                       | sub | fabric | 0       |
-|       c_11_fu_488_p2                                                               | -   |        | c_11                       | sub | fabric | 0       |
-|       sub_ln628_fu_497_p2                                                          | -   |        | sub_ln628                  | sub | fabric | 0       |
-|       ret_V_fu_527_p2                                                              | -   |        | ret_V                      | add | fabric | 0       |
-|       addr_counter_V_6_fu_580_p2                                                   | -   |        | addr_counter_V_6           | add | fabric | 0       |
-|       add_ln504_1_fu_607_p2                                                        | -   |        | add_ln504_1                | add | fabric | 0       |
-|       add_ln504_fu_619_p2                                                          | -   |        | add_ln504                  | add | fabric | 0       |
-|       addr_counter_V_5_fu_549_p2                                                   | -   |        | addr_counter_V_5           | add | fabric | 0       |
-|       add_ln521_1_fu_638_p2                                                        | -   |        | add_ln521_1                | add | fabric | 0       |
-|       add_ln521_fu_660_p2                                                          | -   |        | add_ln521                  | add | fabric | 0       |
-|       rowstart_fu_756_p2                                                           | -   |        | rowstart                   | add | fabric | 0       |
-|       rowend_fu_778_p2                                                             | -   |        | rowend                     | add | fabric | 0       |
+|       a_fu_315_p2                                                                  | -   |        | a                          | add | fabric | 0       |
+|       a_20_fu_329_p2                                                               | -   |        | a_20                       | add | fabric | 0       |
+|       b_15_fu_360_p2                                                               | -   |        | b_15                       | sub | fabric | 0       |
+|       c_15_fu_391_p2                                                               | -   |        | c_15                       | sub | fabric | 0       |
+|       a_22_fu_421_p2                                                               | -   |        | a_22                       | sub | fabric | 0       |
+|       b_18_fu_459_p2                                                               | -   |        | b_18                       | sub | fabric | 0       |
+|       sub_ln628_fu_468_p2                                                          | -   |        | sub_ln628                  | sub | fabric | 0       |
+|       ret_V_fu_498_p2                                                              | -   |        | ret_V                      | add | fabric | 0       |
+|       addr_counter_V_6_fu_551_p2                                                   | -   |        | addr_counter_V_6           | add | fabric | 0       |
+|       add_ln504_1_fu_583_p2                                                        | -   |        | add_ln504_1                | add | fabric | 0       |
+|       add_ln504_fu_595_p2                                                          | -   |        | add_ln504                  | add | fabric | 0       |
+|       addr_counter_V_5_fu_520_p2                                                   | -   |        | addr_counter_V_5           | add | fabric | 0       |
+|       add_ln521_1_fu_574_p2                                                        | -   |        | add_ln521_1                | add | fabric | 0       |
+|       add_ln521_fu_617_p2                                                          | -   |        | add_ln521                  | add | fabric | 0       |
+|       rowstart_fu_723_p2                                                           | -   |        | rowstart                   | add | fabric | 0       |
+|       rowend_fu_745_p2                                                             | -   |        | rowend                     | add | fabric | 0       |
 |    + intersectcache_wrapper_6ul_s                                                  | 0   |        |                            |     |        |         |
 |     + mwj_intersect_6ul_s                                                          | 0   |        |                            |     |        |         |
 |       addr_main_V_fu_7791_p2                                                       | -   |        | addr_main_V                | add | fabric | 0       |
@@ -844,30 +824,30 @@
 |     + mwj_readmin_edge_ap_uint_128_7ul_3ul_64ul_Pipeline_READMIN_EDGES_MAIN_LOOP   | 0   |        |                            |     |        |         |
 |       add_ln587_fu_252_p2                                                          | -   |        | add_ln587                  | add | fabric | 0       |
 |       a_fu_307_p2                                                                  | -   |        | a                          | add | fabric | 0       |
-|       a_2_fu_326_p2                                                                | -   |        | a_2                        | add | fabric | 0       |
-|       b_1_fu_368_p2                                                                | -   |        | b_1                        | sub | fabric | 0       |
-|       c_1_fu_430_p2                                                                | -   |        | c_1                        | sub | fabric | 0       |
-|       a_4_fu_491_p2                                                                | -   |        | a_4                        | sub | fabric | 0       |
-|       b_3_fu_551_p2                                                                | -   |        | b_3                        | sub | fabric | 0       |
-|       c_3_fu_671_p2                                                                | -   |        | c_3                        | sub | fabric | 0       |
-|       a_5_fu_316_p2                                                                | -   |        | a_5                        | add | fabric | 0       |
-|       a_7_fu_337_p2                                                                | -   |        | a_7                        | add | fabric | 0       |
-|       b_5_fu_399_p2                                                                | -   |        | b_5                        | sub | fabric | 0       |
-|       c_5_fu_461_p2                                                                | -   |        | c_5                        | sub | fabric | 0       |
-|       a_9_fu_521_p2                                                                | -   |        | a_9                        | sub | fabric | 0       |
-|       b_7_fu_611_p2                                                                | -   |        | b_7                        | sub | fabric | 0       |
-|       c_7_fu_791_p2                                                                | -   |        | c_7                        | sub | fabric | 0       |
+|       a_11_fu_326_p2                                                               | -   |        | a_11                       | add | fabric | 0       |
+|       b_8_fu_368_p2                                                                | -   |        | b_8                        | sub | fabric | 0       |
+|       c_8_fu_430_p2                                                                | -   |        | c_8                        | sub | fabric | 0       |
+|       a_13_fu_491_p2                                                               | -   |        | a_13                       | sub | fabric | 0       |
+|       b_10_fu_551_p2                                                               | -   |        | b_10                       | sub | fabric | 0       |
+|       c_10_fu_671_p2                                                               | -   |        | c_10                       | sub | fabric | 0       |
+|       a_14_fu_316_p2                                                               | -   |        | a_14                       | add | fabric | 0       |
+|       a_16_fu_337_p2                                                               | -   |        | a_16                       | add | fabric | 0       |
+|       b_12_fu_399_p2                                                               | -   |        | b_12                       | sub | fabric | 0       |
+|       c_12_fu_461_p2                                                               | -   |        | c_12                       | sub | fabric | 0       |
+|       a_18_fu_521_p2                                                               | -   |        | a_18                       | sub | fabric | 0       |
+|       b_14_fu_611_p2                                                               | -   |        | b_14                       | sub | fabric | 0       |
+|       c_14_fu_791_p2                                                               | -   |        | c_14                       | sub | fabric | 0       |
 |    + mwj_assembly                                                                  | 0   |        |                            |     |        |         |
-|      op2_assign_fu_297_p2                                                          | -   |        | op2_assign                 | add | fabric | 0       |
+|      op2_assign_fu_381_p2                                                          | -   |        | op2_assign                 | add | fabric | 0       |
 |     + mwj_assembly_Pipeline_ASSEMBLY_COPYING_EMBEDDING_LOOP                        | 0   |        |                            |     |        |         |
 |       curQV_V_4_fu_103_p2                                                          | -   |        | curQV_V_4                  | add | fabric | 0       |
 |     + mwj_assembly_Pipeline_ASSEMBLY_RADIX_LOOP                                    | 0   |        |                            |     |        |         |
-|       add_ln1404_fu_77_p2                                                          | -   |        | add_ln1404                 | add | fabric | 0       |
+|       add_ln1367_fu_77_p2                                                          | -   |        | add_ln1367                 | add | fabric | 0       |
 |     + mwj_assembly_Pipeline_ASSEMBLY_SET_LOOP                                      | 0   |        |                            |     |        |         |
-|       counter_2_fu_104_p2                                                          | -   |        | counter_2                  | add | fabric | 0       |
-|    + KPN_1392_1                                                                    | 0   |        |                            |     |        |         |
+|       counter_2_fu_232_p2                                                          | -   |        | counter_2                  | add | fabric | 0       |
+|    + KPN_1368_1                                                                    | 0   |        |                            |     |        |         |
 |     + mwj_stop                                                                     | 0   |        |                            |     |        |         |
-|       add_ln1512_fu_73_p2                                                          | -   |        | add_ln1512                 | add | fabric | 0       |
+|       add_ln1475_fu_73_p2                                                          | -   |        | add_ln1475                 | add | fabric | 0       |
 +------------------------------------------------------------------------------------+-----+--------+----------------------------+-----+--------+---------+
 
 
@@ -896,29 +876,29 @@
 |   hTables1_start_edges_U                                             | -    | -    |        | hTables1_start_edges                      | ram_1p  | auto   | 1       |
 |  + buildTableDescriptors_16ul_32ul_32ul_5ul_32ul_s                   | 0    | 0    |        |                                           |         |        |         |
 |    fromNumToPos_U                                                    | -    | -    |        | fromNumToPos                              | ram_s2p | auto   | 1       |
-|  + countEdges_ap_uint_128_5ul_7ul_32ul_32ul_20ul_5ul_32ul_32ul_s     | 3    | 0    |        |                                           |         |        |         |
+|  + countEdges_ap_uint_128_5ul_7ul_32ul_64ul_20ul_5ul_32ul_32ul_s     | 3    | 0    |        |                                           |         |        |         |
 |    stream_tuple_U                                                    | 3    | -    |        | stream_tuple                              | fifo    | memory | 0       |
 |    stream_tuple_end_U                                                | -    | -    |        | stream_tuple_end                          | fifo    | srl    | 0       |
 |  + counterToOffset_ap_uint_128_5ul_7ul_20ul_s                        | 4    | 0    |        |                                           |         |        |         |
 |    row_V_U                                                           | 4    | -    |        | row_V                                     | ram_1p  | auto   | 1       |
-|  + writeEdges_ap_uint_128_6ul_5ul_7ul_32ul_5ul_32ul_20ul_32ul_32ul_s | 6    | 0    |        |                                           |         |        |         |
+|  + writeEdges_ap_uint_128_6ul_5ul_7ul_32ul_5ul_64ul_20ul_32ul_32ul_s | 6    | 0    |        |                                           |         |        |         |
 |    stream_tuple_U                                                    | 6    | -    |        | stream_tuple                              | fifo    | memory | 0       |
 |    stream_tuple_end_U                                                | -    | -    |        | stream_tuple_end                          | fifo    | srl    | 0       |
 |  + writeBloom                                                        | 6    | 0    |        |                                           |         |        |         |
 |    bloom_p_c_U                                                       | -    | -    |        | bloom_p_c                                 | fifo    | srl    | 0       |
 |    stream_tuple_U                                                    | 6    | -    |        | stream_tuple                              | fifo    | memory | 0       |
 |    stream_tuple_end_U                                                | -    | -    |        | stream_tuple_end                          | fifo    | srl    | 0       |
-|   + bloom_read_ap_uint_128_5ul_7ul_32ul_6ul_32ul_20ul_64ul_s         | 0    | 0    |        |                                           |         |        |         |
+|   + bloom_read_ap_uint_128_5ul_7ul_32ul_6ul_64ul_20ul_64ul_s         | 0    | 0    |        |                                           |         |        |         |
 |     hash_in0_fifo_U                                                  | -    | -    |        | hash_in0                                  | fifo    | srl    | 0       |
 |     hash_in1_fifo_U                                                  | -    | -    |        | hash_in1                                  | fifo    | srl    | 0       |
 |     hash_out0_fifo_U                                                 | -    | -    |        | hash_out0                                 | fifo    | srl    | 0       |
 |     hash_out1_fifo_U                                                 | -    | -    |        | hash_out1                                 | fifo    | srl    | 0       |
-|  + multiwayJoinWrap_ap_uint_128_7ul_3ul_32ul_20ul_64ul_s             | 160  | 0    |        |                                           |         |        |         |
+|  + multiwayJoinWrap_ap_uint_128_7ul_3ul_64ul_20ul_64ul_s             | 160  | 0    |        |                                           |         |        |         |
 |    stream_batch_end_U                                                | -    | -    |        | stream_batch_end                          | fifo    | srl    | 0       |
 |    stream_batch_U                                                    | -    | -    |        | stream_batch                              | fifo    | srl    | 0       |
-|   + mwj_batch_32ul_20ul_64ul_s                                       | 1    | 0    |        |                                           |         |        |         |
+|   + mwj_batch_64ul_20ul_64ul_s                                       | 1    | 0    |        |                                           |         |        |         |
 |     set_V_U                                                          | 1    | -    |        | set_V                                     | ram_1p  | auto   | 1       |
-|   + multiwayJoin_ap_uint_128_7ul_3ul_32ul_20ul_64ul_s                | 159  | 0    |        |                                           |         |        |         |
+|   + multiwayJoin_ap_uint_128_7ul_3ul_64ul_20ul_64ul_s                | 159  | 0    |        |                                           |         |        |         |
 |     store_stream_U                                                   | 2    | -    |        | store_stream                              | fifo    | memory | 0       |
 |     load_stream_U                                                    | 2    | -    |        | load_stream                               | fifo    | memory | 0       |
 |     store_p_stream_U                                                 | 8    | -    |        | store_p_stream                            | fifo    | memory | 0       |
@@ -1021,18 +1001,18 @@
 |       curEmb_V_U                                                     | -    | -    |        | curEmb_V                                  | ram_1p  | auto   | 1       |
 |     + mwj_batchbuild_64ul_s                                          | 0    | 0    |        |                                           |         |        |         |
 |       curEmb_V_U                                                     | -    | -    |        | curEmb_V                                  | ram_1p  | auto   | 1       |
-|    + mwj_edgebuild_32ul_20ul_64ul_s                                  | 0    | 0    |        |                                           |         |        |         |
+|    + mwj_edgebuild_64ul_20ul_64ul_s                                  | 0    | 0    |        |                                           |         |        |         |
 |      curEmb_V_U                                                      | -    | -    |        | curEmb_V                                  | ram_1p  | auto   | 1       |
-|    + mwj_tuplebuild_6ul_32ul_20ul_64ul_s                             | 1    | 0    |        |                                           |         |        |         |
+|    + mwj_tuplebuild_6ul_64ul_20ul_64ul_s                             | 1    | 0    |        |                                           |         |        |         |
 |      hash_in0_fifo_U                                                 | -    | -    |        | hash_in0                                  | fifo    | srl    | 0       |
 |      hash_in1_fifo_U                                                 | -    | -    |        | hash_in1                                  | fifo    | srl    | 0       |
 |      hash_out0_fifo_U                                                | -    | -    |        | hash_out0                                 | fifo    | srl    | 0       |
 |      hash_out1_fifo_U                                                | -    | -    |        | hash_out1                                 | fifo    | srl    | 0       |
 |      buffer_V_U                                                      | 2    | -    |        | buffer_V                                  | ram_1p  | auto   | 1       |
-|      grp_hashlookup3_core_32_s_fu_676                                | -    | -    |        | curEmb_V                                  | ram_1p  | auto   | 1       |
+|      curEmb_V_U                                                      | -    | -    |        | curEmb_V                                  | ram_1p  | auto   | 1       |
 |    + mwj_assembly                                                    | 0    | 0    |        |                                           |         |        |         |
 |      curEmb_V_U                                                      | -    | -    |        | curEmb_V                                  | ram_1p  | auto   | 1       |
-|    + KPN_1392_1                                                      | 0    | 0    |        |                                           |         |        |         |
+|    + KPN_1368_1                                                      | 0    | 0    |        |                                           |         |        |         |
 |      merge_out_U                                                     | -    | -    |        | merge_out                                 | fifo    | srl    | 0       |
 +----------------------------------------------------------------------+------+------+--------+-------------------------------------------+---------+--------+---------+
 
@@ -1113,7 +1093,7 @@
 | array_partition      | variable=m_cache_mem type=complete dim=2                                                                                     | source/l1_cache.h:54 in l1_cache<word_type, main_size, n_sets, n_ways, n_words_per_line, swap_tag_set, storage_impl>, m_cache_mem                                                                              |
 | array_partition      | variable=m_tag type=complete dim=0                                                                                           | source/l1_cache.h:55 in l1_cache<word_type, main_size, n_sets, n_ways, n_words_per_line, swap_tag_set, storage_impl>, m_tag                                                                                    |
 | bind_storage         | variable=m_cache_mem type=RAM_2P impl=URAM                                                                                   | source/l1_cache.h:59 in l1_cache<word_type, main_size, n_sets, n_ways, n_words_per_line, swap_tag_set, storage_impl>, m_cache_mem                                                                              |
-| bind_storage         | variable=m_cache_mem type=RAM_2P impl=BRAM latency=3                                                                         | source/l1_cache.h:62 in l1_cache<word_type, main_size, n_sets, n_ways, n_words_per_line, swap_tag_set, storage_impl>, m_cache_mem                                                                              |
+| bind_storage         | variable=m_cache_mem type=RAM_2P impl=BRAM latency=2                                                                         | source/l1_cache.h:62 in l1_cache<word_type, main_size, n_sets, n_ways, n_words_per_line, swap_tag_set, storage_impl>, m_cache_mem                                                                              |
 | bind_storage         | variable=m_cache_mem type=RAM_2P impl=LUTRAM                                                                                 | source/l1_cache.h:65 in l1_cache<word_type, main_size, n_sets, n_ways, n_words_per_line, swap_tag_set, storage_impl>, m_cache_mem                                                                              |
 | inline               |                                                                                                                              | source/l1_cache.h:73 in init                                                                                                                                                                                   |
 | unroll               |                                                                                                                              | source/l1_cache.h:75 in init                                                                                                                                                                                   |
@@ -1182,65 +1162,65 @@
 | unroll               |                                                                                                                              | source/subgraphIsomorphism.cpp:590 in mwj_readmin_edge                                                                                                                                                         |
 | unroll               |                                                                                                                              | source/subgraphIsomorphism.cpp:601 in mwj_readmin_edge                                                                                                                                                         |
 | pipeline             | II=1                                                                                                                         | source/subgraphIsomorphism.cpp:730 in mwj_batchbuild                                                                                                                                                           |
-| pipeline             | II=2                                                                                                                         | source/subgraphIsomorphism.cpp:814 in mwj_tuplebuild                                                                                                                                                           |
-| pipeline             | II=2                                                                                                                         | source/subgraphIsomorphism.cpp:854 in mwj_tuplebuild                                                                                                                                                           |
-| loop_flatten         |                                                                                                                              | source/subgraphIsomorphism.cpp:863 in mwj_tuplebuild                                                                                                                                                           |
-| pipeline             | II=1                                                                                                                         | source/subgraphIsomorphism.cpp:921 in mwj_bypass_sol                                                                                                                                                           |
-| pipeline             | II=1                                                                                                                         | source/subgraphIsomorphism.cpp:1055 in mwj_intersect                                                                                                                                                           |
-| pipeline             | II=2 style=flp                                                                                                               | source/subgraphIsomorphism.cpp:1115 in mwj_offset                                                                                                                                                              |
-| pipeline             | II=1                                                                                                                         | source/subgraphIsomorphism.cpp:1186 in mwj_split                                                                                                                                                               |
-| array_partition      | variable=edge_block type=complete                                                                                            | source/subgraphIsomorphism.cpp:1228 in mwj_verify, edge_block                                                                                                                                                  |
-| pipeline             | II=1                                                                                                                         | source/subgraphIsomorphism.cpp:1232 in mwj_verify                                                                                                                                                              |
-| unroll               |                                                                                                                              | source/subgraphIsomorphism.cpp:1255 in mwj_verify                                                                                                                                                              |
-| unroll               |                                                                                                                              | source/subgraphIsomorphism.cpp:1257 in mwj_verify                                                                                                                                                              |
-| pipeline             | II=1                                                                                                                         | source/subgraphIsomorphism.cpp:1290 in mwj_compact                                                                                                                                                             |
-| pipeline             | II=1                                                                                                                         | source/subgraphIsomorphism.cpp:1328 in mwj_filter                                                                                                                                                              |
-| unroll               |                                                                                                                              | source/subgraphIsomorphism.cpp:1485 in mwj_assembly                                                                                                                                                            |
-| unroll               |                                                                                                                              | source/subgraphIsomorphism.cpp:1497 in mwj_merge                                                                                                                                                               |
-| unroll               |                                                                                                                              | source/subgraphIsomorphism.cpp:1573 in mwj_batch                                                                                                                                                               |
-| stable               | variable=htb_buf0                                                                                                            | source/subgraphIsomorphism.cpp:1726 in multiwayjoin, htb_buf0                                                                                                                                                  |
-| stable               | variable=htb_buf1                                                                                                            | source/subgraphIsomorphism.cpp:1727 in multiwayjoin, htb_buf1                                                                                                                                                  |
-| stable               | variable=htb_buf2                                                                                                            | source/subgraphIsomorphism.cpp:1728 in multiwayjoin, htb_buf2                                                                                                                                                  |
-| stable               | variable=bloom_p                                                                                                             | source/subgraphIsomorphism.cpp:1729 in multiwayjoin, bloom_p                                                                                                                                                   |
-| stable               | variable=hTables0                                                                                                            | source/subgraphIsomorphism.cpp:1730 in multiwayjoin, hTables0                                                                                                                                                  |
-| stable               | variable=hTables1                                                                                                            | source/subgraphIsomorphism.cpp:1731 in multiwayjoin, hTables1                                                                                                                                                  |
-| stable               | variable=qVertices0                                                                                                          | source/subgraphIsomorphism.cpp:1732 in multiwayjoin, qVertices0                                                                                                                                                |
-| stable               | variable=nQueryVer                                                                                                           | source/subgraphIsomorphism.cpp:1733 in multiwayjoin, nQueryVer                                                                                                                                                 |
-| stable               | variable=hash1_w                                                                                                             | source/subgraphIsomorphism.cpp:1734 in multiwayjoin, hash1_w                                                                                                                                                   |
-| stable               | variable=hash2_w                                                                                                             | source/subgraphIsomorphism.cpp:1735 in multiwayjoin, hash2_w                                                                                                                                                   |
-| stable               | variable=dynfifo_space                                                                                                       | source/subgraphIsomorphism.cpp:1736 in multiwayjoin, dynfifo_space                                                                                                                                             |
-| dataflow             |                                                                                                                              | source/subgraphIsomorphism.cpp:1738 in multiwayjoin                                                                                                                                                            |
-| array_partition      | variable=merge_in type=complete                                                                                              | source/subgraphIsomorphism.cpp:1895 in multiwayjoin, merge_in                                                                                                                                                  |
-| stable               | variable=htb_buf0                                                                                                            | source/subgraphIsomorphism.cpp:2343 in multiwayjoinwrap, htb_buf0                                                                                                                                              |
-| stable               | variable=htb_buf1                                                                                                            | source/subgraphIsomorphism.cpp:2344 in multiwayjoinwrap, htb_buf1                                                                                                                                              |
-| stable               | variable=htb_buf2                                                                                                            | source/subgraphIsomorphism.cpp:2345 in multiwayjoinwrap, htb_buf2                                                                                                                                              |
-| stable               | variable=htb_buf3                                                                                                            | source/subgraphIsomorphism.cpp:2346 in multiwayjoinwrap, htb_buf3                                                                                                                                              |
-| stable               | variable=hTables0                                                                                                            | source/subgraphIsomorphism.cpp:2347 in multiwayjoinwrap, hTables0                                                                                                                                              |
-| stable               | variable=hTables1                                                                                                            | source/subgraphIsomorphism.cpp:2348 in multiwayjoinwrap, hTables1                                                                                                                                              |
-| stable               | variable=qVertices0                                                                                                          | source/subgraphIsomorphism.cpp:2349 in multiwayjoinwrap, qVertices0                                                                                                                                            |
-| stable               | variable=qVertices1                                                                                                          | source/subgraphIsomorphism.cpp:2350 in multiwayjoinwrap, qVertices1                                                                                                                                            |
-| stable               | variable=nQueryVer                                                                                                           | source/subgraphIsomorphism.cpp:2351 in multiwayjoinwrap, nQueryVer                                                                                                                                             |
-| stable               | variable=hash1_w                                                                                                             | source/subgraphIsomorphism.cpp:2352 in multiwayjoinwrap, hash1_w                                                                                                                                               |
-| stable               | variable=hash2_w                                                                                                             | source/subgraphIsomorphism.cpp:2353 in multiwayjoinwrap, hash2_w                                                                                                                                               |
-| stable               | variable=dynfifo_space                                                                                                       | source/subgraphIsomorphism.cpp:2354 in multiwayjoinwrap, dynfifo_space                                                                                                                                         |
-| dataflow             |                                                                                                                              | source/subgraphIsomorphism.cpp:2355 in multiwayjoinwrap                                                                                                                                                        |
-| interface            | mode=m_axi port=htb_buf0 bundle=prop_batch max_widen_bitwidth=128 latency=1                                                  | source/subgraphIsomorphism.cpp:2520 in subgraphisomorphism, htb_buf0                                                                                                                                           |
-| interface            | mode=m_axi port=htb_buf1 bundle=cache max_widen_bitwidth=128 num_write_outstanding=1 max_write_burst_length=2 latency=1      | source/subgraphIsomorphism.cpp:2522 in subgraphisomorphism, htb_buf1                                                                                                                                           |
-| interface            | mode=m_axi port=htb_buf2 bundle=readmin_c max_widen_bitwidth=128 num_write_outstanding=1 max_write_burst_length=2 latency=1  | source/subgraphIsomorphism.cpp:2525 in subgraphisomorphism, htb_buf2                                                                                                                                           |
-| interface            | mode=m_axi port=htb_buf3 bundle=readmin_e max_widen_bitwidth=128 num_write_outstanding=1 max_write_burst_length=2 latency=20 | source/subgraphIsomorphism.cpp:2528 in subgraphisomorphism, htb_buf3                                                                                                                                           |
-| interface            | mode=m_axi port=res_buf bundle=fifo max_widen_bitwidth=128 max_read_burst_length=32 max_write_burst_length=32 latency=1      | source/subgraphIsomorphism.cpp:2531 in subgraphisomorphism, res_buf                                                                                                                                            |
-| interface            | mode=m_axi port=bloom_p bundle=bloom max_widen_bitwidth=128 latency=20                                                       | source/subgraphIsomorphism.cpp:2534 in subgraphisomorphism, bloom_p                                                                                                                                            |
-| alias                | ports=htb_buf0,htb_buf1,htb_buf2,htb_buf3 distance=0                                                                         | source/subgraphIsomorphism.cpp:2537 in subgraphisomorphism                                                                                                                                                     |
-| interface            | mode=s_axilite port=numQueryVert                                                                                             | source/subgraphIsomorphism.cpp:2539 in subgraphisomorphism, numQueryVert                                                                                                                                       |
-| interface            | mode=s_axilite port=numQueryEdges                                                                                            | source/subgraphIsomorphism.cpp:2540 in subgraphisomorphism, numQueryEdges                                                                                                                                      |
-| interface            | mode=s_axilite port=numDataEdges                                                                                             | source/subgraphIsomorphism.cpp:2541 in subgraphisomorphism, numDataEdges                                                                                                                                       |
-| interface            | mode=s_axilite port=hash1_w                                                                                                  | source/subgraphIsomorphism.cpp:2542 in subgraphisomorphism, hash1_w                                                                                                                                            |
-| interface            | mode=s_axilite port=hash2_w                                                                                                  | source/subgraphIsomorphism.cpp:2543 in subgraphisomorphism, hash2_w                                                                                                                                            |
-| interface            | mode=s_axilite port=dynfifo_space                                                                                            | source/subgraphIsomorphism.cpp:2544 in subgraphisomorphism, dynfifo_space                                                                                                                                      |
-| interface            | mode=s_axilite port=dynfifo_diagnostic                                                                                       | source/subgraphIsomorphism.cpp:2545 in subgraphisomorphism, dynfifo_diagnostic                                                                                                                                 |
-| interface            | mode=s_axilite port=return                                                                                                   | source/subgraphIsomorphism.cpp:2546 in subgraphisomorphism, return                                                                                                                                             |
-| interface            | mode=s_axilite port=debif_endpreprocess                                                                                      | source/subgraphIsomorphism.cpp:2549 in subgraphisomorphism, debif_endpreprocess                                                                                                                                |
-| interface            | mode=s_axilite port=result                                                                                                   | source/subgraphIsomorphism.cpp:2553 in subgraphisomorphism, result                                                                                                                                             |
+| pipeline             | II = 1                                                                                                                       | source/subgraphIsomorphism.cpp:810 in mwj_tuplebuild                                                                                                                                                           |
+| pipeline             | II=2                                                                                                                         | source/subgraphIsomorphism.cpp:818 in mwj_tuplebuild                                                                                                                                                           |
+| loop_flatten         |                                                                                                                              | source/subgraphIsomorphism.cpp:826 in mwj_tuplebuild                                                                                                                                                           |
+| pipeline             | II=1                                                                                                                         | source/subgraphIsomorphism.cpp:884 in mwj_bypass_sol                                                                                                                                                           |
+| pipeline             | II=1                                                                                                                         | source/subgraphIsomorphism.cpp:1018 in mwj_intersect                                                                                                                                                           |
+| pipeline             | II=2 style=flp                                                                                                               | source/subgraphIsomorphism.cpp:1078 in mwj_offset                                                                                                                                                              |
+| pipeline             | II=1                                                                                                                         | source/subgraphIsomorphism.cpp:1149 in mwj_split                                                                                                                                                               |
+| array_partition      | variable=edge_block type=complete                                                                                            | source/subgraphIsomorphism.cpp:1191 in mwj_verify, edge_block                                                                                                                                                  |
+| pipeline             | II=1                                                                                                                         | source/subgraphIsomorphism.cpp:1195 in mwj_verify                                                                                                                                                              |
+| unroll               |                                                                                                                              | source/subgraphIsomorphism.cpp:1218 in mwj_verify                                                                                                                                                              |
+| unroll               |                                                                                                                              | source/subgraphIsomorphism.cpp:1220 in mwj_verify                                                                                                                                                              |
+| pipeline             | II=1                                                                                                                         | source/subgraphIsomorphism.cpp:1253 in mwj_compact                                                                                                                                                             |
+| pipeline             | II=1                                                                                                                         | source/subgraphIsomorphism.cpp:1291 in mwj_filter                                                                                                                                                              |
+| unroll               |                                                                                                                              | source/subgraphIsomorphism.cpp:1448 in mwj_assembly                                                                                                                                                            |
+| unroll               |                                                                                                                              | source/subgraphIsomorphism.cpp:1460 in mwj_merge                                                                                                                                                               |
+| unroll               |                                                                                                                              | source/subgraphIsomorphism.cpp:1536 in mwj_batch                                                                                                                                                               |
+| stable               | variable=htb_buf0                                                                                                            | source/subgraphIsomorphism.cpp:1689 in multiwayjoin, htb_buf0                                                                                                                                                  |
+| stable               | variable=htb_buf1                                                                                                            | source/subgraphIsomorphism.cpp:1690 in multiwayjoin, htb_buf1                                                                                                                                                  |
+| stable               | variable=htb_buf2                                                                                                            | source/subgraphIsomorphism.cpp:1691 in multiwayjoin, htb_buf2                                                                                                                                                  |
+| stable               | variable=bloom_p                                                                                                             | source/subgraphIsomorphism.cpp:1692 in multiwayjoin, bloom_p                                                                                                                                                   |
+| stable               | variable=hTables0                                                                                                            | source/subgraphIsomorphism.cpp:1693 in multiwayjoin, hTables0                                                                                                                                                  |
+| stable               | variable=hTables1                                                                                                            | source/subgraphIsomorphism.cpp:1694 in multiwayjoin, hTables1                                                                                                                                                  |
+| stable               | variable=qVertices0                                                                                                          | source/subgraphIsomorphism.cpp:1695 in multiwayjoin, qVertices0                                                                                                                                                |
+| stable               | variable=nQueryVer                                                                                                           | source/subgraphIsomorphism.cpp:1696 in multiwayjoin, nQueryVer                                                                                                                                                 |
+| stable               | variable=hash1_w                                                                                                             | source/subgraphIsomorphism.cpp:1697 in multiwayjoin, hash1_w                                                                                                                                                   |
+| stable               | variable=hash2_w                                                                                                             | source/subgraphIsomorphism.cpp:1698 in multiwayjoin, hash2_w                                                                                                                                                   |
+| stable               | variable=dynfifo_space                                                                                                       | source/subgraphIsomorphism.cpp:1699 in multiwayjoin, dynfifo_space                                                                                                                                             |
+| dataflow             |                                                                                                                              | source/subgraphIsomorphism.cpp:1701 in multiwayjoin                                                                                                                                                            |
+| array_partition      | variable=merge_in type=complete                                                                                              | source/subgraphIsomorphism.cpp:1858 in multiwayjoin, merge_in                                                                                                                                                  |
+| stable               | variable=htb_buf0                                                                                                            | source/subgraphIsomorphism.cpp:2306 in multiwayjoinwrap, htb_buf0                                                                                                                                              |
+| stable               | variable=htb_buf1                                                                                                            | source/subgraphIsomorphism.cpp:2307 in multiwayjoinwrap, htb_buf1                                                                                                                                              |
+| stable               | variable=htb_buf2                                                                                                            | source/subgraphIsomorphism.cpp:2308 in multiwayjoinwrap, htb_buf2                                                                                                                                              |
+| stable               | variable=htb_buf3                                                                                                            | source/subgraphIsomorphism.cpp:2309 in multiwayjoinwrap, htb_buf3                                                                                                                                              |
+| stable               | variable=hTables0                                                                                                            | source/subgraphIsomorphism.cpp:2310 in multiwayjoinwrap, hTables0                                                                                                                                              |
+| stable               | variable=hTables1                                                                                                            | source/subgraphIsomorphism.cpp:2311 in multiwayjoinwrap, hTables1                                                                                                                                              |
+| stable               | variable=qVertices0                                                                                                          | source/subgraphIsomorphism.cpp:2312 in multiwayjoinwrap, qVertices0                                                                                                                                            |
+| stable               | variable=qVertices1                                                                                                          | source/subgraphIsomorphism.cpp:2313 in multiwayjoinwrap, qVertices1                                                                                                                                            |
+| stable               | variable=nQueryVer                                                                                                           | source/subgraphIsomorphism.cpp:2314 in multiwayjoinwrap, nQueryVer                                                                                                                                             |
+| stable               | variable=hash1_w                                                                                                             | source/subgraphIsomorphism.cpp:2315 in multiwayjoinwrap, hash1_w                                                                                                                                               |
+| stable               | variable=hash2_w                                                                                                             | source/subgraphIsomorphism.cpp:2316 in multiwayjoinwrap, hash2_w                                                                                                                                               |
+| stable               | variable=dynfifo_space                                                                                                       | source/subgraphIsomorphism.cpp:2317 in multiwayjoinwrap, dynfifo_space                                                                                                                                         |
+| dataflow             |                                                                                                                              | source/subgraphIsomorphism.cpp:2318 in multiwayjoinwrap                                                                                                                                                        |
+| interface            | mode=m_axi port=htb_buf0 bundle=prop_batch max_widen_bitwidth=128 latency=1                                                  | source/subgraphIsomorphism.cpp:2483 in subgraphisomorphism, htb_buf0                                                                                                                                           |
+| interface            | mode=m_axi port=htb_buf1 bundle=cache max_widen_bitwidth=128 num_write_outstanding=1 max_write_burst_length=2 latency=1      | source/subgraphIsomorphism.cpp:2485 in subgraphisomorphism, htb_buf1                                                                                                                                           |
+| interface            | mode=m_axi port=htb_buf2 bundle=readmin_c max_widen_bitwidth=128 num_write_outstanding=1 max_write_burst_length=2 latency=1  | source/subgraphIsomorphism.cpp:2488 in subgraphisomorphism, htb_buf2                                                                                                                                           |
+| interface            | mode=m_axi port=htb_buf3 bundle=readmin_e max_widen_bitwidth=128 num_write_outstanding=1 max_write_burst_length=2 latency=20 | source/subgraphIsomorphism.cpp:2491 in subgraphisomorphism, htb_buf3                                                                                                                                           |
+| interface            | mode=m_axi port=res_buf bundle=fifo max_widen_bitwidth=128 max_read_burst_length=32 max_write_burst_length=32 latency=1      | source/subgraphIsomorphism.cpp:2494 in subgraphisomorphism, res_buf                                                                                                                                            |
+| interface            | mode=m_axi port=bloom_p bundle=bloom max_widen_bitwidth=128 latency=20                                                       | source/subgraphIsomorphism.cpp:2497 in subgraphisomorphism, bloom_p                                                                                                                                            |
+| alias                | ports=htb_buf0,htb_buf1,htb_buf2,htb_buf3 distance=0                                                                         | source/subgraphIsomorphism.cpp:2500 in subgraphisomorphism                                                                                                                                                     |
+| interface            | mode=s_axilite port=numQueryVert                                                                                             | source/subgraphIsomorphism.cpp:2502 in subgraphisomorphism, numQueryVert                                                                                                                                       |
+| interface            | mode=s_axilite port=numQueryEdges                                                                                            | source/subgraphIsomorphism.cpp:2503 in subgraphisomorphism, numQueryEdges                                                                                                                                      |
+| interface            | mode=s_axilite port=numDataEdges                                                                                             | source/subgraphIsomorphism.cpp:2504 in subgraphisomorphism, numDataEdges                                                                                                                                       |
+| interface            | mode=s_axilite port=hash1_w                                                                                                  | source/subgraphIsomorphism.cpp:2505 in subgraphisomorphism, hash1_w                                                                                                                                            |
+| interface            | mode=s_axilite port=hash2_w                                                                                                  | source/subgraphIsomorphism.cpp:2506 in subgraphisomorphism, hash2_w                                                                                                                                            |
+| interface            | mode=s_axilite port=dynfifo_space                                                                                            | source/subgraphIsomorphism.cpp:2507 in subgraphisomorphism, dynfifo_space                                                                                                                                      |
+| interface            | mode=s_axilite port=dynfifo_diagnostic                                                                                       | source/subgraphIsomorphism.cpp:2508 in subgraphisomorphism, dynfifo_diagnostic                                                                                                                                 |
+| interface            | mode=s_axilite port=return                                                                                                   | source/subgraphIsomorphism.cpp:2509 in subgraphisomorphism, return                                                                                                                                             |
+| interface            | mode=s_axilite port=debif_endpreprocess                                                                                      | source/subgraphIsomorphism.cpp:2512 in subgraphisomorphism, debif_endpreprocess                                                                                                                                |
+| interface            | mode=s_axilite port=result                                                                                                   | source/subgraphIsomorphism.cpp:2516 in subgraphisomorphism, result                                                                                                                                             |
 | pipeline             | II=1                                                                                                                         | source/utils.h:31 in delay                                                                                                                                                                                     |
 | latency              | min=AMOUNT max=AMOUNT                                                                                                        | source/utils.h:32 in delay                                                                                                                                                                                     |
 | inline               | off                                                                                                                          | source/utils.h:33 in delay                                                                                                                                                                                     |

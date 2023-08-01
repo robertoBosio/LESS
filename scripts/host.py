@@ -32,7 +32,7 @@ def subiso(test, path):
   
     HASHTABLES_SPACE = 1 << 26  #~ 67 MB
     BLOOM_SPACE  = 1 << 26  #~ 67 MB
-    RESULTS_SPACE = 1 << 26  #~ 67 MB
+    RESULTS_SPACE = 1 << 27  #~ 134 MB
     MAX_QDATA = 300
     BURST_SIZE = 32
     nfile = 0
@@ -225,7 +225,8 @@ def subiso(test, path):
             print(data, querytuple, sep=" ", flush=True)
             print(f"Allocated {(mem_counter / (2**20))} Mb. Hash tables" 
                   f" use {((hashtable_spaceused / MEM.nbytes) * 100):.2f}%,"
-                  f" bloom use {((bloom_spaceused / BLOOM.nbytes) * 100):.2f}%.", flush=True)
+                  f" bloom use {((bloom_spaceused / BLOOM.nbytes) * 100):.2f}%."
+                  f" {dynfifo_space} lines available in fifo.", flush=True)
 
             if (hashtable_spaceused <= MEM.nbytes and bloom_spaceused <= BLOOM.nbytes):
                 start = perf_counter()
