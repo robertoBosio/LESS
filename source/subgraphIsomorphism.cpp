@@ -166,82 +166,12 @@ typedef struct {
 
 /******** End tuple definition ********/
 
-template <size_t W_1,
-        size_t W_2,
-        size_t SHF,
-        size_t T>
-ap_uint<(1UL << T)> read_table(
-        ap_uint<W_1> index1,
-        ap_uint<W_2> index2,
-        ap_uint<DDR_W> *htb_buf,
-        ap_uint<32> start_addr)
-{
-    ap_uint<DDR_W> ram_row;
-    unsigned long addr_row;
-    unsigned long addr_inrow;
-    ap_uint<64> addr_counter;
-
-    addr_counter = index1;
-    addr_counter <<= SHF;
-    addr_counter += index2;
-
-    /* Compute address of row storing the counter */
-    addr_row = start_addr + (addr_counter >> (DDR_BIT - T));
-
-    /* Compute address of data inside the row */
-    addr_inrow = addr_counter.range((DDR_BIT - T) - 1, 0);
-
-    /* Read the data */
-    ram_row = htb_buf[addr_row];
-    ram_row >>= (addr_inrow << T);
-
-    return ram_row;
-
-}
-
-template <typename T_MEM,
-        size_t W_1,
-        size_t W_2,
-        size_t SHF,
-        size_t T,
-        size_t PORT>
-ap_uint<(1UL << T)> read_table(
-        ap_uint<W_1> index1,
-        ap_uint<W_2> index2,
-        T_MEM htb_buf,
-        ap_uint<32> start_addr)
-{
-#pragma HLS inline
-/* #pragma HLS function_instantiate variable=cache_port */
-    ap_uint<DDR_W> ram_row;
-    unsigned long addr_row;
-    unsigned long addr_inrow;
-    ap_uint<64> addr_counter;
-
-    addr_counter = index1;
-    addr_counter <<= SHF;
-    addr_counter += index2;
-
-    /* Compute address of row storing the counter */
-    addr_row = start_addr + (addr_counter >> (DDR_BIT - T));
-
-    /* Compute address of data inside the row */
-    addr_inrow = addr_counter.range((DDR_BIT - T) - 1, 0);
-
-    /* Read the data */
-    ram_row = htb_buf.get(addr_row, PORT);
-    ram_row >>= (addr_inrow << T);
-
-    return ram_row;
-
-}
-
 template <typename T_BLOOM,
          size_t BLOOM_LOG,
         size_t K_FUN_LOG>
 unsigned int bloom_bitset(T_BLOOM filter)                         
 {
-#pragma HLS inline
+#pragma HLS inline off
     unsigned int count {0};
     for (int c = 0; c < (1UL << (BLOOM_LOG - 5)); c++){
 #pragma HLS unroll
@@ -315,6 +245,7 @@ mwj_edgebuild(const unsigned char hash1_w,
     //Initializing filter in findmin
     tuple_out.reset = true;
     tuple_out.last = false;
+    tuple_out.address = 0;
     stream_tuple_out.write(tuple_out);
    
     while(true) {
@@ -380,7 +311,8 @@ void mwj_findmin(
     findmin_tuple_t tuple_in;
     unsigned int min_size;
     bool stop;
-
+// #pragma HLS allocation operation instances=mul limit=4
+#pragma HLS allocation function instances=bloom_bitset limit=1
 FINDMIN_TASK_LOOP:
     while (1) {
 #pragma HLS pipeline II=8
@@ -444,6 +376,74 @@ FINDMIN_TASK_LOOP:
     }
 }
 
+// template <typename T_BLOOM,
+//           size_t BLOOM_LOG,
+//           size_t K_FUN_LOG>
+// void mwj_findmin(
+//     bloom_t *bloom_p,
+//     hls::stream<findmin_tuple_t> &stream_tuple_in,
+//     hls::stream<bool> &stream_stop,
+
+//     hls::stream<readmin_counter_tuple_t> &stream_tuple_out,
+//     hls::stream<T_BLOOM> &stream_filter_out)
+// {
+//     constexpr size_t K_FUN = (1UL << K_FUN_LOG);
+//     T_BLOOM filter[K_FUN];
+// #pragma HLS array_partition variable=filter type=complete dim=1
+
+//     readmin_counter_tuple_t tuple_out;
+//     findmin_tuple_t tuple_in;
+//     unsigned int min_size;
+//     bool stop;
+
+// FINDMIN_TASK_LOOP:
+//     while (1) {
+
+//         if (stream_tuple_in.read_nb(tuple_in)){ 
+//             unsigned int address = tuple_in.address;
+//             address <<= K_FUN_LOG;
+//             unsigned short bloom_s = 0;
+            
+//             for (int s = 0; s < K_FUN; s++) {
+// #pragma HLS pipeline II=1
+                  
+//                 T_BLOOM set_bloom = bloom_p[address + s];
+                
+//                 if (tuple_in.reset) {
+//                   filter[s] = ~0;
+//                 } else {
+//                   bloom_s += bloom_bitset<T_BLOOM, BLOOM_LOG, 0>(set_bloom);
+//                   filter[s] = filter[s] & set_bloom;
+//                   if (tuple_in.last) {
+//                     stream_filter_out.write(filter[s]);
+//                   }
+//                 }
+
+//                 if (s == K_FUN - 1) {
+//                   bloom_s >>= K_FUN_LOG;
+//                   if (tuple_in.reset) {
+//                     min_size = ~0;
+//                   } else {
+//                     if (bloom_s < min_size) {
+//                       min_size = bloom_s;
+//                       tuple_out.indexing_v = tuple_in.indexing_v;
+//                       tuple_out.tb_index = tuple_in.tb_index;
+//                       tuple_out.iv_pos = tuple_in.iv_pos;
+//                     }
+//                     if (tuple_in.last) {
+//                       stream_tuple_out.write(tuple_out);
+//                     }
+//                   }
+//                 }
+//             }
+//         }
+
+//         if (stream_stop.read_nb(stop))
+//             break;
+//     }
+// }
+
+
 template <typename T_BLOOM,
           size_t BLOOM_LOG,
           size_t K_FUN_LOG,
@@ -481,7 +481,7 @@ READMIN_COUNTER_TASK_LOOP:
             xf::database::details::hashlookup3_core<V_ID_W>(tuple_in.indexing_v, hash_out);
             volatile unsigned int start_off = 0;
             volatile unsigned int end_off;
-            unsigned int addr_inrow;
+            ap_uint<DDR_BIT - C_W> addr_inrow;
             ap_uint<DDR_W> ram_row;
             unsigned long addr_row;
             ap_uint<64> addr_counter;
@@ -502,7 +502,15 @@ READMIN_COUNTER_TASK_LOOP:
 
                 /* Read the data */
                 ram_row = m_axi[addr_row];
-                start_off = ram_row.range(((addr_inrow + 1) << C_W) - 1, addr_inrow << C_W);
+                if (addr_inrow == 0) {
+                    start_off = ram_row.range((1UL << C_W) - 1, 0);
+                } else if (addr_inrow == 1) {
+                    start_off = ram_row.range((2UL << C_W) - 1, 1UL << C_W);
+                } else if (addr_inrow == 2) {
+                    start_off = ram_row.range((3UL << C_W) - 1, 2UL << C_W);
+                } else {
+                    start_off = ram_row.range((4UL << C_W) - 1, 3UL << C_W);
+                }
             }
 
 
@@ -519,8 +527,16 @@ READMIN_COUNTER_TASK_LOOP:
 
             /* Read the data */
             ram_row = m_axi[addr_row];
-            end_off = ram_row.range(((addr_inrow + 1) << C_W) - 1, addr_inrow << C_W);
-            
+            if (addr_inrow == 0) {
+                end_off = ram_row.range((1UL << C_W) - 1, 0);
+            } else if (addr_inrow == 1) {
+                end_off = ram_row.range((2UL << C_W) - 1, 1UL << C_W);
+            } else if (addr_inrow == 2) {
+                end_off = ram_row.range((3UL << C_W) - 1, 2UL << C_W);
+            } else {
+                end_off = ram_row.range((4UL << C_W) - 1, 3UL << C_W);
+            }
+
             unsigned int rowstart = hTables[tuple_in.tb_index].start_edges +
                                     (start_off >> (DDR_BIT - E_W));
             unsigned int rowend = hTables[tuple_in.tb_index].start_edges +
@@ -1009,7 +1025,7 @@ void mwj_intersect(
     unsigned char tableIndex;
     ap_uint<DDR_W> ram_row;
     unsigned long addr_row;
-    unsigned long addr_inrow;
+    ap_uint<DDR_BIT - C_W> addr_inrow;
     ap_uint<64> addr_counter;
     bool stop, last;
 
@@ -1033,8 +1049,18 @@ INTERSECT_TASK_LOOP:
                     /* Compute address of data inside the row */
                     addr_inrow = addr_counter.range((DDR_BIT - C_W) - 1, 0);
                     ram_row = htb_buf.get(addr_row, 1);
-                    offset = ram_row.range(((addr_inrow + 1) << C_W) - 1, 
-                            addr_inrow << C_W);
+                    if (addr_inrow == 0) {
+                        offset = ram_row.range((1UL << C_W) - 1, 0);
+                    } else if (addr_inrow == 1) {
+                        offset =
+                          ram_row.range((2UL << C_W) - 1, 1UL << C_W);
+                    } else if (addr_inrow == 2) {
+                        offset =
+                          ram_row.range((3UL << C_W) - 1, 2UL << C_W);
+                    } else {
+                        offset =
+                          ram_row.range((4UL << C_W) - 1, 3UL << C_W);
+                    }
 
 #if DEBUG_STATS
                     debug::intersect_reads += 1;
@@ -1739,9 +1765,9 @@ void multiwayJoin(
         ("Readmin edge - partial solution");
     hls_thread_local hls::stream<bool, MAX_QV> re_stream_sol_end
         ("Readmin edge - partial solution end flag");
-    hls_thread_local hls::stream<ap_uint<V_ID_W>, S_D> re_stream_set
+    hls_thread_local hls::stream<ap_uint<V_ID_W>, S_D + 32> re_stream_set
         ("Readmin edge - set nodes");
-    hls_thread_local hls::stream<bool, S_D> re_stream_set_end
+    hls_thread_local hls::stream<bool, S_D + 32> re_stream_set_end
         ("Readmin edge - set nodes end flag");
     hls_thread_local hls::stream<tuplebuild_tuple_t, S_D> re_stream_tuple
         ("Readmin edge - tuples");
@@ -1775,9 +1801,9 @@ void multiwayJoin(
         ("Tuplebuild - partial solution");
     hls_thread_local hls::stream<bool, MAX_QV> t_stream_sol_end
         ("Tuplebuild - partial solution end flag");
-    hls_thread_local hls::stream<intersect_tuple_t, S_D> t_stream_tuple
+    hls_thread_local hls::stream<intersect_tuple_t, S_D + 32> t_stream_tuple
         ("Tuplebuild - tuples");
-    hls_thread_local hls::stream<bool, S_D> t_stream_tuple_end
+    hls_thread_local hls::stream<bool, S_D + 32> t_stream_tuple_end
         ("Tuplebuild - tuples end flag");
     
     /* Intersect data out */    
@@ -1805,9 +1831,9 @@ void multiwayJoin(
         ("Split - partial solution");
     hls_thread_local hls::stream<bool, MAX_QV> s_stream_sol_end
         ("Split - partial solution end flag");
-    hls_thread_local hls::stream<verify_tuple_t, S_D> s_stream_tuple
+    hls_thread_local hls::stream<verify_tuple_t, S_D + 32> s_stream_tuple
         ("Split - tuples");
-    hls_thread_local hls::stream<bool, S_D> s_stream_tuple_end
+    hls_thread_local hls::stream<bool, S_D + 32> s_stream_tuple_end
         ("Split - tuples end flag");
     
     /* Verify data out */

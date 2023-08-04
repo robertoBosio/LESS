@@ -310,7 +310,7 @@ int main()
 
             unsigned char h1 = stoi(testEntry.h1);
             unsigned char h2 = stoi(testEntry.h2);
-            res_expected = stoi(testEntry.golden);
+            res_expected = stol(testEntry.golden);
 
 #if SOFTWARE_PREPROC
             QueryVertex qVertices0[MAX_QUERY_VERTICES];

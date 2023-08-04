@@ -46,6 +46,12 @@ def main():
             produce_datagraph_file_CECI(data_graph, args.output_path)
         else:
             produce_querygraph_file_CECI(data_graph, args.output_path)
+    if (args.GSI):
+        print("Producing for GSI")
+        if (not args.query):
+            produce_datagraph_file_GSI(data_graph, args.output_path)
+        else:
+            produce_querygraph_file_GSI(data_graph, args.output_path)
         
 
 def parse_args():
@@ -86,6 +92,9 @@ def parse_args():
     parser.add_argument('--query',
             action='store_true',
             help='produce query')
+    parser.add_argument('--GSI',
+            action='store_true',
+            help='produce for GSI algorithm')
     
     args = parser.parse_args()
   

@@ -13,7 +13,7 @@
 #include "QueryVertex.hpp"
 #include "Trie.hpp"
 #include "hash_lookup3.hpp"
-#include "hls_burst_maxi.h"
+#include "cache.h"
 
 #if DEBUG_STATS
 #include "debug.hpp"
@@ -189,7 +189,7 @@ increaseCounter(T_DDR* htb_buf,
     ap_uint<(1UL << CNT_LOG)> counter;
     unsigned short ntb;
     ap_uint<64> addr_outrow;
-    ap_uint<64> addr_inrow;
+    ap_uint<ROW_LOG - CNT_LOG> addr_inrow;
     ap_uint<64> addr_counter;
     counter_tuple_t tuple;
 
@@ -209,11 +209,26 @@ INCREASE_COUNTER_DDR_LOOP:
 
         /* Read, increase by 1 and write the counter */
         row = htb_buf[addr_outrow];
-        counter = row.range(((addr_inrow + 1) << CNT_LOG) - 1,
-                                addr_inrow << CNT_LOG);
+        if (addr_inrow == 0){
+            counter = row.range((1UL << CNT_LOG) - 1, 0);  
+        } else if (addr_inrow == 1){
+            counter = row.range((2UL << CNT_LOG) - 1, 1UL << CNT_LOG);  
+        } else if (addr_inrow == 2){
+            counter = row.range((3UL << CNT_LOG) - 1, 2UL << CNT_LOG);  
+        } else if (addr_inrow == 3){
+            counter = row.range((4UL << CNT_LOG) - 1, 3UL << CNT_LOG);  
+        }
         counter += 1;
-        row.range(((addr_inrow + 1) << CNT_LOG) - 1,
-                      addr_inrow << CNT_LOG) = counter;
+
+        if (addr_inrow == 0){
+            row.range((1UL << CNT_LOG) - 1, 0) = counter;  
+        } else if (addr_inrow == 1){
+            row.range((2UL << CNT_LOG) - 1, 1UL << CNT_LOG) = counter;  
+        } else if (addr_inrow == 2){
+            row.range((3UL << CNT_LOG) - 1, 2UL << CNT_LOG) = counter;  
+        } else if (addr_inrow == 3){
+            row.range((4UL << CNT_LOG) - 1, 3UL << CNT_LOG) = counter;  
+        }
         htb_buf[addr_outrow] = row;
 
         hTables[ntb].n_edges++;
@@ -464,10 +479,20 @@ STORE_EDGES_INCREASE_COUNTER_DDR_LOOP:
 
         // Select the correct offset from the word
         row_off = htb_buf[addr_row_off];
-        offset = row_off.range(((addr_inrow + 1) << CNT_LOG) - 1,
-                                addr_inrow << CNT_LOG);
-        row_off.range(((addr_inrow + 1) << CNT_LOG) - 1,
-                      addr_inrow << CNT_LOG) = offset + 1;
+
+        if (addr_inrow == 0){
+            offset = row_off.range((1UL << CNT_LOG) - 1, 0);  
+            row_off.range((1UL << CNT_LOG) - 1, 0) = offset + 1;  
+        } else if (addr_inrow == 1){
+            offset = row_off.range((2UL << CNT_LOG) - 1, 1UL << CNT_LOG);  
+            row_off.range((2UL << CNT_LOG) - 1, 1UL << CNT_LOG) = offset + 1;  
+        } else if (addr_inrow == 2){
+            offset = row_off.range((3UL << CNT_LOG) - 1, 2UL << CNT_LOG);  
+            row_off.range((3UL << CNT_LOG) - 1, 2UL << CNT_LOG) = offset + 1;  
+        } else {
+            offset = row_off.range((4UL << CNT_LOG) - 1, 3UL << CNT_LOG);  
+            row_off.range((4UL << CNT_LOG) - 1, 3UL << CNT_LOG) = offset + 1;  
+        }
 
         /* Compute address of row that will store the edge */
         addr_row_edge =
@@ -653,7 +678,6 @@ template <typename T_DDR,
 void countEdges(
     row_t *edge_p,
     T_DDR *htb_p,
-    // T_DDR *bloom_p,
     const ap_uint<8> labelToTable[MAX_LABELS][MAX_LABELS],
     AdjHT *hTables,
     const unsigned long numDataEdges,
@@ -676,9 +700,6 @@ void countEdges(
       hash2_w,
       labelToTable,
       numDataEdges,
-      // stream_b_addr,
-      // stream_b_index,
-      // stream_b_end,
       stream_tuple,
       stream_tuple_end);
 

@@ -59,7 +59,7 @@ class l1_cache {
 #pragma HLS bind_storage variable=m_cache_mem type=RAM_2P impl=URAM
 					break;
 				case BRAM:
-#pragma HLS bind_storage variable=m_cache_mem type=RAM_2P impl=BRAM latency=2
+#pragma HLS bind_storage variable=m_cache_mem type=RAM_2P impl=BRAM latency=1
 					break;
 				case LUTRAM:
 #pragma HLS bind_storage variable=m_cache_mem type=RAM_2P impl=LUTRAM
