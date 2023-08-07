@@ -35,7 +35,8 @@
 #pragma GCC diagnostic ignored "-Wunused-label"
 #pragma GCC diagnostic ignored "-Wsign-compare"
 #pragma GCC diagnostic ignored "-Wunused-parameter"
-// #pragma GCC diagnostic ignored "-Wunused-but-set-variable"
+#pragma GCC diagnostic ignored "-Wunused-variable"
+#pragma GCC diagnostic ignored "-Wunused-but-set-variable"
 
 #define STOP_S      9    
 #define V_ID_W      VERTEX_WIDTH_BIT
@@ -274,12 +275,13 @@ EDGEBUILD_MAIN_LOOP:
     }
 }
 
-template<typename T_BLOOM, size_t BLOOM_LOG, size_t K_FUN_LOG>
-unsigned int
-bloom_bitset(T_BLOOM filter)
+template <typename T_BLOOM,
+         size_t BLOOM_LOG,
+        size_t K_FUN_LOG>
+unsigned int bloom_bitset(T_BLOOM filter)                         
 {
-    unsigned int count{ 0 };
-    for (int c = 0; c < (1UL << (BLOOM_LOG - 5)); c++) {
+    unsigned int count {0};
+    for (int c = 0; c < (1UL << (BLOOM_LOG - 5)); c++){
 #pragma HLS unroll
         unsigned int u = filter.range(((c + 1) * 32) - 1, c * 32);
         u = u - ((u >> 1) & 0x55555555);
@@ -289,12 +291,13 @@ bloom_bitset(T_BLOOM filter)
     return (count >> K_FUN_LOG);
 }
 
+
 template<typename T_BLOOM, size_t BLOOM_LOG>
 unsigned short
-bloom_intersect(T_BLOOM& filter, T_BLOOM set_bloom)
+bloom_intersect(T_BLOOM &filter, T_BLOOM set_bloom)
 {
 #pragma HLS inline off
-#pragma HLS pipeline II = 1
+#pragma HLS pipeline II=1
     unsigned short bloom_s = bloom_bitset<T_BLOOM, BLOOM_LOG, 0>(set_bloom);
     filter = filter & set_bloom;
     return bloom_s;
@@ -1383,6 +1386,7 @@ mwj_batch(const unsigned char hash1_w,
     bool flag_buff = false;
     bool flag_new = true;
     hash_buff = hash_new = 0;
+    unsigned int rm_start = 0;
 
 PROPOSE_TBINDEXING_LOOP:
     for(int g = 0; g < qVertices[0].numTablesIndexing; g++){
@@ -1437,10 +1441,106 @@ EXTRACT_BAGTOSET_SETCHECKER_LOOP:
                 assert(set_counter < MAX_CL);
 #endif
                 if (flag_new) {
+                    set[set_counter++] = vertex;
 #if DEBUG_STATS
                     debug::start_set++;
 #endif
-                    set[set_counter++] = vertex;
+                    // unsigned int start_off = 0;
+                    // unsigned int end_off;
+                    // ap_uint<DDR_BIT - C_W> addr_inrow;
+                    // ap_uint<DDR_W> ram_row;
+                    // unsigned long addr_row;
+                    // ap_uint<64> addr_counter;
+                    // ap_uint<V_ID_W * 2> edge2;
+                    // ap_uint<V_ID_W> vertex2;
+                    // bool verified = true;
+
+                    // for (int t = 0; t < qVertices[0].numTablesIndexing; t++) {
+                    //     unsigned char tb_index = qVertices[0].tables_indexing[t];
+                    //     bool tb_verified = false;
+
+                    //     if (hash_buff != 0) {
+                    //         addr_counter = hash_new - 1;
+                    //         addr_counter <<= 5;
+                    //         addr_counter += (1UL << 5) - 1;
+
+                    //         /* Compute address of row storing the counter */
+                    //         addr_row = hTables[tb_index].start_offset +
+                    //                    (addr_counter >> (DDR_BIT - C_W));
+
+                    //         /* Compute address of data inside the row */
+                    //         addr_inrow =
+                    //           addr_counter.range((DDR_BIT - C_W) - 1, 0);
+
+                    //         /* Read the data */
+                    //         ram_row = htb_buf[addr_row];
+                    //         if (addr_inrow == 0) {
+                    //             start_off = ram_row.range((1UL << C_W) - 1, 0);
+                    //         } else if (addr_inrow == 1) {
+                    //             start_off =
+                    //               ram_row.range((2UL << C_W) - 1, 1UL << C_W);
+                    //         } else if (addr_inrow == 2) {
+                    //             start_off =
+                    //               ram_row.range((3UL << C_W) - 1, 2UL << C_W);
+                    //         } else {
+                    //             start_off =
+                    //               ram_row.range((4UL << C_W) - 1, 3UL << C_W);
+                    //         }
+                    //     }
+
+                    //     addr_counter = hash_new;
+                    //     addr_counter <<= 5;
+                    //     addr_counter += (1UL << 5) - 1;
+
+                    //     /* Compute address of row storing the counter */
+                    //     addr_row = hTables[tb_index].start_offset +
+                    //                (addr_counter >> (DDR_BIT - C_W));
+
+                    //     /* Compute address of data inside the row */
+                    //     addr_inrow = addr_counter.range((DDR_BIT - C_W) - 1, 0);
+
+                    //     /* Read the data */
+                    //     ram_row = htb_buf[addr_row];
+                    //     if (addr_inrow == 0) {
+                    //         end_off = ram_row.range((1UL << C_W) - 1, 0);
+                    //     } else if (addr_inrow == 1) {
+                    //         end_off =
+                    //           ram_row.range((2UL << C_W) - 1, 1UL << C_W);
+                    //     } else if (addr_inrow == 2) {
+                    //         end_off =
+                    //           ram_row.range((3UL << C_W) - 1, 2UL << C_W);
+                    //     } else {
+                    //         end_off =
+                    //           ram_row.range((4UL << C_W) - 1, 3UL << C_W);
+                    //     }
+
+                    //     unsigned int rowstart2 = hTables[tb_index].start_edges +
+                    //                              (start_off >> (DDR_BIT - E_W));
+                    //     unsigned int rowend2 = hTables[tb_index].start_edges +
+                    //                            (end_off >> (DDR_BIT - E_W));
+
+                    //     for (unsigned int s = 0; s <= rowend2 - rowstart2;
+                    //          s++) {
+                    //         row_t rowss = htb_buf[rowstart2 + s];
+                    //         for (unsigned int i2 = 0; i2 < E_W; i2++) {
+                    //             edge2 = rowss.range((1UL << E_W) - 1, 0);
+                    //             vertex2 = edge2.range(V_ID_W * 2 - 1, V_ID_W);
+                    //             if (vertex == vertex2) {
+                    //               tb_verified = true;
+                    //             }
+                    //             rowss >>= (1UL << E_W);
+                    //         }
+                    //     }
+                    //     verified = verified && tb_verified;
+
+                    // }
+
+                    // if (verified) {
+                    //     stream_batch_end.write(false);
+                    //     stream_batch.write(vertex);
+                    // } else {
+                    //     rm_start++;
+                    // }
                     stream_batch_end.write(false);
                     stream_batch.write(vertex);
                 }
@@ -1454,8 +1554,8 @@ EXTRACT_BAGTOSET_SETCHECKER_LOOP:
 
 #if DEBUG_STATS
     debug::batch_reads += ceil((rowend - rowstart) / 16.0);
+    std::cout << rm_start << " removed\n";
 #endif
-
     stream_batch_end.write(true);
 }
 
