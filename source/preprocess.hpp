@@ -318,28 +318,33 @@ bloom_read(AdjHT* hTables,
     hls::stream<ap_uint<LKP3_HASH_W>, 4> hash_out1;
     ap_uint<EDGE_W> edge;
     ap_uint<NODE_W> indexing_v, indexed_v;
-    ap_uint<FULL_HASH_W> indexed_h;
+    ap_uint<FULL_HASH_W> indexed_h, prev_indexed_h;
     ap_uint<MAX_HASH_W> indexing_h, prev_indexing_h;
     bloom_tuple_t<FULL_HASH_W> tuple_out;
     T_DDR row;
     unsigned int counter;
+    prev_indexing_h = 0;
+    prev_indexed_h = 0;
 
 BLOOM_READ_TABLES_LOOP:
     for (unsigned int ntb = 0; ntb < numTables; ntb++) {
 
+        /* During first iteration do not consider the difference between
+        prev_indexing_h and indexing_h to be useful to write the bloom */
+        bool first_it = true;
         /* First iteration to initialize prev_indexing_h */
-        row = htb_buf[hTables[ntb].start_edges];
-        edge = row.range((1UL << EDGE_LOG) - 1, 0);
-        indexing_v = edge.range(NODE_W * 2 - 1, NODE_W);
-        indexed_v = edge.range(NODE_W - 1, 0);
-        hash_in0.write(indexed_v);
-        hash_in1.write(indexing_v);
-        xf::database::hashLookup3<NODE_W>(hash_in0, hash_out0);
-        xf::database::hashLookup3<NODE_W>(hash_in1, hash_out1);
-        indexed_h = hash_out0.read();
-        indexing_h = hash_out1.read();
+        // row = htb_buf[hTables[ntb].start_edges];
+        // edge = row.range((1UL << EDGE_LOG) - 1, 0);
+        // indexing_v = edge.range(NODE_W * 2 - 1, NODE_W);
+        // indexed_v = edge.range(NODE_W - 1, 0);
+        // hash_in0.write(indexed_v);
+        // hash_in1.write(indexing_v);
+        // xf::database::hashLookup3<NODE_W>(hash_in0, hash_out0);
+        // xf::database::hashLookup3<NODE_W>(hash_in1, hash_out1);
+        // indexed_h = hash_out0.read();
+        // indexing_h = hash_out1.read();
 
-        prev_indexing_h = indexing_h.range(hash1_w - 1, 0);
+        // prev_indexing_h = indexing_h.range(hash1_w - 1, 0);
         counter = 0;
 
         /* Read all the edges in a table and divide them by hash1 */
@@ -361,18 +366,22 @@ BLOOM_READ_TABLES_LOOP:
                 xf::database::hashLookup3<NODE_W>(hash_in1, hash_out1);
                 indexed_h = hash_out0.read();
                 indexing_h = hash_out1.read();
-
                 indexing_h = indexing_h.range(hash1_w - 1, 0);
+
+                /* Writing edge of previous iteration */
                 tuple_out.address = ntb * (1UL << hash1_w) + prev_indexing_h;
-                tuple_out.indexed_h = indexed_h;
-                tuple_out.write = (indexing_h != prev_indexing_h);
-                tuple_out.valid = (counter < hTables[ntb].n_edges);
+                tuple_out.indexed_h = prev_indexed_h;
+                tuple_out.write = (indexing_h != prev_indexing_h) && !first_it;
+                tuple_out.valid = (counter < hTables[ntb].n_edges) && !first_it;
                 stream_tuple_out.write(tuple_out);
                 stream_tuple_end_out.write(false);
 
-                if (counter < hTables[ntb].n_edges)
+                if (counter < hTables[ntb].n_edges){
                   prev_indexing_h = indexing_h;
+                  prev_indexed_h = indexed_h;
+                }
                 counter++;
+                first_it = false;
             }
         }
 
@@ -380,7 +389,7 @@ BLOOM_READ_TABLES_LOOP:
         the difference between prev_indexing_h and indexing_h
         does not work at the end of the table */
         tuple_out.address = ntb * (1UL << hash1_w) + prev_indexing_h;
-        tuple_out.indexed_h = indexed_h;
+        tuple_out.indexed_h = prev_indexed_h;
         tuple_out.write = true;
         tuple_out.valid = true;
         stream_tuple_out.write(tuple_out);
@@ -388,6 +397,20 @@ BLOOM_READ_TABLES_LOOP:
     }
 
     stream_tuple_end_out.write(true);
+}
+
+template<typename T_BLOOM, size_t BLOOM_LOG, size_t K_FUN, size_t FULL_HASH_W>
+void
+bloom_set(T_BLOOM filter[K_FUN], ap_uint<64> hash_val)
+{
+#pragma HLS inline off
+    for (int g = 0; g < K_FUN; g++) {
+#pragma HLS unroll
+        ap_uint<BLOOM_LOG> idx =
+          hash_val.range((FULL_HASH_W / K_FUN) * (g + 1) - 1,
+                         (FULL_HASH_W / K_FUN) * (g + 1) - BLOOM_LOG);
+        filter[g][idx] = 1;
+    }
 }
 
 template<typename T_BLOOM,
@@ -413,9 +436,12 @@ bloom_write(T_BLOOM* bloom_p,
 BLOOM_WRITE_TASK_LOOP:
     while (!last) {
 #pragma HLS pipeline II = 8
+#pragma HLS allocation function instances=bloom_set<T_BLOOM, BLOOM_LOG, K_FUN, FULL_HASH_W> limit=1 
         tuple_in = stream_tuple_in.read();
 
         if (tuple_in.valid) {
+            bloom_set<T_BLOOM, BLOOM_LOG, K_FUN, FULL_HASH_W>(filter, tuple_in.indexed_h);
+            
             if (tuple_in.write) {
                 for (int g = 0; g < K_FUN; g++) {
 #pragma HLS unroll
@@ -424,13 +450,14 @@ BLOOM_WRITE_TASK_LOOP:
                 }
             }
 
-            for (int g = 0; g < K_FUN; g++) {
-#pragma HLS unroll
-                ap_uint<BLOOM_LOG> idx = tuple_in.indexed_h.range(
-                  (FULL_HASH_W / K_FUN) * (g + 1) - 1,
-                  (FULL_HASH_W / K_FUN) * (g + 1) - BLOOM_LOG);
-                filter[g][idx] = 1;
-            }
+            //             for (int g = 0; g < K_FUN; g++) {
+            // #pragma HLS unroll
+            //                 ap_uint<BLOOM_LOG> idx =
+            //                 tuple_in.indexed_h.range(
+            //                   (FULL_HASH_W / K_FUN) * (g + 1) - 1,
+            //                   (FULL_HASH_W / K_FUN) * (g + 1) - BLOOM_LOG);
+            //                 filter[g][idx] = 1;
+            //             }
         }
 
         last = stream_tuple_end_in.read();

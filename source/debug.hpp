@@ -4,8 +4,8 @@ namespace debug {
 
     static unsigned long batch_reads;
     static unsigned long findmin_reads;
-    static unsigned long readmin_reads;
-    static unsigned long readmin_burst;
+    static unsigned long readmin_counter_reads;
+    static unsigned long readmin_edge_reads;
     static unsigned long readmin_n_sets;
     static unsigned long readmin_vstream;
     static unsigned long bloom_filter;
@@ -27,29 +27,29 @@ namespace debug {
     static float cache_hit_verify;
     
     static void init(){
-        batch_reads      = 0;
-        findmin_reads    = 0;
-        readmin_reads    = 0;
-        readmin_burst    = 0;
-        readmin_n_sets   = 0;
-        readmin_vstream  = 0;
-        bloom_filter     = 0;
-        bloom_fullness   = 0;
-        intersect_reads  = 0;
-        intersect_filter = 0;
-        verify_filter    = 0;
-        verify_reads     = 0;
-        homomo_trashed   = 0;
-        start_set        = 0;
-        miss_indexing    = 0;
-        max_collisions   = 0;
-        hash_collisions  = 0;
-        cache_hit_prop   = 0;
-        cache_hit_inter  = 0;
-        cache_hit_verify = 0;
-        cache_req_prop   = 0;
-        cache_req_inter  = 0;
-        cache_req_verify = 0;
+      batch_reads = 0;
+      findmin_reads = 0;
+      readmin_counter_reads = 0;
+      readmin_edge_reads = 0;
+      readmin_n_sets = 0;
+      readmin_vstream = 0;
+      bloom_filter = 0;
+      bloom_fullness = 0;
+      intersect_reads = 0;
+      intersect_filter = 0;
+      verify_filter = 0;
+      verify_reads = 0;
+      homomo_trashed = 0;
+      start_set = 0;
+      miss_indexing = 0;
+      max_collisions = 0;
+      hash_collisions = 0;
+      cache_hit_prop = 0;
+      cache_hit_inter = 0;
+      cache_hit_verify = 0;
+      cache_req_prop = 0;
+      cache_req_inter = 0;
+      cache_req_verify = 0;
     }
 
     static void print(
@@ -58,13 +58,10 @@ namespace debug {
     ){
         std::ofstream debof("../../../../stats.txt", std::ofstream::app);
 
-        unsigned long mem_reads =  batch_reads +
-        findmin_reads    +
-        readmin_reads    +
-        readmin_burst    +
-        intersect_reads  +
-        verify_reads;     
-        
+        unsigned long mem_accesses = batch_reads + findmin_reads +
+                                  readmin_counter_reads + readmin_edge_reads +
+                                  intersect_reads + verify_reads;
+
         unsigned int cnt, k_fun;
         cnt = COUNTER_WIDTH;
         k_fun = (1UL << K_FUNCTIONS);
@@ -73,45 +70,47 @@ namespace debug {
         debof << "DEBUG STATISTICS HW1: " << (int)hash1_w << " HW2: " << (int)hash2_w
             << " CNT: " << cnt << " K_FUN: " << k_fun << std::endl << std::endl;
 
-        debof << "\tbatch reads:     " << batch_reads << "\t" << 
-            batch_reads * 100 / mem_reads << "%"<< std::endl;
-        debof << "\tfindmin reads:   " << findmin_reads << "\t" <<
-            findmin_reads * 100 / mem_reads << "%" << std::endl;
-        debof << "\treadmin reads:   " << readmin_reads << "\t" <<
-            readmin_reads * 100 / mem_reads << "%"<< std::endl;
-        debof << "\treadmin burst reads:   " << readmin_burst << "\t" <<
-            readmin_burst * 100 / mem_reads << "%"<< std::endl;
-        debof << "\tintersect reads: " << intersect_reads << "\t" << 
-            intersect_reads * 100 / mem_reads << "%"<< std::endl;
-        debof << "\tverify reads:    " << verify_reads << "\t" << 
-            verify_reads * 100 / mem_reads << "%"<< std::endl;
-        debof << "\tTOTAL:           " <<  mem_reads << "\t100%\n" << 
+        debof << "\tbatch accesses:              " << batch_reads << "\t" << 
+            batch_reads * 100 / mem_accesses << "%"<< std::endl;
+        debof << "\tfindmin accesses:            " << findmin_reads << "\t" <<
+            findmin_reads * 100 / mem_accesses << "%" << std::endl;
+        debof << "\treadmin counters accesses:   " << readmin_counter_reads << "\t" <<
+            readmin_counter_reads * 100 / mem_accesses << "%"<< std::endl;
+        debof << "\treadmin edge accesses:       " << readmin_edge_reads << "\t" <<
+            readmin_edge_reads * 100 / mem_accesses << "%"<< std::endl;
+        debof << "\tintersect accesses:          " << intersect_reads << "\t" << 
+            intersect_reads * 100 / mem_accesses << "%"<< std::endl;
+        debof << "\tverify accesses:             " << verify_reads << "\t" << 
+            verify_reads * 100 / mem_accesses << "%"<< std::endl;
+        debof << "\tTOTAL:                       " <<  mem_accesses << "\t100%\n" << 
             std::endl;
 
 #if CACHE_ENABLE
-        mem_reads = mem_reads - cache_hit_verify - cache_hit_inter - cache_hit_prop;
+        mem_accesses = mem_accesses - cache_hit_verify - cache_hit_inter - cache_hit_prop;
         intersect_reads -= cache_hit_inter;
         verify_reads -= cache_hit_verify;
         findmin_reads -= cache_hit_prop;
-        debof << "With Caching on:" << std::endl;
-        debof << "\tbatch reads:     " << batch_reads << "\t" << 
-            batch_reads * 100 / mem_reads << "%"<< std::endl;
-        debof << "\tfindmin reads:   " << findmin_reads << "\t" <<
-            findmin_reads * 100 / mem_reads << "%" << std::endl;
-        debof << "\treadmin reads:   " << readmin_reads << "\t" <<
-            readmin_reads * 100 / mem_reads << "%"<< std::endl;
-        debof << "\treadmin burst reads:   " << readmin_burst << "\t" <<
-            readmin_burst * 100 / mem_reads << "%"<< std::endl;
-        debof << "\tintersect reads: " << intersect_reads << "\t" << 
-            intersect_reads * 100 / mem_reads << "%"<< std::endl;
-        debof << "\tverify reads:    " << verify_reads << "\t" << 
-            verify_reads * 100 / mem_reads << "%"<< std::endl;
-        debof << "\tTOTAL:           " <<  mem_reads << "\t100%\n" << 
+
+        debof << "\tbatch accesses:              " << batch_reads << "\t" << 
+            batch_reads * 100 / mem_accesses << "%"<< std::endl;
+        debof << "\tfindmin accesses:            " << findmin_reads << "\t" <<
+            findmin_reads * 100 / mem_accesses << "%" << std::endl;
+        debof << "\treadmin counters accesses:   " << readmin_counter_reads << "\t" <<
+            readmin_counter_reads * 100 / mem_accesses << "%"<< std::endl;
+        debof << "\treadmin edge accesses:       " << readmin_edge_reads << "\t" <<
+            readmin_edge_reads * 100 / mem_accesses << "%"<< std::endl;
+        debof << "\tintersect accesses:          " << intersect_reads << "\t" << 
+            intersect_reads * 100 / mem_accesses << "%"<< std::endl;
+        debof << "\tverify accesses:             " << verify_reads << "\t" << 
+            verify_reads * 100 / mem_accesses << "%"<< std::endl;
+        debof << "\tTOTAL:                       " <<  mem_accesses << "\t100%\n" << 
             std::endl;
 
-        debof << "\tmean cache hit propose: " << cache_hit_prop / cache_req_prop
-            << std::endl;
-        debof << "\tcache reqs propose:     " << cache_req_prop << std::endl; 
+        if (cache_req_prop != 0) {
+          debof << "\tmean cache hit propose: "
+                << cache_hit_prop / cache_req_prop << std::endl;
+          debof << "\tcache reqs propose:     " << cache_req_prop << std::endl;
+        }
         debof << "\tmean cache hit inter:   " << cache_hit_inter / cache_req_inter  
             << std::endl;
         debof << "\tcache reqs inter:       " << cache_req_inter  << std::endl;
