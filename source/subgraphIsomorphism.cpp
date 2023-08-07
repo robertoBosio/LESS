@@ -165,24 +165,6 @@ typedef struct {
 } assembly_tuple_t;
 
 /******** End tuple definition ********/
-
-template <typename T_BLOOM,
-         size_t BLOOM_LOG,
-        size_t K_FUN_LOG>
-unsigned int bloom_bitset(T_BLOOM filter)                         
-{
-#pragma HLS inline off
-    unsigned int count {0};
-    for (int c = 0; c < (1UL << (BLOOM_LOG - 5)); c++){
-#pragma HLS unroll
-        unsigned int u = filter.range(((c + 1) * 32) - 1, c * 32);
-        u = u - ((u >> 1) & 0x55555555);
-        u = (u & 0x33333333) + ((u >> 2) & 0x33333333);
-        count += (((u + (u >> 4)) & 0x0F0F0F0F) * 0x01010101) >> 24;
-    }
-    return (count >> K_FUN_LOG);
-}
-
 void mwj_propose(
     hls::stream<ap_uint<V_ID_W> > &stream_fifo_in,
 
@@ -292,81 +274,95 @@ EDGEBUILD_MAIN_LOOP:
     }
 }
 
-template <typename T_BLOOM,
-          size_t BLOOM_LOG,
-          size_t K_FUN_LOG>
-void mwj_findmin(
-    bloom_t *bloom_p,
-    hls::stream<findmin_tuple_t> &stream_tuple_in,
-    hls::stream<bool> &stream_stop,
+template<typename T_BLOOM, size_t BLOOM_LOG, size_t K_FUN_LOG>
+unsigned int
+bloom_bitset(T_BLOOM filter)
+{
+    unsigned int count{ 0 };
+    for (int c = 0; c < (1UL << (BLOOM_LOG - 5)); c++) {
+#pragma HLS unroll
+        unsigned int u = filter.range(((c + 1) * 32) - 1, c * 32);
+        u = u - ((u >> 1) & 0x55555555);
+        u = (u & 0x33333333) + ((u >> 2) & 0x33333333);
+        count += (((u + (u >> 4)) & 0x0F0F0F0F) * 0x01010101) >> 24;
+    }
+    return (count >> K_FUN_LOG);
+}
 
-    hls::stream<readmin_counter_tuple_t> &stream_tuple_out,
-    hls::stream<T_BLOOM> &stream_filter_out)
+template<typename T_BLOOM, size_t BLOOM_LOG>
+unsigned short
+bloom_intersect(T_BLOOM& filter, T_BLOOM set_bloom)
+{
+#pragma HLS inline off
+#pragma HLS pipeline II = 1
+    unsigned short bloom_s = bloom_bitset<T_BLOOM, BLOOM_LOG, 0>(set_bloom);
+    filter = filter & set_bloom;
+    return bloom_s;
+}
+
+template<typename T_BLOOM, size_t BLOOM_LOG, size_t K_FUN_LOG>
+void
+mwj_findmin(bloom_t* bloom_p,
+            hls::stream<findmin_tuple_t>& stream_tuple_in,
+            hls::stream<bool>& stream_stop,
+
+            hls::stream<readmin_counter_tuple_t>& stream_tuple_out,
+            hls::stream<T_BLOOM>& stream_filter_out)
 {
     constexpr size_t K_FUN = (1UL << K_FUN_LOG);
     T_BLOOM filter[K_FUN];
-#pragma HLS array_partition variable=filter type=complete dim=1
-
     readmin_counter_tuple_t tuple_out;
     findmin_tuple_t tuple_in;
     unsigned int min_size;
     bool stop;
-// #pragma HLS allocation operation instances=mul limit=4
-#pragma HLS allocation function instances=bloom_bitset limit=1
+
+#pragma HLS array_partition variable = filter type = complete dim = 1
+#pragma HLS allocation function instances=bloom_intersect<T_BLOOM, BLOOM_LOG> limit=1
+
 FINDMIN_TASK_LOOP:
     while (1) {
-#pragma HLS pipeline II=8
+#pragma HLS pipeline II = 8
 
-        if (stream_tuple_in.read_nb(tuple_in)){ 
+        if (stream_tuple_in.read_nb(tuple_in)) {
             unsigned int address = tuple_in.address;
             address <<= K_FUN_LOG;
             unsigned short bloom_s = 0;
 
-            if (tuple_in.reset){
-                for (int s = 0; s < K_FUN; s++)
-                {
+            if (tuple_in.reset) {
+                for (int s = 0; s < K_FUN; s++) {
 #pragma HLS unroll
                     filter[s] = ~0;
                 }
-            }
-            else
-            {
-                for (int s = 0; s < K_FUN; s++)
-                {
+            } else {
+                for (int s = 0; s < K_FUN; s++) {
 #pragma HLS unroll
                     T_BLOOM set_bloom = bloom_p[address + s];
-                    bloom_s += bloom_bitset<T_BLOOM, BLOOM_LOG, 0>(set_bloom);
-                    filter[s] = filter[s] & set_bloom;
+                    bloom_s +=
+                      bloom_intersect<T_BLOOM, BLOOM_LOG>(filter[s], set_bloom);
                 }
 #if DEBUG_STATS
-            debug::findmin_reads++;
+                debug::findmin_reads++;
 #endif
             }
             bloom_s >>= K_FUN_LOG;
 
-            if (tuple_in.reset)
-            {
+            if (tuple_in.reset) {
                 min_size = ~0;
-            }
-            else
-            {
-                if (bloom_s < min_size)
-                {
-                    min_size = bloom_s;
-                    tuple_out.indexing_v = tuple_in.indexing_v;
-                    tuple_out.tb_index = tuple_in.tb_index;
-                    tuple_out.iv_pos = tuple_in.iv_pos;
+            } else {
+                if (bloom_s < min_size) {
+                  min_size = bloom_s;
+                  tuple_out.indexing_v = tuple_in.indexing_v;
+                  tuple_out.tb_index = tuple_in.tb_index;
+                  tuple_out.iv_pos = tuple_in.iv_pos;
                 }
             }
 
-            if (tuple_in.last)
-            {
+            if (tuple_in.last) {
                 stream_tuple_out.write(tuple_out);
 
-                for (int g = 0; g < K_FUN; g++)
-                {
+                for (int g = 0; g < K_FUN; g++) {
 #pragma HLS unroll
-                    stream_filter_out.write(filter[g]);
+                  stream_filter_out.write(filter[g]);
                 }
             }
         }
@@ -376,91 +372,23 @@ FINDMIN_TASK_LOOP:
     }
 }
 
-// template <typename T_BLOOM,
-//           size_t BLOOM_LOG,
-//           size_t K_FUN_LOG>
-// void mwj_findmin(
-//     bloom_t *bloom_p,
-//     hls::stream<findmin_tuple_t> &stream_tuple_in,
-//     hls::stream<bool> &stream_stop,
+template<typename T_BLOOM,
+         size_t BLOOM_LOG,
+         size_t K_FUN_LOG,
+         size_t LKP3_HASH_W,
+         size_t MAX_HASH_W,
+         size_t FULL_HASH_W>
+void
+mwj_readmin_counter(const unsigned char hash1_w,
+                    const unsigned char hash2_w,
+                    AdjHT* hTables,
+                    row_t* m_axi,
+                    hls::stream<readmin_counter_tuple_t>& stream_tuple_in,
+                    hls::stream<T_BLOOM>& stream_filter_in,
+                    hls::stream<bool>& stream_stop,
 
-//     hls::stream<readmin_counter_tuple_t> &stream_tuple_out,
-//     hls::stream<T_BLOOM> &stream_filter_out)
-// {
-//     constexpr size_t K_FUN = (1UL << K_FUN_LOG);
-//     T_BLOOM filter[K_FUN];
-// #pragma HLS array_partition variable=filter type=complete dim=1
-
-//     readmin_counter_tuple_t tuple_out;
-//     findmin_tuple_t tuple_in;
-//     unsigned int min_size;
-//     bool stop;
-
-// FINDMIN_TASK_LOOP:
-//     while (1) {
-
-//         if (stream_tuple_in.read_nb(tuple_in)){ 
-//             unsigned int address = tuple_in.address;
-//             address <<= K_FUN_LOG;
-//             unsigned short bloom_s = 0;
-            
-//             for (int s = 0; s < K_FUN; s++) {
-// #pragma HLS pipeline II=1
-                  
-//                 T_BLOOM set_bloom = bloom_p[address + s];
-                
-//                 if (tuple_in.reset) {
-//                   filter[s] = ~0;
-//                 } else {
-//                   bloom_s += bloom_bitset<T_BLOOM, BLOOM_LOG, 0>(set_bloom);
-//                   filter[s] = filter[s] & set_bloom;
-//                   if (tuple_in.last) {
-//                     stream_filter_out.write(filter[s]);
-//                   }
-//                 }
-
-//                 if (s == K_FUN - 1) {
-//                   bloom_s >>= K_FUN_LOG;
-//                   if (tuple_in.reset) {
-//                     min_size = ~0;
-//                   } else {
-//                     if (bloom_s < min_size) {
-//                       min_size = bloom_s;
-//                       tuple_out.indexing_v = tuple_in.indexing_v;
-//                       tuple_out.tb_index = tuple_in.tb_index;
-//                       tuple_out.iv_pos = tuple_in.iv_pos;
-//                     }
-//                     if (tuple_in.last) {
-//                       stream_tuple_out.write(tuple_out);
-//                     }
-//                   }
-//                 }
-//             }
-//         }
-
-//         if (stream_stop.read_nb(stop))
-//             break;
-//     }
-// }
-
-
-template <typename T_BLOOM,
-          size_t BLOOM_LOG,
-          size_t K_FUN_LOG,
-          size_t LKP3_HASH_W,
-          size_t MAX_HASH_W,
-          size_t FULL_HASH_W>
-void mwj_readmin_counter(
-    const unsigned char hash1_w,
-    const unsigned char hash2_w,
-    AdjHT *hTables,
-    row_t *m_axi,
-    hls::stream<readmin_counter_tuple_t> &stream_tuple_in,
-    hls::stream<T_BLOOM> &stream_filter_in,
-    hls::stream<bool> &stream_stop,
-
-    hls::stream<readmin_edge_tuple_t> &stream_tuple_out,
-    hls::stream<T_BLOOM> &stream_filter_out)
+                    hls::stream<readmin_edge_tuple_t>& stream_tuple_out,
+                    hls::stream<T_BLOOM>& stream_filter_out)
 {
     constexpr size_t K_FUN = (1UL << K_FUN_LOG);
     readmin_counter_tuple_t tuple_in;
@@ -469,16 +397,17 @@ void mwj_readmin_counter(
 
 READMIN_COUNTER_TASK_LOOP:
     while (true) {
-        if (stream_tuple_in.read_nb(tuple_in)){ 
+        if (stream_tuple_in.read_nb(tuple_in)) {
 
-            for (int g = 0; g < K_FUN; g++){
+            for (int g = 0; g < K_FUN; g++) {
 #pragma HLS unroll
                 stream_filter_out.write(stream_filter_in.read());
             }
 
             ap_uint<LKP3_HASH_W> hash_out;
             ap_uint<MAX_HASH_W> hash_trimmed;
-            xf::database::details::hashlookup3_core<V_ID_W>(tuple_in.indexing_v, hash_out);
+            xf::database::details::hashlookup3_core<V_ID_W>(tuple_in.indexing_v,
+                                                            hash_out);
             volatile unsigned int start_off = 0;
             volatile unsigned int end_off;
             ap_uint<DDR_BIT - C_W> addr_inrow;
@@ -487,43 +416,42 @@ READMIN_COUNTER_TASK_LOOP:
             ap_uint<64> addr_counter;
             hash_trimmed = hash_out;
             hash_trimmed = hash_trimmed.range(hash1_w - 1, 0);
-            
-            if (hash_trimmed != 0){ 
+
+            if (hash_trimmed != 0) {
                 addr_counter = hash_trimmed - 1;
                 addr_counter <<= hash2_w;
                 addr_counter += (1UL << hash2_w) - 1;
 
                 /* Compute address of row storing the counter */
-                addr_row = hTables[tuple_in.tb_index].start_offset 
-                    + (addr_counter >> (DDR_BIT - C_W));
+                addr_row = hTables[tuple_in.tb_index].start_offset +
+                           (addr_counter >> (DDR_BIT - C_W));
 
                 /* Compute address of data inside the row */
-                addr_inrow = addr_counter.range((DDR_BIT - C_W) - 1,0);
+                addr_inrow = addr_counter.range((DDR_BIT - C_W) - 1, 0);
 
                 /* Read the data */
                 ram_row = m_axi[addr_row];
                 if (addr_inrow == 0) {
-                    start_off = ram_row.range((1UL << C_W) - 1, 0);
+                  start_off = ram_row.range((1UL << C_W) - 1, 0);
                 } else if (addr_inrow == 1) {
-                    start_off = ram_row.range((2UL << C_W) - 1, 1UL << C_W);
+                  start_off = ram_row.range((2UL << C_W) - 1, 1UL << C_W);
                 } else if (addr_inrow == 2) {
-                    start_off = ram_row.range((3UL << C_W) - 1, 2UL << C_W);
+                  start_off = ram_row.range((3UL << C_W) - 1, 2UL << C_W);
                 } else {
-                    start_off = ram_row.range((4UL << C_W) - 1, 3UL << C_W);
+                  start_off = ram_row.range((4UL << C_W) - 1, 3UL << C_W);
                 }
             }
-
 
             addr_counter = hash_trimmed;
             addr_counter <<= hash2_w;
             addr_counter += (1UL << hash2_w) - 1;
 
             /* Compute address of row storing the counter */
-            addr_row = hTables[tuple_in.tb_index].start_offset 
-                + (addr_counter >> (DDR_BIT - C_W));
+            addr_row = hTables[tuple_in.tb_index].start_offset +
+                       (addr_counter >> (DDR_BIT - C_W));
 
             /* Compute address of data inside the row */
-            addr_inrow = addr_counter.range((DDR_BIT - C_W) - 1,0);
+            addr_inrow = addr_counter.range((DDR_BIT - C_W) - 1, 0);
 
             /* Read the data */
             ram_row = m_axi[addr_row];
@@ -541,22 +469,43 @@ READMIN_COUNTER_TASK_LOOP:
                                     (start_off >> (DDR_BIT - E_W));
             unsigned int rowend = hTables[tuple_in.tb_index].start_edges +
                                   (end_off >> (DDR_BIT - E_W));
-            
+
             tuple_out.indexing_v = tuple_in.indexing_v;
             tuple_out.tb_index = tuple_in.tb_index;
             tuple_out.iv_pos = tuple_in.iv_pos;
             tuple_out.rowstart = rowstart;
             tuple_out.rowend = rowend;
-            
+
             stream_tuple_out.write(tuple_out);
 
 #if DEBUG_STATS
-            debug::readmin_reads += 2;
+            debug::readmin_counter_reads += 2;
 #endif
         }
 
         if (stream_stop.read_nb(stop))
             break;
+    }
+}
+
+template <size_t W>
+void hash_wrapper(ap_uint<W> key_val, ap_uint<64> &hash_val) {
+#pragma HLS inline off
+    xf::database::details::hashlookup3_core<W>(key_val, hash_val);
+}
+
+template<typename T_BLOOM,
+         size_t BLOOM_LOG,
+         size_t K_FUN,
+         size_t FULL_HASH_W>
+void bloom_test(T_BLOOM filter[K_FUN], ap_uint<64> hash_val, bool &test){
+#pragma HLS inline off
+    for (int g = 0; g < K_FUN; g++) {
+#pragma HLS unroll
+        ap_uint<BLOOM_LOG> idx =
+          hash_val.range((FULL_HASH_W / K_FUN) * (g + 1) - 1,
+                         (FULL_HASH_W / K_FUN) * (g + 1) - BLOOM_LOG);
+        test = test && (filter[g][idx] == 1);
     }
 }
 
@@ -577,8 +526,9 @@ mwj_readmin_edge(row_t* m_axi,
     constexpr size_t K_FUN = (1UL << K_FUN_LOG);
     T_BLOOM filter[K_FUN];
 #pragma HLS array_partition variable = filter type = complete dim = 1
-
     readmin_edge_tuple_t tuple_in;
+    hls::stream<ap_uint<V_ID_W>, 2> hash_in_s;
+    hls::stream<ap_uint<FULL_HASH_W>, 2> hash_out_s;
     tuplebuild_tuple_t tuple_out;
     ap_uint<V_ID_W> vertexCheck;
     ap_uint<V_ID_W> vertex;
@@ -601,6 +551,9 @@ READMIN_EDGE_TASK_LOOP:
 
         READMIN_EDGES_MAIN_LOOP:
             for (int g = 0; g <= tuple_in.rowend - tuple_in.rowstart; g++) {
+#pragma HLS pipeline II = 2
+#pragma HLS allocation function instances=hash_wrapper<V_ID_W> limit=1 
+#pragma HLS allocation function instances=bloom_test<T_BLOOM, BLOOM_LOG, K_FUN, FULL_HASH_W> limit=1 
                 row_t row = m_axi[tuple_in.rowstart + g];
                 for (int i = 0; i < EDGE_ROW; i++) {
 #pragma HLS unroll
@@ -610,16 +563,12 @@ READMIN_EDGE_TASK_LOOP:
 
                     if (tuple_in.indexing_v == vertexCheck) {
 
-                      xf::database::details::hashlookup3_core<V_ID_W>(vertex,
-                                                                      hash_out);
+                      hash_wrapper<V_ID_W>(vertex, hash_out);
+                      //   xf::database::details::hashlookup3_core<V_ID_W>(vertex,
+                      //                                                   hash_out);
                       bool test = true;
-                      for (int g = 0; g < K_FUN; g++) {
-#pragma HLS unroll
-                        ap_uint<BLOOM_LOG> idx = hash_out.range(
-                          (FULL_HASH_W / K_FUN) * (g + 1) - 1,
-                          (FULL_HASH_W / K_FUN) * (g + 1) - BLOOM_LOG);
-                        test = test && (filter[g][idx] == 1);
-                      }
+                      bloom_test<T_BLOOM, BLOOM_LOG, K_FUN, FULL_HASH_W>(
+                        filter, hash_out, test);
 
                       if (test) {
                         stream_set_out.write(vertex);
@@ -632,10 +581,11 @@ READMIN_EDGE_TASK_LOOP:
                       }
                     }
                 }
-#if DEBUG_STATS
-                debug::readmin_burst++;
-#endif
             }
+#if DEBUG_STATS
+            debug::readmin_edge_reads +=
+              ceil(((tuple_in.rowend - tuple_in.rowstart) / 16.0));
+#endif
             stream_set_end_out.write(true);
 #if DEBUG_STATS
             debug::readmin_n_sets++;
@@ -906,107 +856,6 @@ void mwj_bypass_sol(
         stream_sol_end_out.write(true);
     }
 }
-
-// template <size_t BATCH_SIZE_LOG>
-// void mwj_intersect(
-//         AdjHT                          *hTables,
-//         htb_cache_t                    &htb_buf,
-//         hls::stream<intersect_tuple_t> &stream_tuple_in,
-//         hls::stream<bool>              &stream_tuple_end_in,
-//         hls::stream<bool>              &stream_stop,
-
-//         hls::stream<split_tuple_t>     &stream_tuple_out,
-//         hls::stream<bool>              &stream_tuple_end_out)
-// {
-//     constexpr size_t EDGE_BLOCK = (CACHE_WORDS_PER_LINE + DDR_BIT - E_W);
-
-//     ap_uint<V_ID_W> indexing_v;
-//     intersect_tuple_t tuple_in;
-//     split_tuple_t tuple_out;
-//     unsigned char tableIndex;
-//     ap_uint<DDR_W> ram_row;
-//     unsigned long addr_row;
-//     unsigned long addr_inrow;
-//     ap_uint<64> addr_counter;
-//     bool stop, last;
-
-// INTERSECT_TASK_LOOP:
-//     while (1) {
-// #pragma HLS pipeline II=2
-//         if (stream_tuple_end_in.read_nb(last)){
-
-//             if (!last){
-//                 tuple_in = stream_tuple_in.read();
-//                 ap_uint<(1UL << C_W)> start_off = 0;
-//                 ap_uint<(1UL << C_W)> end_off = 1;
-//                 tableIndex = tuple_in.tb_index;
-//                 addr_counter = tuple_in.addr_counter;
-
-//                 if (tuple_in.flag != MIN_SET){
-                    
-//                     /* Compute address of row storing the counter */
-//                     addr_row = hTables[tableIndex].start_offset + 
-//                         (addr_counter >> (DDR_BIT - C_W));
-
-//                     /* Compute address of data inside the row */
-//                     addr_inrow = addr_counter.range((DDR_BIT - C_W) - 1, 0);
-//                     ram_row = htb_buf.get(addr_row, 1);
-//                     end_off = ram_row.range(((addr_inrow + 1) << C_W) - 1, 
-//                             addr_inrow << C_W);
-
-//                     if (addr_counter != 0){
-//                         addr_counter--;
-
-//                         //Compute address of row storing the counter
-//                         addr_row = hTables[tableIndex].start_offset +
-//                             (addr_counter >> (DDR_BIT - C_W));
-
-//                         //Compute address of data inside the row
-//                         addr_inrow = addr_counter.range((DDR_BIT - C_W) - 1, 0);
-//                         ram_row = htb_buf.get(addr_row, 1);
-//                         start_off = ram_row.range(((addr_inrow + 1) << C_W) - 1,
-//                                 addr_inrow << C_W);
-//                     }
-// #if DEBUG_STATS
-//                     debug::intersect_reads += 2;
-// #endif /* DEBUG_STATS */
-//                 }
- 
-//                 tuple_out.indexed_v     = tuple_in.indexed_v;
-//                 tuple_out.indexing_v    = tuple_in.indexing_v;
-//                 tuple_out.pos           = tuple_in.pos;
-//                 tuple_out.tb_index      = tuple_in.tb_index;
-//                 tuple_out.bit_last_edge = tuple_in.bit_last_edge;
-//                 tuple_out.start_off     = start_off;
-//                 tuple_out.first_block   = start_off >> EDGE_BLOCK;
-//                 tuple_out.end_block     = (start_off == end_off)? (unsigned int)(end_off >> EDGE_BLOCK) : 
-//                 (unsigned int)((end_off - 1) >> EDGE_BLOCK);
-//                 tuple_out.flag          = (tuple_in.flag == MIN_SET) ? MIN_SET : 
-//                 ((start_off == end_off) ? NO_EDGE : CHECK);
-
-// #if DEBUG_STATS
-//                 debug::intersect_filter += (start_off == end_off)? 1 : 0;
-// #endif /* DEBUG_STATS */
-// /* std::cout << "( " */
-// /* << tuple_out.indexing_v */
-// /* << ", " << tuple_out.indexed_v */
-// /* << ", " << (int)tuple_out.tb_index */
-// /* << ", " << tuple_out.pos */
-// /* << ", " << tuple_out.start_off */
-// /* << ", " << tuple_out.n_edges */
-// /* << ", " << tuple_out.bit_last_edge */
-// /* << ", " << tuple_out.bit_min_set */
-// /* << ", " << tuple_out.bit_no_edge << ")" << std::endl; */
-//                 /* bits[pos] = bits[pos] & (start_off < end_off); */
-//                 stream_tuple_out.write(tuple_out);
-//             }
-//             stream_tuple_end_out.write(last);
-//         }
-
-//         if (stream_stop.read_nb(stop))
-//             break;
-//     }
-// }
 
 template <size_t BATCH_SIZE_LOG>
 void mwj_intersect(
@@ -1599,12 +1448,14 @@ EXTRACT_BAGTOSET_SETCHECKER_LOOP:
                 hash_buff = hash_new;
                 flag_buff = true;
             }
-#if DEBUG_STATS
-            debug::batch_reads++;
-#endif
             row >>= (1UL << E_W);
         }
     }
+
+#if DEBUG_STATS
+    debug::batch_reads += ceil((rowend - rowstart) / 16.0);
+#endif
+
     stream_batch_end.write(true);
 }
 
@@ -1873,14 +1724,14 @@ void multiwayJoin(
     /* Dynamic fifo data out */
     hls_thread_local hls::stream<ap_uint<V_ID_W>, DYN_FIFO_DEPTH> dyn_stream_sol
         ("Dynamic fifo - partial solution");
-    hls_thread_local hls::stream<bool, 1> dyn_stream_ovf
+    hls_thread_local hls::stream<bool, 4> dyn_stream_ovf
         ("Dynamic fifo - overflow");
  
     /* Stop signals */
-    hls_thread_local hls::stream<bool, 1> streams_stop[STOP_S];
+    hls_thread_local hls::stream<bool, 4> streams_stop[STOP_S];
     hls_thread_local hls::stream<bool, S_D> merge_out;
     hls_thread_local hls::stream<bool, S_D> merge_in[MERGE_IN_STREAMS];
-    hls_thread_local hls::stream<bool, 1> stream_sol0;
+    hls_thread_local hls::stream<bool, 4> stream_sol0;
 #pragma HLS array_partition variable=merge_in type=complete    
 
 #ifndef __SYNTHESIS__
