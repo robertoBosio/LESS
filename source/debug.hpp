@@ -96,7 +96,7 @@ namespace debug {
         mem_accesses = mem_accesses - cache_hit_verify - cache_hit_inter - cache_hit_prop;
         intersect_reads -= cache_hit_inter;
         verify_reads -= cache_hit_verify;
-        findmin_reads -= cache_hit_prop;
+        readmin_counter_reads -= cache_hit_prop;
 
         debof << "\tbatch accesses:              " << std::setw(15)
               << batch_reads << "\t" << std::setw(4)

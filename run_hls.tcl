@@ -3,7 +3,8 @@ source settings.tcl
 set proj "subgraphiso-kria"
 set dir "source"
 
-open_project -reset $proj
+# open_project -reset $proj
+open_project $proj
 
 add_files "$dir/subgraphIsomorphism.cpp"
 add_files -tb "$dir/subiso-test.cpp scripts dataset" -cflags "-Wno-attributes -Wno-unknown-pragmas" -csimflags "-Wno-unknown-pragmas"

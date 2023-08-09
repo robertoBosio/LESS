@@ -32,7 +32,11 @@
 #include <ap_int.h>
 #include "utils.h"
 #ifdef __SYNTHESIS__
+
+#ifndef HLS_STREAM_THREAD_SAFE
 #define HLS_STREAM_THREAD_SAFE
+#endif
+
 #include <hls_stream.h>
 #include "sliced_stream.h"
 #else
@@ -89,7 +93,7 @@ class cache {
 			address_type;
 		typedef T line_type[N_WORDS_PER_LINE];
 		typedef l1_cache<T, MAIN_SIZE, N_L1_SETS, N_L1_WAYS,
-			N_WORDS_PER_LINE, SWAP_TAG_SET, L1_STORAGE_IMPL> l1_cache_type;
+			N_WORDS_PER_LINE, SWAP_TAG_SET, L1_STORAGE_IMPL, PORTS> l1_cache_type;
 		typedef raw_cache<T, (N_LINES), N_WORDS_PER_LINE, 2>
 			raw_cache_type;
 		typedef replacer<LRU, address_type, N_SETS, N_WAYS,
@@ -166,14 +170,12 @@ class cache {
 		cache(T * const main_mem) {
 #pragma HLS array_reshape variable=m_cache_mem type=complete dim=2
 #pragma HLS array_partition variable=m_tag type=complete dim=0
-			if (PORTS > 1) {
 #pragma HLS array_partition variable=m_core_req type=complete dim=0
 #pragma HLS array_partition variable=m_core_resp type=complete dim=0
 #pragma HLS array_partition variable=m_mem_req type=complete dim=0
 #pragma HLS array_partition variable=m_mem_st_req type=complete dim=0
 #pragma HLS array_partition variable=m_mem_resp type=complete dim=0
 #pragma HLS array_partition variable=m_l1_cache_get type=complete dim=1
-			}
 
 			switch (L2_STORAGE_IMPL) {
 				case URAM:
