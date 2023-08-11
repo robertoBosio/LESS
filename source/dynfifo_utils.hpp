@@ -241,7 +241,7 @@ void MMU_slow(
 
 MMU_SLOW_TASK_LOOP:
     while(true) {
-// #pragma HLS pipeline II=32 
+#pragma HLS pipeline II=32 
         switch (state) {
 
             case bypass: 

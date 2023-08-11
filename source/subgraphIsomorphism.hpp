@@ -57,6 +57,15 @@ void subgraphIsomorphism(
 
 #if DEBUG_INTERFACE
     volatile unsigned int &debif_endpreprocess,
+    unsigned long &p_propose_empty,
+    unsigned long &p_edgebuild_empty,
+    unsigned long &p_findmin_empty,
+    unsigned long &p_readmin_counter_empty,
+    unsigned long &p_readmin_edge_empty,
+    unsigned long &p_tuplebuild_empty,
+    unsigned long &p_intersect_empty,
+    unsigned long &p_verify_empty,
+    unsigned long &p_assembly_empty,
 #endif /* DEBUG_INTERFACE */
 
 #if COUNT_ONLY

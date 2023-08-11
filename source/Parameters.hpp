@@ -9,7 +9,7 @@
 
 /* Cannot be bigger than 255 since in the code it is
  * always contained in 8 bits */
-#define MAX_QUERY_VERTICES	(1UL << 4)
+#define MAX_QUERY_VERTICES	(1UL << 5)
 #define MAX_TABLES 		    32
 
 /* Max space given to query data in fifo for graph read*/
@@ -42,7 +42,7 @@
 #define MAX_COLLISIONS      (1UL << 5)
 
 /* Depth of streams connecting tasks */
-#define DEFAULT_STREAM_DEPTH 32
+#define DEFAULT_STREAM_DEPTH 128
 
 /* Dynamic fifo parameters */
 #define DYN_FIFO_DEPTH      128

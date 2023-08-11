@@ -35,10 +35,10 @@
 #pragma GCC diagnostic ignored "-Wunused-label"
 #pragma GCC diagnostic ignored "-Wsign-compare"
 #pragma GCC diagnostic ignored "-Wunused-parameter"
-#pragma GCC diagnostic ignored "-Wunused-variable"
-#pragma GCC diagnostic ignored "-Wunused-but-set-variable"
+// #pragma GCC diagnostic ignored "-Wunused-variable"
+// #pragma GCC diagnostic ignored "-Wunused-but-set-variable"
 
-#define STOP_S      9    
+#define STOP_S      10    
 #define V_ID_W      VERTEX_WIDTH_BIT
 #define V_L_W       LABEL_WIDTH
 #define MAX_QV      MAX_QUERY_VERTICES
@@ -49,6 +49,18 @@
 #define S_D         DEFAULT_STREAM_DEPTH    
 #define DDR_WORDS   RES_WIDTH
 #define DDR_W       DDR_WORD
+
+#if DEBUG_INTERFACE
+    unsigned long propose_empty = 0;
+    unsigned long edgebuild_empty = 0;
+    unsigned long findmin_empty = 0;
+    unsigned long readmin_counter_empty = 0;
+    unsigned long readmin_edge_empty = 0;
+    unsigned long tuplebuild_empty = 0;
+    unsigned long intersect_empty = 0;
+    unsigned long verify_empty = 0;
+    unsigned long assembly_empty = 0;
+#endif
 
 #if CACHE_ENABLE
 typedef cache< ap_uint<DDR_W>, true, false, 2,
@@ -166,45 +178,73 @@ typedef struct {
 } assembly_tuple_t;
 
 /******** End tuple definition ********/
-void mwj_propose(
-    hls::stream<ap_uint<V_ID_W> > &stream_fifo_in,
 
-    hls::stream<ap_uint<V_ID_W> > &stream_sol_out,
-    hls::stream<bool> &stream_sol_end_out)
+void
+mwj_propose(const unsigned short nQueryVer,
+            hls::stream<ap_uint<V_ID_W> >& stream_fifo_in,
+            hls::stream<bool>& stream_stop,
+
+            hls::stream<ap_uint<V_ID_W> >& stream_sol_out,
+            hls::stream<bool>& stream_sol_end_out)
 {
-    // const ap_uint<V_ID_W> MASK_NEW_SOLUTION = ~(1UL << (V_ID_W - 1));
+    const ap_uint<V_ID_W> BIT_FINAL_SOLUTION = (1UL << (V_ID_W - 1));
+    const ap_uint<V_ID_W> MASK_NEW_SOLUTION = ~(1UL << (V_ID_W - 1));
     const ap_uint<V_ID_W> MASK_END_EXTENSION = ~(1UL << (V_ID_W - 2));
     static ap_uint<V_ID_W> curSol_fifo[MAX_QV];
     static ap_uint<V_ID_W> curQV = 0;
     ap_uint<V_ID_W> readv;
+    bool stop = false;
 
     // Read BFS solutions
-    if (stream_fifo_in.read_nb(readv)){
-        if (readv.test(V_ID_W - 1))
-        {
-            // Delimiter, new solution
-            curQV = readv.range(V_ID_W - 2, 0);
-PROPOSE_FIFO_NEW_SOLUTION_LOOP:
-            for (int g = 0; g < curQV; g++)
-            {
+PROPOSE_TASK_LOOP:
+    while (true) {
+      if (stream_fifo_in.read_nb(readv)) {
+        if (readv.test(V_ID_W - 1)) {
+          /* A node with the 31st bit asserted is a vertex of
+          a radix of a solution, it will probably not change in
+          future iteration */
+          curQV = 0;
+        PROPOSE_READ_NEW_SOLUTION_LOOP:
+          while (readv.test(V_ID_W - 1)) {
 #pragma HLS pipeline II = 1
-                curSol_fifo[g] = stream_fifo_in.read();
-            }
-            curSol_fifo[curQV] = stream_fifo_in.read() & MASK_END_EXTENSION;
-        }
-        else
-        {
-            // Updating only the last vertex
-            curSol_fifo[curQV] = readv & MASK_END_EXTENSION;
+            curSol_fifo[curQV++] = readv & MASK_NEW_SOLUTION;
+            readv = stream_fifo_in.read();
+          }
+
+          /* In case of starting solution, i.e. solution with only
+          one node, a second node with 30th bit asserted is used as
+          false extension. This is done to handle special case */
+          if (!readv.test(V_ID_W - 2)) {
+            curSol_fifo[curQV] = readv;
+          } else {
+            curQV--;
+          }
+        } else {
+          // Updating only the last vertex
+          curSol_fifo[curQV] = readv;
         }
 
-        for (int g = 0; g < curQV + 1; g++)
-        {
+      PROPOSE_NEW_SOLUTION_OUT_LOOP:
+        for (int g = 0; g <= curQV; g++) {
 #pragma HLS pipeline II = 1
-            stream_sol_out.write(curSol_fifo[g]);
-            stream_sol_end_out.write(false);
+          /* Mark as possibile final solution the ones with only one
+          node missing, in a way that the mwj_assembly can recognize.
+          We are reusing the same 31st bit. */
+          stream_sol_out.write((curQV == nQueryVer - 2)
+                                 ? curSol_fifo[g] | BIT_FINAL_SOLUTION
+                                 : curSol_fifo[g]);
+          stream_sol_end_out.write(false);
         }
         stream_sol_end_out.write(true);
+      }
+#if DEBUG_INTERFACE
+      else {
+        propose_empty++;
+      }
+#endif
+
+      if (stream_stop.read_nb(stop))
+        break;
     }
 }
 
@@ -220,6 +260,7 @@ mwj_edgebuild(const unsigned char hash1_w,
               hls::stream<ap_uint<V_ID_W> >& stream_sol_out,
               hls::stream<bool>& stream_sol_end_out)
 {
+    const ap_uint<V_ID_W> MASK_FINAL_SOLUTION = ~(1UL << (V_ID_W - 1));
     ap_uint<V_ID_W> curEmb[MAX_QV];
     unsigned char curQV = 0;
     bool stop, last;
@@ -230,13 +271,14 @@ mwj_edgebuild(const unsigned char hash1_w,
     tuple_out.last = false;
     tuple_out.address = 0;
     stream_tuple_out.write(tuple_out);
-   
-    while(true) {
-        if (stream_sol_end_in.read_nb(last)){ 
+
+EDGEBUILD_TASK_LOOP:
+    while (true) {
+        if (stream_sol_end_in.read_nb(last)) {
             curQV = 0;
 
-EDGEBUILD_COPYING_EMBEDDING_LOOP:
-            while(!last){
+        EDGEBUILD_COPYING_EMBEDDING_LOOP:
+            while (!last) {
                 curEmb[curQV] = stream_sol_in.read();
                 stream_sol_out.write(curEmb[curQV]);
                 stream_sol_end_out.write(false);
@@ -245,19 +287,21 @@ EDGEBUILD_COPYING_EMBEDDING_LOOP:
             }
             stream_sol_end_out.write(true);
 
-EDGEBUILD_MAIN_LOOP:
-            for(int g = 0; g < qVertices[curQV].numTablesIndexed; g++){
+        EDGEBUILD_MAIN_LOOP:
+            for (int g = 0; g < qVertices[curQV].numTablesIndexed; g++) {
                 unsigned char tb_index = qVertices[curQV].tables_indexed[g];
                 unsigned char iv_pos = qVertices[curQV].vertex_indexing[g];
 
-                //Computing addresses of indexed sets
+                // Computing addresses of indexed sets
                 ap_uint<LKP3_HASH_W> hash_out;
                 ap_uint<MAX_HASH_W> hash_trimmed;
-                xf::database::details::hashlookup3_core<V_ID_W>(curEmb[iv_pos], hash_out);
+                xf::database::details::hashlookup3_core<V_ID_W>(
+                  curEmb[iv_pos] & MASK_FINAL_SOLUTION, hash_out);
                 hash_trimmed = hash_out;
                 hash_trimmed = hash_trimmed.range(hash1_w - 1, 0);
-                unsigned int address = (tb_index * (1UL << hash1_w)) + hash_trimmed;
-                tuple_out.indexing_v = curEmb[iv_pos];
+                unsigned int address =
+                  (tb_index * (1UL << hash1_w)) + hash_trimmed;
+                tuple_out.indexing_v = curEmb[iv_pos] & MASK_FINAL_SOLUTION;
                 tuple_out.iv_pos = iv_pos;
                 tuple_out.tb_index = tb_index;
                 tuple_out.address = address;
@@ -269,16 +313,20 @@ EDGEBUILD_MAIN_LOOP:
             tuple_out.last = false;
             stream_tuple_out.write(tuple_out);
         }
+#if DEBUG_INTERFACE
+        else {
+            edgebuild_empty++;
+        }
+#endif
 
         if (stream_stop.read_nb(stop))
             break;
     }
 }
 
-template <typename T_BLOOM,
-         size_t BLOOM_LOG,
-        size_t K_FUN_LOG>
-unsigned int bloom_bitset(T_BLOOM filter)                         
+template<typename T_BLOOM, size_t BLOOM_LOG, size_t K_FUN_LOG>
+unsigned int
+bloom_bitset(T_BLOOM filter)
 {
     unsigned int count {0};
     for (int c = 0; c < (1UL << (BLOOM_LOG - 5)); c++){
@@ -369,6 +417,11 @@ FINDMIN_TASK_LOOP:
                 }
             }
         }
+#if DEBUG_INTERFACE
+        else {
+            findmin_empty++;
+        }
+#endif
 
         if (stream_stop.read_nb(stop))
             break;
@@ -400,6 +453,7 @@ mwj_readmin_counter(const unsigned char hash1_w,
 
 READMIN_COUNTER_TASK_LOOP:
     while (true) {
+#pragma HLS pipeline II = 8
         if (stream_tuple_in.read_nb(tuple_in)) {
 
             for (int g = 0; g < K_FUN; g++) {
@@ -485,6 +539,11 @@ READMIN_COUNTER_TASK_LOOP:
             debug::readmin_counter_reads += 2;
 #endif
         }
+#if DEBUG_INTERFACE
+        else {
+            readmin_counter_empty++;
+        }
+#endif
 
         if (stream_stop.read_nb(stop))
             break;
@@ -594,6 +653,11 @@ READMIN_EDGE_TASK_LOOP:
             debug::readmin_n_sets++;
 #endif
         }
+#if DEBUG_INTERFACE
+        else {
+            readmin_edge_empty++;
+        }
+#endif
 
         if (stream_stop.read_nb(stop))
             break;
@@ -613,6 +677,7 @@ void mwj_homomorphism(
         hls::stream< ap_uint<V_ID_W> >  &stream_sol_out,
         hls::stream<bool>               &stream_sol_end_out)
 {
+    const ap_uint<V_ID_W> MASK_FINAL_SOLUTION = ~(1UL << (V_ID_W - 1));
     ap_uint<8> curQV {0};
     ap_uint<2> last_set;
     ap_uint<V_ID_W> curEmb[MAX_QV];
@@ -638,7 +703,7 @@ HOMOMORPHISM_CHECK_LOOP:
         bool homomorphism = false;
 
         for (int g = 0; g < curQV; g++){
-            if (vToVerify == curEmb[g])
+            if (vToVerify == (curEmb[g] & MASK_FINAL_SOLUTION))
                 homomorphism = true;
         }
 
@@ -742,8 +807,9 @@ mwj_tuplebuild(const unsigned char hash1_w,
                hls::stream<ap_uint<V_ID_W> >& stream_sol_out,
                hls::stream<bool>& stream_sol_end_out)
 {
+    const ap_uint<V_ID_W> MASK_FINAL_SOLUTION = ~(1UL << (V_ID_W - 1));
     ap_uint<V_ID_W> buffer[(1UL << BATCH_SIZE_LOG)];
-    ap_uint<BATCH_SIZE_LOG> buffer_size {0};
+    ap_uint<BATCH_SIZE_LOG> buffer_size = 0;
     ap_uint<BATCH_SIZE_LOG> buffer_p;
     ap_uint<V_ID_W> curEmb[MAX_QV];
     ap_uint<V_ID_W> vToVerify;
@@ -751,16 +817,21 @@ mwj_tuplebuild(const unsigned char hash1_w,
     hls::stream<ap_uint<LKP3_HASH_W>, 4> hash_out0, hash_out1;
     unsigned long addr_counter;
     intersect_tuple_t tuple_out;
-    unsigned char curQV {0};
+    unsigned char curQV = 0;
+    unsigned char query_edge = 0;
     bool stop, last;
-   
-    while(true) {
-        if (stream_sol_end_in.read_nb(last)){ 
+
+TUPLEBUILD_TASK_LOOP:
+    while (true) {
+        if (stream_sol_end_in.read_nb(last)) {
             curQV = 0;
             buffer_size = 0;
+            buffer_p = 0;
+            query_edge = 0;
 
-TUPLEBUILD_COPYING_EMBEDDING_LOOP:
-            while(!last){
+        TUPLEBUILD_COPYING_EMBEDDING_LOOP:
+            while (!last) {
+#pragma HLS pipeline II = 1
                 curEmb[curQV] = stream_sol_in.read();
                 stream_sol_out.write(curEmb[curQV]);
                 stream_sol_end_out.write(false);
@@ -768,75 +839,83 @@ TUPLEBUILD_COPYING_EMBEDDING_LOOP:
                 last = stream_sol_end_in.read();
             }
             stream_sol_end_out.write(true);
-            
+
             tuplebuild_tuple_t tuple_in = stream_tuple_in.read();
             unsigned char cycles = qVertices[curQV].numTablesIndexed;
 
-            last = stream_set_end_in.read();
+            /* Flatten the inner loop cycling on vertices of min set
+            into the outer cycle over query edges, Vitis HLS 2022.2 is
+            not able to do it on its own */
+            bool last_outer = stream_set_end_in.read();
+            bool last_inner = false;
+        TUPLEBUILD_EDGE_LOOP:
+            while (!last_outer) {
+#pragma HLS pipeline II = 2
+                uint8_t tableIndex = qVertices[curQV].tables_indexed[query_edge];
+                uint8_t ivPos = qVertices[curQV].vertex_indexing[query_edge];
+                bool bit_last = (query_edge == (cycles - 1));
+                bool bit_min =
+                  (tuple_in.tb_index == tableIndex && tuple_in.iv_pos == ivPos);
 
-TUPLEBUILD_SAVE_NODE_LOOP:
-            while (!last) {
-#pragma HLS pipeline II = 1
-                vToVerify = stream_set_in.read();
-                buffer[buffer_size++] = vToVerify;
-                last = stream_set_end_in.read();
-            }
-
-TUPLEBUILD_EDGE_LOOP:
-            for (int g = 0; g < cycles; g++){
-#pragma HLS pipeline II=2
-                uint8_t tableIndex = qVertices[curQV].tables_indexed[g];
-                uint8_t ivPos = qVertices[curQV].vertex_indexing[g];
-                bool bit_last = (g == cycles - 1);
-                bool bit_min = (tuple_in.tb_index == tableIndex && 
-                        tuple_in.iv_pos == ivPos);
-
-                for (int buffer_p = 0; buffer_p < buffer_size; buffer_p++){
-#pragma HLS loop_flatten
+                if (query_edge == 0) {
+                    vToVerify = stream_set_in.read();
+                } else {
                     vToVerify = buffer[buffer_p];
-
-                    hash_in0.write(vToVerify);
-                    hash_in1.write(curEmb[ivPos]);
-                    xf::database::hashLookup3<V_ID_W>(hash_in0, hash_out0);
-                    xf::database::hashLookup3<V_ID_W>(hash_in1, hash_out1);
-                    ap_uint<MAX_HASH_W> indexed_h = hash_out0.read();
-                    ap_uint<MAX_HASH_W> indexing_h = hash_out1.read();
-                    
-                    addr_counter = indexing_h.range(hash1_w - 1, 0);
-                    addr_counter <<= hash2_w;
-                    addr_counter += indexed_h.range(hash2_w - 1, 0);
-                    
-                    tuple_out.indexed_v = vToVerify;
-                    tuple_out.indexing_v = curEmb[ivPos];
-                    tuple_out.addr_counter = addr_counter;
-                    tuple_out.tb_index = tableIndex;
-                    tuple_out.pos = buffer_p;
-                    tuple_out.bit_last_edge = bit_last;
-                    tuple_out.flag = (bit_min)? MIN_SET: CHECK;
-                    tuple_out.skip_counter = false;
-                    
-                    stream_tuple_out.write(tuple_out);
-                    stream_tuple_end_out.write(false);
-                    
-                    if (addr_counter == 0)
-                        tuple_out.skip_counter = true; 
-                    tuple_out.addr_counter = addr_counter - 1;
-                    stream_tuple_out.write(tuple_out);
-                    stream_tuple_end_out.write(false);
-
-                    // std::cout << "( "
-                    //           << tuple_out.indexing_v
-                    //           << ", " << tuple_out.indexed_v
-                    //           << ", " << tuple_out.addr_counter
-                    //           << ", " << (int)tuple_out.tb_index
-                    //           << ", " << tuple_out.pos
-                    //           << ", " << tuple_out.bit_last_edge
-                    //           << ", " << tuple_out.bit_min_set << ")\n" << std::endl;
-
                 }
+
+                hash_in0.write(vToVerify);
+                hash_in1.write(curEmb[ivPos] & MASK_FINAL_SOLUTION);
+                xf::database::hashLookup3<V_ID_W>(hash_in0, hash_out0);
+                xf::database::hashLookup3<V_ID_W>(hash_in1, hash_out1);
+                ap_uint<MAX_HASH_W> indexed_h = hash_out0.read();
+                ap_uint<MAX_HASH_W> indexing_h = hash_out1.read();
+
+                addr_counter = indexing_h.range(hash1_w - 1, 0);
+                addr_counter <<= hash2_w;
+                addr_counter += indexed_h.range(hash2_w - 1, 0);
+
+                tuple_out.indexed_v = vToVerify;
+                tuple_out.indexing_v = curEmb[ivPos] & MASK_FINAL_SOLUTION;
+                tuple_out.addr_counter = addr_counter;
+                tuple_out.tb_index = tableIndex;
+                tuple_out.pos = buffer_p;
+                tuple_out.bit_last_edge = bit_last;
+                tuple_out.flag = (bit_min) ? MIN_SET : CHECK;
+                tuple_out.skip_counter = false;
+
+                stream_tuple_out.write(tuple_out);
+                stream_tuple_end_out.write(false);
+
+                if (addr_counter == 0)
+                    tuple_out.skip_counter = true;
+                tuple_out.addr_counter = addr_counter - 1;
+                stream_tuple_out.write(tuple_out);
+                stream_tuple_end_out.write(false);
+                buffer[buffer_p++] = vToVerify;
+
+                /* End condition inner flatten loop*/
+                if (query_edge == 0) {
+                    last_inner = stream_set_end_in.read();
+                } else {
+                    last_inner = (buffer_p == buffer_size);
+                }
+
+                if (last_inner) {
+                    query_edge++;
+                    buffer_size = buffer_p;
+                    buffer_p = 0;
+                }
+
+                /* End condition outer loop */
+                last_outer = last_inner && (query_edge == cycles);
             }
             stream_tuple_end_out.write(true);
         }
+#if DEBUG_INTERFACE
+        else {
+            tuplebuild_empty++;
+        }
+#endif
 
         if (stream_stop.read_nb(stop))
             break;
@@ -940,6 +1019,11 @@ INTERSECT_TASK_LOOP:
             }
             stream_tuple_end_out.write(last);
         }
+#if DEBUG_INTERFACE
+        else {
+            intersect_empty++;
+        }
+#endif
 
         if (stream_stop.read_nb(stop))
             break;
@@ -1037,9 +1121,7 @@ SPLIT_MAIN_LOOP:
             //           << ", " << tuple_out.pos
             //           << ", " << tuple_out.address
             //           << ", " << tuple_out.bit_last_address
-            //           << ", " << tuple_out.bit_last_edge
-            //           << ", " << tuple_out.bit_no_edge
-            //           << ", " << tuple_out.bit_min_set << ")" << std::endl;
+            //           << ", " << tuple_out.bit_last_edge << ")" << std::endl;
         }
     } else {
         stream_tuple_end_out.write(true);
@@ -1114,6 +1196,11 @@ VERIFY_TASK_LOOP:
             }
             stream_tuple_end_out.write(last);
         }
+#if DEBUG_INTERFACE
+        else {
+            verify_empty++;
+        }
+#endif
 
         if (stream_stop.read_nb(stop)){
             break;
@@ -1187,7 +1274,7 @@ void mwj_filter(
 }
 
 void mwj_assembly(
-    unsigned short nQueryVer,
+    const unsigned short nQueryVer,
     hls::stream<ap_uint<V_ID_W> > &stream_inter_in,
     hls::stream<bool> &stream_end_inter_in,
     hls::stream<ap_uint<V_ID_W> > &stream_embed_in,
@@ -1211,7 +1298,7 @@ void mwj_assembly(
     ap_uint<V_ID_W> curQV;
     ap_uint<V_ID_W> curEmb[MAX_QV];
     bool last_sol, last_set, stop, last_start;
-    bool token_new_start;
+    // bool token_new_start;
     T_NODE node;
 
 #if COUNT_ONLY
@@ -1220,48 +1307,48 @@ void mwj_assembly(
 
     last_start = stream_batch_end.read();
     last_start = stream_batch_end.read();
-    token_new_start = false;
-    stream_partial_out.write(0 | MASK_NEW_SOLUTION);
-    stream_partial_out.write(stream_batch.read() | MASK_END_EXTENSION);
+    // token_new_start = false;
+    stream_partial_out.write(stream_batch.read() | MASK_NEW_SOLUTION);
+    /* False extension for single node solutions */
+    stream_partial_out.write(0 | MASK_END_EXTENSION);
+
     stream_req.write(true);
 ASSEMBLY_TASK_LOOP:
     while(1) {
-        if (stream_end_embed_in.read_nb(last_sol)){
-
+        if (stream_end_inter_in.read_nb(last_set)){
             curQV = 0;
+
+            last_sol = stream_end_embed_in.read();
 ASSEMBLY_COPYING_EMBEDDING_LOOP:
             while(!last_sol){
-                curEmb[curQV] = stream_embed_in.read();
+#pragma HLS pipeline II = 1
+                ap_uint<V_ID_W> node = stream_embed_in.read();
+
+                /* If there is at least an extensions for this solution, 
+                and the solution is not a one with only one node missing */
+                if (!last_set && !node.test(V_ID_W - 1)){
+                    stream_partial_out.write(node | MASK_NEW_SOLUTION);
+                }
+
                 curQV++;
                 last_sol = stream_end_embed_in.read();
             }
 
-            last_set = stream_end_inter_in.read();
-
-            //Last bit used to signal new solution
-            if (!last_set && (curQV != nQueryVer - 1)){
-                stream_partial_out.write(curQV | MASK_NEW_SOLUTION);
-ASSEMBLY_RADIX_LOOP:
-                for (int g = 0; g < curQV; g++){
-                    stream_partial_out.write(curEmb[g]);
-                }
-            }
-
 ASSEMBLY_SET_LOOP:
             while(!last_set){
+#pragma HLS pipeline II = 1
                 last_set = stream_end_inter_in.read();
                 ap_uint<V_ID_W> vToVerify = stream_inter_in.read();
-                
                 /* Write in the correct stream */
                 if (curQV == nQueryVer - 1){
 #if COUNT_ONLY
-                    if (!last_start && token_new_start){
-                        last_start = stream_batch_end.read();
-                        token_new_start = false;
-                        stream_partial_out.write(0 | MASK_NEW_SOLUTION);
-                        stream_partial_out.write(stream_batch.read() | MASK_END_EXTENSION);
-                        stream_req.write(true);
-                    }
+                    // if (!last_start && token_new_start){
+                    //     last_start = stream_batch_end.read();
+                    //     token_new_start = false;
+                    //     stream_partial_out.write(0 | MASK_NEW_SOLUTION);
+                    //     stream_partial_out.write(stream_batch.read() | MASK_END_EXTENSION);
+                    //     stream_req.write(true);
+                    // }
                     // for (int g = 0; g < nQueryVer - 1; g++){
                     //     f << curEmb[g] << " ";
                     // }
@@ -1281,8 +1368,8 @@ ASSEMBLY_WRITE_FINAL_LOOP:
                     result.write(node);
 #endif
                 } else {
-                    token_new_start = true;
-                    stream_partial_out.write((last_set)? (vToVerify | MASK_END_EXTENSION) : vToVerify);
+                    // token_new_start = true;
+                    stream_partial_out.write(vToVerify);
                     stream_req.write(true);
                 }
             }
@@ -1291,6 +1378,11 @@ ASSEMBLY_WRITE_FINAL_LOOP:
             stream_req.write(false);
 
         }
+#if DEBUG_INTERFACE
+        else {
+            assembly_empty++;
+        }
+#endif
 
         if (stream_sol0.read_nb(stop)){
 
@@ -1301,9 +1393,12 @@ ASSEMBLY_WRITE_FINAL_LOOP:
             // Test if there are some node from start batch 
             if (!last_start){
                 last_start = stream_batch_end.read();
-                token_new_start = true;
-                stream_partial_out.write(0 | MASK_NEW_SOLUTION);
-                stream_partial_out.write(stream_batch.read() | MASK_END_EXTENSION);
+                // token_new_start = true;
+                stream_partial_out.write(stream_batch.read() |
+                                         MASK_NEW_SOLUTION);
+
+                /* False extension for single node solutions */
+                stream_partial_out.write(0 | MASK_END_EXTENSION);
                 stream_req.write(true);
             } else {
                 break;
@@ -1862,12 +1957,6 @@ void multiwayJoin(
          streams_stop[STOP_S - 1],
          dyn_stream_ovf);
 
-    hls_thread_local hls::task mwj_propose_t(
-        mwj_propose,
-        dyn_stream_sol,
-        p0_stream_sol,
-        p0_stream_sol_end);
-
     hls_thread_local hls::task mwj_bypass_sol_findmin(
         mwj_bypass_sol,
         e_stream_sol,
@@ -2012,6 +2101,13 @@ void multiwayJoin(
     //     dyn_stream_sol,
     //     streams_stop[STOP_S - 1],
     //     dyn_stream_ovf);
+    
+    mwj_propose(nQueryVer,
+                dyn_stream_sol,
+                streams_stop[7],
+                p0_stream_sol,
+                p0_stream_sol_end);
+
 
     mwj_edgebuild<LKP3_HASH_W, MAX_HASH_W, FULL_HASH_W>(hash1_w,
                                        qVertices0,
@@ -2113,6 +2209,12 @@ void multiwayJoin(
     //     std::ref(dyn_stream_sol),
     //     std::ref(streams_stop[STOP_S - 1]),
     //     std::ref(dyn_stream_ovf));
+    std::thread mwj_propose_t(mwj_propose,
+                              nQueryVer,
+                              std::ref(dyn_stream_sol),
+                              std::ref(streams_stop[7]),
+                              std::ref(p0_stream_sol),
+                              std::ref(p0_stream_sol_end));
 
     std::thread mwj_edgebuild_t(mwj_edgebuild<LKP3_HASH_W, MAX_HASH_W, FULL_HASH_W>,
                                 hash1_w,
@@ -2224,6 +2326,7 @@ void multiwayJoin(
 
 #ifndef __SYNTHESIS__
 
+    mwj_propose_t.join();
     mwj_edgebuild_t.join();
     mwj_findmin_t.join();
     mwj_readmin_counter_t.join();
@@ -2231,7 +2334,6 @@ void multiwayJoin(
     mwj_tuplebuild_t.join();
     mwj_intersect_t.join(); 
     mwj_verify_t.join();
-    // stack_t.join();
     mwj_assembly_t.join();
 
 
@@ -2429,32 +2531,41 @@ void subgraphIsomorphism(
 
 #else
 
-void subgraphIsomorphism(
-        row_t htb_buf0[HASHTABLES_SPACE],
-        row_t htb_buf1[HASHTABLES_SPACE],
-        row_t htb_buf2[HASHTABLES_SPACE],
-        row_t htb_buf3[HASHTABLES_SPACE],
-        row_t bloom_p[BLOOM_SPACE],
-        row_t res_buf[RESULTS_SPACE],
-        const unsigned short numQueryVert,
-        const unsigned short numQueryEdges,
-        const unsigned long numDataEdges,
-        const unsigned char hash1_w,
-        const unsigned char hash2_w,
-        const unsigned long dynfifo_space,
-        unsigned long &dynfifo_diagnostic,
+void
+subgraphIsomorphism(row_t htb_buf0[HASHTABLES_SPACE],
+                    row_t htb_buf1[HASHTABLES_SPACE],
+                    row_t htb_buf2[HASHTABLES_SPACE],
+                    row_t htb_buf3[HASHTABLES_SPACE],
+                    row_t bloom_p[BLOOM_SPACE],
+                    row_t res_buf[RESULTS_SPACE],
+                    const unsigned short numQueryVert,
+                    const unsigned short numQueryEdges,
+                    const unsigned long numDataEdges,
+                    const unsigned char hash1_w,
+                    const unsigned char hash2_w,
+                    const unsigned long dynfifo_space,
+                    unsigned long& dynfifo_diagnostic,
 
 #if DEBUG_INTERFACE
-        volatile unsigned int &debif_endpreprocess,
+                    volatile unsigned int& debif_endpreprocess,
+                    unsigned long& p_propose_empty,
+                    unsigned long& p_edgebuild_empty,
+                    unsigned long& p_findmin_empty,
+                    unsigned long& p_readmin_counter_empty,
+                    unsigned long& p_readmin_edge_empty,
+                    unsigned long& p_tuplebuild_empty,
+                    unsigned long& p_intersect_empty,
+                    unsigned long& p_verify_empty,
+                    unsigned long& p_assembly_empty,
 #endif /* DEBUG_INTERFACE */
 
 #if COUNT_ONLY
-        long unsigned int &result
+                    long unsigned int& result
 #else
-        hls::stream<T_NODE> &result
+                     hls::stream<T_NODE>& result
 #endif /* COUNT_ONLY */
 
-        )
+)
 {
 
 #pragma HLS INTERFACE mode=m_axi port=htb_buf0 bundle=prop_batch \
@@ -2467,7 +2578,7 @@ void subgraphIsomorphism(
     latency=1
 #pragma HLS INTERFACE mode=m_axi port=htb_buf3 bundle=readmin_e \
     max_widen_bitwidth=128 num_write_outstanding=1 max_write_burst_length=2 \
-    latency=20
+    latency=1
 #pragma HLS INTERFACE mode=m_axi port=res_buf bundle=fifo \
     max_widen_bitwidth=128 max_read_burst_length=32 max_write_burst_length=32 \
     latency=1
@@ -2487,6 +2598,15 @@ void subgraphIsomorphism(
 
 #if DEBUG_INTERFACE
 #pragma HLS INTERFACE mode=s_axilite port=debif_endpreprocess
+#pragma HLS INTERFACE mode=s_axilite port=p_propose_empty
+#pragma HLS INTERFACE mode=s_axilite port=p_edgebuild_empty
+#pragma HLS INTERFACE mode=s_axilite port=p_findmin_empty
+#pragma HLS INTERFACE mode=s_axilite port=p_readmin_counter_empty
+#pragma HLS INTERFACE mode=s_axilite port=p_readmin_edge_empty
+#pragma HLS INTERFACE mode=s_axilite port=p_tuplebuild_empty
+#pragma HLS INTERFACE mode=s_axilite port=p_intersect_empty
+#pragma HLS INTERFACE mode=s_axilite port=p_verify_empty
+#pragma HLS INTERFACE mode=s_axilite port=p_assembly_empty
 #endif /* DEBUG_INTERFACE */
 
 #if COUNT_ONLY
@@ -2559,7 +2679,17 @@ void subgraphIsomorphism(
                          dynfifo_diagnostic,
                          localResult);
 
+    ap_wait();
     result = localResult;
+    p_propose_empty = propose_empty;
+    p_edgebuild_empty = edgebuild_empty;
+    p_findmin_empty = findmin_empty;
+    p_readmin_counter_empty = readmin_counter_empty;
+    p_readmin_edge_empty = readmin_edge_empty;
+    p_tuplebuild_empty = tuplebuild_empty;
+    p_intersect_empty = intersect_empty;
+    p_verify_empty = verify_empty;
+    p_assembly_empty = assembly_empty;
 
 #if DEBUG_STATS
     debug::print(hash1_w, hash2_w);

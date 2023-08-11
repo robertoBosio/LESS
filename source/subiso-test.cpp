@@ -213,6 +213,7 @@ int main()
     bool flag = true;
     std::map<std::string, std::vector<TestEntry>> test;
     std::string prev_datagraph;
+    unsigned long counters[9];
 
     char cwd[100];
     if (getcwd(cwd, sizeof(cwd)) != NULL)
@@ -384,6 +385,15 @@ int main()
                 diagnostic,
 #if DEBUG_INTERFACE
                 debug_endpreprocess_s,
+                counters[0],
+                counters[1],
+                counters[2],
+                counters[3],
+                counters[4],
+                counters[5],
+                counters[6],
+                counters[7],
+                counters[8],
 #endif
                 result);
 #endif /* SOFTWARE_PREPROC */
@@ -402,6 +412,9 @@ int main()
                 ;
             for (int g = 0; g < BLOOM_SPACE; bloom_p[g++] = 0)
                 ;
+            for (int g = 0; g < 9; g++) {
+                std::cout << counters[g] << std::endl;
+            }
         }
     }
     free(htb_buf);

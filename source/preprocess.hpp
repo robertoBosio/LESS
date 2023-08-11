@@ -77,6 +77,7 @@ buildTableDescriptors(row_t* edge_buf,
      * the vertex order needed by multiway join */
 FILL_ORDER_LOOP:
     for (int g = 0; g < numQueryVert; g++) {
+#pragma HLS pipeline II = 1
       ap_uint<NODE_W> nodesrc =
         edge_buf[g].range(SRC_NODE + NODE_W - 1, SRC_NODE);
 #ifndef __SYNTHESIS__
@@ -88,6 +89,7 @@ FILL_ORDER_LOOP:
     /* Creating table descriptors */
 CREATE_TABDESC_LOOP:
     for (int s = 0; s < numQueryEdge; s++) {
+#pragma HLS pipeline II = 4
       bool dirEdge = false;
       ap_uint<8> index = 0;
       row_t edge = edge_buf[s + numQueryVert];
@@ -196,43 +198,44 @@ increaseCounter(T_DDR* htb_buf,
     bool last = stream_tuple_end.read();
 INCREASE_COUNTER_DDR_LOOP:
     while (!last) {
-        tuple = stream_tuple.read();
-        addr_counter = tuple.address;
-        ntb = tuple.tb_index;
+#pragma HLS pipeline II = 15
+      tuple = stream_tuple.read();
+      addr_counter = tuple.address;
+      ntb = tuple.tb_index;
 
-        /* Compute address of row storing the counter */
-        addr_outrow =
-          hTables[ntb].start_offset + (addr_counter >> (ROW_LOG - CNT_LOG));
+      /* Compute address of row storing the counter */
+      addr_outrow =
+        hTables[ntb].start_offset + (addr_counter >> (ROW_LOG - CNT_LOG));
 
-        /* Compute address of counter inside the row */
-        addr_inrow = addr_counter.range((ROW_LOG - CNT_LOG) - 1, 0);
+      /* Compute address of counter inside the row */
+      addr_inrow = addr_counter.range((ROW_LOG - CNT_LOG) - 1, 0);
 
-        /* Read, increase by 1 and write the counter */
-        row = htb_buf[addr_outrow];
-        if (addr_inrow == 0){
-            counter = row.range((1UL << CNT_LOG) - 1, 0);  
-        } else if (addr_inrow == 1){
-            counter = row.range((2UL << CNT_LOG) - 1, 1UL << CNT_LOG);  
-        } else if (addr_inrow == 2){
-            counter = row.range((3UL << CNT_LOG) - 1, 2UL << CNT_LOG);  
-        } else if (addr_inrow == 3){
-            counter = row.range((4UL << CNT_LOG) - 1, 3UL << CNT_LOG);  
-        }
-        counter += 1;
+      /* Read, increase by 1 and write the counter */
+      row = htb_buf[addr_outrow];
+      if (addr_inrow == 0) {
+        counter = row.range((1UL << CNT_LOG) - 1, 0);
+      } else if (addr_inrow == 1) {
+        counter = row.range((2UL << CNT_LOG) - 1, 1UL << CNT_LOG);
+      } else if (addr_inrow == 2) {
+        counter = row.range((3UL << CNT_LOG) - 1, 2UL << CNT_LOG);
+      } else if (addr_inrow == 3) {
+        counter = row.range((4UL << CNT_LOG) - 1, 3UL << CNT_LOG);
+      }
+      counter += 1;
 
-        if (addr_inrow == 0){
-            row.range((1UL << CNT_LOG) - 1, 0) = counter;  
-        } else if (addr_inrow == 1){
-            row.range((2UL << CNT_LOG) - 1, 1UL << CNT_LOG) = counter;  
-        } else if (addr_inrow == 2){
-            row.range((3UL << CNT_LOG) - 1, 2UL << CNT_LOG) = counter;  
-        } else if (addr_inrow == 3){
-            row.range((4UL << CNT_LOG) - 1, 3UL << CNT_LOG) = counter;  
-        }
-        htb_buf[addr_outrow] = row;
+      if (addr_inrow == 0) {
+        row.range((1UL << CNT_LOG) - 1, 0) = counter;
+      } else if (addr_inrow == 1) {
+        row.range((2UL << CNT_LOG) - 1, 1UL << CNT_LOG) = counter;
+      } else if (addr_inrow == 2) {
+        row.range((3UL << CNT_LOG) - 1, 2UL << CNT_LOG) = counter;
+      } else if (addr_inrow == 3) {
+        row.range((4UL << CNT_LOG) - 1, 3UL << CNT_LOG) = counter;
+      }
+      htb_buf[addr_outrow] = row;
 
-        hTables[ntb].n_edges++;
-        last = stream_tuple_end.read();
+      hTables[ntb].n_edges++;
+      last = stream_tuple_end.read();
     }
 }
 
@@ -469,6 +472,7 @@ storeEdges(AdjHT* hTables,
     bool last = stream_tuple_end.read();
 STORE_EDGES_INCREASE_COUNTER_DDR_LOOP:
     while (!last) {
+#pragma HLS pipeline II = 19
         tuple = stream_tuple.read();
         ntb = tuple.tb_index;
         edge = tuple.edge;
@@ -1186,6 +1190,7 @@ preprocess(row_t* edge_buf,
     unsigned short numTables = 0;
     ap_uint<8> labelToTable[MAX_LABELS][MAX_LABELS];
 
+INITIALIZE_LABELTOTABLE_LOOP:
     for (int g = 0; g < MAX_TABLES; g++)
         for (int s = 0; s < MAX_TABLES; s++)
             labelToTable[g][s] = 0;

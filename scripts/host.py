@@ -68,8 +68,8 @@ def subiso(test, path):
     addr_dyn_fifo_ctrl = 0x98
     addr_preproc = 0xa8
     addr_preproc_ctrl = 0xac
-    addr_res = 0xb8
-    addr_res_ctrl = 0xc0
+    addr_res = 0x190
+    addr_res_ctrl = 0x198
 
     node_t = np.uint32
     label_t = np.uint8
@@ -261,7 +261,6 @@ def subiso(test, path):
 
                 end_subiso = perf_counter()
                 c = ol.subgraphIsomorphism_0.read(addr_res)
-
                 tot_time = end_subiso - start
                 pre_time = end_preprocess - start
                 tot_time_bench = tot_time_bench + tot_time
@@ -273,11 +272,61 @@ def subiso(test, path):
                       f" {os.path.basename(datagraph)}"
                       f" h1: {hash1_w} h2: {hash2_w}",
                       file=fres)
-                print(ol.subgraphIsomorphism_0.read(addr_dyn_fifo), file=fres)
+                cycles = int((tot_time - pre_time) * 290000000);
 
-    # frame = recorder.frame[recorder.frame['Mark'] == 0]
-    # power = frame["5V_power"].mean()
-    # energy = power * exec_time
+                empty = 0
+                empty0 = ol.subgraphIsomorphism_0.read(0xb8);
+                empty1 = ol.subgraphIsomorphism_0.read(0xbc);
+                empty = (empty1 << 32) | empty0;
+                print(f"Propose empty         {empty} cc, {(empty * 100 / cycles):.2f}%", file=fres)
+                empty = 0
+                empty0 = ol.subgraphIsomorphism_0.read(0xd0);
+                empty1 = ol.subgraphIsomorphism_0.read(0xb4);
+                empty = (empty1 << 32) | empty0;
+                empty = empty * 2
+                print(f"Edgebuild empty       {empty} cc, {(empty * 100 / cycles):.2f}%", file=fres)
+                empty = 0
+                empty0 = ol.subgraphIsomorphism_0.read(0xe8);
+                empty1 = ol.subgraphIsomorphism_0.read(0xec);
+                empty = (empty1 << 32) | empty0;
+                empty = empty * 8
+                print(f"Findmin empty         {empty} cc, {(empty * 100 / cycles):.2f}%", file=fres)
+                empty = 0
+                empty0 = ol.subgraphIsomorphism_0.read(0x100);
+                empty1 = ol.subgraphIsomorphism_0.read(0x104);
+                empty = (empty1 << 32) | empty0;
+                empty = empty * 8
+                print(f"Readmin counter empty {empty} cc, {(empty * 100 / cycles):.2f}%", file=fres)
+                empty = 0
+                empty0 = ol.subgraphIsomorphism_0.read(0x118);
+                empty1 = ol.subgraphIsomorphism_0.read(0x11c);
+                empty = (empty1 << 32) | empty0;
+                empty = empty * 2
+                print(f"Readmin edge empty    {empty} cc, {(empty * 100 / cycles):.2f}%", file=fres)
+                empty = 0
+                empty0 = ol.subgraphIsomorphism_0.read(0x130);
+                empty1 = ol.subgraphIsomorphism_0.read(0x134);
+                empty = (empty1 << 32) | empty0;
+                empty = empty * 2
+                print(f"Tuplebuild empty      {empty} cc, {(empty * 100 / cycles):.2f}%", file=fres)
+                empty = 0
+                empty0 = ol.subgraphIsomorphism_0.read(0x148);
+                empty1 = ol.subgraphIsomorphism_0.read(0x14c);
+                empty = (empty1 << 32) | empty0;
+                print(f"Intersect empty       {empty} cc, {(empty * 100 / cycles):.2f}%", file=fres)
+                empty = 0
+                empty0 = ol.subgraphIsomorphism_0.read(0x160);
+                empty1 = ol.subgraphIsomorphism_0.read(0x164);
+                empty = (empty1 << 32) | empty0;
+                print(f"Verify empty          {empty} cc, {(empty * 100 / cycles):.2f}%", file=fres)
+                empty = 0
+                empty0 = ol.subgraphIsomorphism_0.read(0x178);
+                empty1 = ol.subgraphIsomorphism_0.read(0x17c);
+                empty = (empty1 << 32) | empty0;
+                empty = empty * 2
+                print(f"Assembly empty        {empty} cc, {(empty * 100 / cycles):.2f}%", file=fres)
+                print(f"Cycles: {cycles}", file=fres)
+                print(ol.subgraphIsomorphism_0.read(addr_dyn_fifo), file=fres)
 
                 if c == int(querytuple[1]):
                     print("OK, solutions: ", c, sep="", flush=True)
