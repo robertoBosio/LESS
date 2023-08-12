@@ -213,7 +213,7 @@ int main()
     bool flag = true;
     std::map<std::string, std::vector<TestEntry>> test;
     std::string prev_datagraph;
-    unsigned long counters[9];
+    unsigned long counters[15];
 
     char cwd[100];
     if (getcwd(cwd, sizeof(cwd)) != NULL)
@@ -394,6 +394,12 @@ int main()
                 counters[6],
                 counters[7],
                 counters[8],
+                counters[9],
+                counters[10],
+                counters[11],
+                counters[12],
+                counters[13],
+                counters[14],
 #endif
                 result);
 #endif /* SOFTWARE_PREPROC */

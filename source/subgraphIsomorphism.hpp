@@ -40,36 +40,42 @@ void subgraphIsomorphism(
 
 #else
 
-void subgraphIsomorphism(
-    row_t htb_buf0[HASHTABLES_SPACE],
-    row_t htb_buf1[HASHTABLES_SPACE],
-    row_t htb_buf2[HASHTABLES_SPACE],
-    row_t htb_buf3[HASHTABLES_SPACE],
-    row_t bloom_p[BLOOM_SPACE],
-    row_t res_buf[RESULTS_SPACE],
-    const unsigned short numQueryVert,
-    const unsigned short numQueryEdges,
-    const unsigned long numDataEdges,
-    const unsigned char hash1_w,
-    const unsigned char hash2_w,
-    const unsigned long dynfifo_space,
-    unsigned long &dynfifo_diagnostic,
+void
+subgraphIsomorphism(row_t htb_buf0[HASHTABLES_SPACE],
+                    row_t htb_buf1[HASHTABLES_SPACE],
+                    row_t htb_buf2[HASHTABLES_SPACE],
+                    row_t htb_buf3[HASHTABLES_SPACE],
+                    row_t bloom_p[BLOOM_SPACE],
+                    row_t res_buf[RESULTS_SPACE],
+                    const unsigned short numQueryVert,
+                    const unsigned short numQueryEdges,
+                    const unsigned long numDataEdges,
+                    const unsigned char hash1_w,
+                    const unsigned char hash2_w,
+                    const unsigned long dynfifo_space,
+                    unsigned long& dynfifo_diagnostic,
 
 #if DEBUG_INTERFACE
-    volatile unsigned int &debif_endpreprocess,
-    unsigned long &p_propose_empty,
-    unsigned long &p_edgebuild_empty,
-    unsigned long &p_findmin_empty,
-    unsigned long &p_readmin_counter_empty,
-    unsigned long &p_readmin_edge_empty,
-    unsigned long &p_tuplebuild_empty,
-    unsigned long &p_intersect_empty,
-    unsigned long &p_verify_empty,
-    unsigned long &p_assembly_empty,
+                    volatile unsigned int& debif_endpreprocess,
+                    unsigned long& p_propose_empty,
+                    unsigned long& p_edgebuild_empty,
+                    unsigned long& p_findmin_empty,
+                    unsigned long& p_readmin_counter_empty,
+                    unsigned long& p_readmin_edge_empty,
+                    unsigned long& p_homomorphism_empty,
+                    unsigned long& p_batchbuild_empty,
+                    unsigned long& p_tuplebuild_empty,
+                    unsigned long& p_intersect_empty,
+                    unsigned long& p_offset_empty,
+                    unsigned long& p_split_empty,
+                    unsigned long& p_verify_empty,
+                    unsigned long& p_compact_empty,
+                    unsigned long& p_filter_empty,
+                    unsigned long& p_assembly_empty,
 #endif /* DEBUG_INTERFACE */
 
 #if COUNT_ONLY
-    long unsigned int &result
+                    long unsigned int& result
 #else
     hls::stream<T_NODE> &result
 #endif /* COUNT_ONLY */

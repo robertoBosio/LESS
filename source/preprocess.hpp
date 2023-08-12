@@ -1191,9 +1191,12 @@ preprocess(row_t* edge_buf,
     ap_uint<8> labelToTable[MAX_LABELS][MAX_LABELS];
 
 INITIALIZE_LABELTOTABLE_LOOP:
-    for (int g = 0; g < MAX_TABLES; g++)
-        for (int s = 0; s < MAX_TABLES; s++)
+    for (int g = 0; g < MAX_TABLES; g++) {
+        for (int s = 0; s < MAX_TABLES; s++) {
+#pragma HLS pipeline II = 2
             labelToTable[g][s] = 0;
+        }
+    }
 
     buildTableDescriptors<MAX_QV, MAX_TB, NODE_W, LAB_W, MAX_LABELS>(
       &edge_buf[numDataEdges],
