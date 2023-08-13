@@ -50,6 +50,7 @@
 #define S_D         DEFAULT_STREAM_DEPTH    
 #define DDR_WORDS   RES_WIDTH
 #define DDR_W       DDR_WORD
+#define BLOCKBUILD_NUM 2
 
 #if DEBUG_INTERFACE
     unsigned long propose_empty = 0;
@@ -851,7 +852,7 @@ mwj_tuplebuild(const unsigned char hash1_w,
                hls::stream<bool>& stream_sol_end_in,
                hls::stream<bool>& stream_stop,
 
-               hls::stream<intersect_tuple_t>& stream_tuple_out,
+               hls::stream<intersect_tuple_t> stream_tuple_out[2],
                hls::stream<ap_uint<V_ID_W> >& stream_sol_out,
                hls::stream<bool>& stream_sol_end_out)
 {
@@ -869,6 +870,7 @@ mwj_tuplebuild(const unsigned char hash1_w,
     unsigned char curQV = 0;
     unsigned char query_edge = 0;
     bool stop, last;
+    bool inverted = true;
 
 TUPLEBUILD_TASK_LOOP:
     while (true) {
@@ -900,7 +902,7 @@ TUPLEBUILD_TASK_LOOP:
             bool last_inner = false;
         TUPLEBUILD_EDGE_LOOP:
             while (!last_outer) {
-#pragma HLS pipeline II = 2
+#pragma HLS pipeline II = 1
                 uint8_t tableIndex = qVertices[curQV].tables_indexed[query_edge];
                 uint8_t ivPos = qVertices[curQV].vertex_indexing[query_edge];
                 bool bit_last = (query_edge == (cycles - 1));
@@ -934,12 +936,21 @@ TUPLEBUILD_TASK_LOOP:
                 tuple_out.skip_counter = false;
                 tuple_out.last = false;
 
-                stream_tuple_out.write(tuple_out);
+                if (inverted) {
+                    stream_tuple_out[0].write(tuple_out);
+                } else {
+                    stream_tuple_out[1].write(tuple_out);
+                }
 
                 if (addr_counter == 0)
                     tuple_out.skip_counter = true;
                 tuple_out.addr_counter = addr_counter - 1;
-                stream_tuple_out.write(tuple_out);
+                
+                if (inverted) {
+                    stream_tuple_out[1].write(tuple_out);
+                } else {
+                    stream_tuple_out[0].write(tuple_out);
+                }
                 
                 buffer[buffer_p++] = vToVerify;
 
@@ -961,7 +972,12 @@ TUPLEBUILD_TASK_LOOP:
                 last_outer = last_inner && (query_edge == cycles);
             }
             tuple_out.last = true;
-            stream_tuple_out.write(tuple_out);
+            if (inverted){
+                stream_tuple_out[0].write(tuple_out);
+            } else {
+                stream_tuple_out[1].write(tuple_out);
+            }
+            inverted = !inverted;
         }
 #if DEBUG_INTERFACE
         else {
@@ -995,7 +1011,7 @@ template <size_t BATCH_SIZE_LOG>
 void mwj_intersect(
     AdjHT *hTables,
     htb_cache_t &htb_buf,
-    hls::stream<intersect_tuple_t> &stream_tuple_in,
+    hls::stream<intersect_tuple_t> stream_tuple_in[2],
     hls::stream<bool> &stream_stop,
 
     hls::stream<offset_tuple_t> &stream_tuple_out)
@@ -1008,12 +1024,14 @@ void mwj_intersect(
     unsigned long addr_row;
     ap_uint<DDR_BIT - C_W> addr_inrow;
     ap_uint<64> addr_counter;
+    unsigned char stream_p = 0;
     bool stop;
 
 INTERSECT_TASK_LOOP:
     while (1) {
 #pragma HLS pipeline II=1
-        if (stream_tuple_in.read_nb(tuple_in)){
+        if (stream_tuple_in[stream_p].read_nb(tuple_in)){
+            stream_p = (stream_p + 1) % 2;
 
             if (!tuple_in.last){
                 ap_uint<(1UL << C_W)> offset = 0;
@@ -1055,16 +1073,7 @@ INTERSECT_TASK_LOOP:
                 tuple_out.bit_last_edge = tuple_in.bit_last_edge;
                 tuple_out.flag = tuple_in.flag;
                 tuple_out.last = false;
-
-                // std::cout << "( "
-                //           << tuple_out.indexing_v
-                //           << ", " << tuple_out.indexed_v
-                //           << ", " << (int)tuple_out.tb_index
-                //           << ", " << tuple_out.pos
-                //           << ", " << tuple_out.offset
-                //           << ", " << tuple_out.bit_last_edge
-                //           << ", " << tuple_out.bit_min_set << ")" << std::endl;
-                /* bits[pos] = bits[pos] & (start_off < end_off); */
+                
                 stream_tuple_out.write(tuple_out);
             } else {
                 tuple_out.last = true;
@@ -1797,7 +1806,7 @@ template <size_t BATCH_SIZE_LOG>
 void intersectcache_wrapper(
     AdjHT *hTables,
     htb_cache_t &htb_buf,
-    hls::stream<intersect_tuple_t> &stream_tuple_in,
+    hls::stream<intersect_tuple_t> stream_tuple_in[2],
     hls::stream<bool> &stream_stop,
 
     hls::stream<offset_tuple_t> &stream_tuple_out)
@@ -1835,8 +1844,7 @@ template <typename T_BLOOM,
           size_t K_FUN_LOG,
           size_t LKP3_HASH_W,
           size_t MAX_HASH_W,
-          size_t FULL_HASH_W,
-          size_t BLOCKBUILD_NUM>
+          size_t FULL_HASH_W>
 void multiwayJoin(
     ap_uint<DDR_W> *htb_buf0,
     ap_uint<DDR_W> *htb_buf1,
@@ -1944,8 +1952,7 @@ void multiwayJoin(
         ("Tuplebuild - partial solution");
     hls_thread_local hls::stream<bool, MAX_QV> t_stream_sol_end
         ("Tuplebuild - partial solution end flag");
-    hls_thread_local hls::stream<intersect_tuple_t, S_D> t_stream_tuple
-        ("Tuplebuild - tuples");
+    hls_thread_local hls::stream<intersect_tuple_t, S_D> t_stream_tuple[2];
     
     /* Intersect data out */    
     hls_thread_local hls::stream<ap_uint<V_ID_W>, MAX_QV> i_stream_sol
@@ -2498,7 +2505,7 @@ void multiwayJoinWrap(
     mwj_batch<LKP3_HASH_W, MAX_HASH_W, FULL_HASH_W>(
       hash1_w, hTables0, qVertices0, htb_buf0, stream_batch_end, stream_batch);
 
-    multiwayJoin<T_BLOOM, BLOOM_LOG, K_FUN_LOG, LKP3_HASH_W, MAX_HASH_W, FULL_HASH_W, 2>(
+    multiwayJoin<T_BLOOM, BLOOM_LOG, K_FUN_LOG, LKP3_HASH_W, MAX_HASH_W, FULL_HASH_W>(
       htb_buf1,
       htb_buf2,
       htb_buf3,
