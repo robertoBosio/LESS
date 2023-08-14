@@ -95,6 +95,7 @@ typedef struct
     ap_uint<V_ID_W> indexing_v;
     unsigned char tb_index;
     unsigned char iv_pos; // Query indexing vertex position.
+    unsigned char num_tb_indexed;
     unsigned int address;
     bool reset;
     bool last;
@@ -105,6 +106,7 @@ typedef struct
     ap_uint<V_ID_W> indexing_v;
     unsigned char tb_index;
     unsigned char iv_pos; // Query indexing vertex position.
+    unsigned char num_tb_indexed;
 } readmin_counter_tuple_t;
 
 typedef struct
@@ -112,6 +114,7 @@ typedef struct
     ap_uint<V_ID_W> indexing_v;
     unsigned char tb_index;
     unsigned char iv_pos; // Query indexing vertex position.
+    unsigned char num_tb_indexed;
     unsigned int rowstart;
     unsigned int rowend;
 } readmin_edge_tuple_t;
@@ -123,10 +126,31 @@ struct homomorphism_tuple_t
     bool last;
 };
 
+template<typename NODE_T>
+struct batchbuild_tuple_t
+{
+    NODE_T node;
+    bool last;
+    bool min_set;
+};
+
+template<typename NODE_T>
+struct sequencebuild_tuple_t
+{
+    NODE_T node;
+    unsigned char tb_index;
+    unsigned char iv_pos;
+    unsigned char query_edge;
+    unsigned char pos;
+    bool bit_last;
+    bool last;
+};
+
 typedef struct
 {
     unsigned char tb_index;
     unsigned char iv_pos; // Query indexing vertex position.
+    unsigned char num_tb_indexed;
 } tuplebuild_tuple_t;
 
 typedef struct
@@ -256,7 +280,9 @@ PROPOSE_TASK_LOOP:
                                  ? curSol_fifo[g] | BIT_FINAL_SOLUTION
                                  : curSol_fifo[g]);
           stream_sol_end_out.write(false);
+        //   std::cout << curSol_fifo[g] << " ";
         }
+        // std::cout << std::endl;
         stream_sol_end_out.write(true);
       }
 #if DEBUG_INTERFACE
@@ -328,6 +354,7 @@ EDGEBUILD_TASK_LOOP:
                 tuple_out.tb_index = tb_index;
                 tuple_out.address = address;
                 tuple_out.reset = false;
+                tuple_out.num_tb_indexed = qVertices[curQV].numTablesIndexed;
                 tuple_out.last = (g == (qVertices[curQV].numTablesIndexed - 1));
                 stream_tuple_out.write(tuple_out);
             }
@@ -427,6 +454,7 @@ FINDMIN_TASK_LOOP:
                   tuple_out.indexing_v = tuple_in.indexing_v;
                   tuple_out.tb_index = tuple_in.tb_index;
                   tuple_out.iv_pos = tuple_in.iv_pos;
+                  tuple_out.num_tb_indexed = tuple_in.num_tb_indexed;
                 }
             }
 
@@ -552,6 +580,7 @@ READMIN_COUNTER_TASK_LOOP:
             tuple_out.indexing_v = tuple_in.indexing_v;
             tuple_out.tb_index = tuple_in.tb_index;
             tuple_out.iv_pos = tuple_in.iv_pos;
+            tuple_out.num_tb_indexed = tuple_in.num_tb_indexed;
             tuple_out.rowstart = rowstart;
             tuple_out.rowend = rowend;
 
@@ -625,6 +654,7 @@ READMIN_EDGE_TASK_LOOP:
 
             tuple_out.tb_index = tuple_in.tb_index;
             tuple_out.iv_pos = tuple_in.iv_pos;
+            tuple_out.num_tb_indexed = tuple_in.num_tb_indexed;
             stream_tuple_out.write(tuple_out);
 
             for (int g = 0; g < K_FUN; g++) {
@@ -776,16 +806,16 @@ mwj_batchbuild(
   hls::stream<bool>& stream_sol_end_in,
 
   hls::stream<bool>& stream_req,
-  hls::stream<homomorphism_tuple_t<ap_uint<V_ID_W> > >& stream_batch_out,
-  hls::stream<tuplebuild_tuple_t>& stream_tuple_out,
+  hls::stream<batchbuild_tuple_t<ap_uint<V_ID_W> > >& stream_batch_out,
   hls::stream<ap_uint<V_ID_W> >& stream_sol_out,
   hls::stream<bool>& stream_sol_end_out)
 {
     ap_uint<8> curQV{ 0 };
     ap_uint<V_ID_W> curEmb[MAX_QV];
+    ap_uint<V_ID_W> fake_node;
     unsigned int batch_counter{ 0 };
     homomorphism_tuple_t<ap_uint<V_ID_W> > tuple_in;
-    homomorphism_tuple_t<ap_uint<V_ID_W> > tuple_out;
+    batchbuild_tuple_t<ap_uint<V_ID_W> > tuple_out;
     bool last;
 
     last = stream_sol_end_in.read();
@@ -801,7 +831,14 @@ BATCHBUILD_COPYING_EMBEDDING_LOOP:
     stream_sol_end_out.write(true);
 
     tuplebuild_tuple_t tuple = stream_tuple_in.read();
-    stream_tuple_out.write(tuple);
+    fake_node.range(7, 0) = tuple.tb_index;
+    fake_node.range(15, 8) = tuple.iv_pos;
+    fake_node.range(31, 16) = tuple.num_tb_indexed;
+    tuple_out.last = false;
+    tuple_out.min_set = true;
+    tuple_out.node = fake_node;
+    stream_batch_out.write(tuple_out);
+
     tuple_in = stream_set_in.read();
 
 BATCHBUILD_MAIN_LOOP:
@@ -812,6 +849,7 @@ BATCHBUILD_MAIN_LOOP:
 #pragma HLS pipeline II = 1
             tuple_out.node = tuple_in.node;
             tuple_out.last = false;
+            tuple_out.min_set = false;
             stream_batch_out.write(tuple_out);
             batch_counter++;
             tuple_in = stream_set_in.read();
@@ -821,6 +859,7 @@ BATCHBUILD_MAIN_LOOP:
         if (!tuple_in.last && batch_counter == (MAX_BATCH_SIZE - 1)) {
             stream_req.write(true);
             tuple_out.last = true;
+            tuple_out.min_set = false;
             stream_batch_out.write(tuple_out);
             batch_counter = 0;
 
@@ -831,11 +870,94 @@ BATCHBUILD_MAIN_LOOP:
                 stream_sol_end_out.write(false);
             }
             stream_sol_end_out.write(true);
-            stream_tuple_out.write(tuple);
+            tuple_out.last = false;
+            tuple_out.min_set = true;
+            tuple_out.node = fake_node;
+            stream_batch_out.write(tuple_out);
         }
     }
+    tuple_out.min_set = false;
     tuple_out.last = true;
     stream_batch_out.write(tuple_out);
+}
+
+template<size_t BATCH_SIZE_LOG>
+void
+mwj_sequencebuild(
+  hls::stream<batchbuild_tuple_t<ap_uint<V_ID_W> > >& stream_tuple_in,
+
+  hls::stream<sequencebuild_tuple_t<ap_uint<V_ID_W> > >& stream_tuple_out)
+{
+#pragma HLS pipeline II = 1
+    static ap_uint<V_ID_W> buffer[(1UL << BATCH_SIZE_LOG)];
+    static ap_uint<BATCH_SIZE_LOG> buffer_size = 0;
+    static ap_uint<BATCH_SIZE_LOG> buffer_p;
+    static unsigned short cycles = 0;
+    static unsigned char query_edge = 0;
+    static unsigned char tb_index = 0;
+    static unsigned char iv_pos = 0;
+    ap_uint<V_ID_W> vToVerify;
+    batchbuild_tuple_t< ap_uint<V_ID_W> > tuple_in;
+    sequencebuild_tuple_t< ap_uint<V_ID_W> > tuple_out;
+    bool last_inner, min_set;
+
+    /* If used to decide if read from stream or from memory */
+    // std::cout << "reading from ";
+    if (query_edge == 0) {
+        // std::cout << "stream: ";
+        tuple_in = stream_tuple_in.read();
+        last_inner = tuple_in.last;
+        vToVerify = tuple_in.node;
+        min_set = tuple_in.min_set;
+        buffer[buffer_p] = vToVerify;
+    } else {
+        // std::cout << "mem: ";
+        last_inner = (buffer_p == buffer_size);
+        vToVerify = buffer[buffer_p];
+        min_set = false;
+    }
+
+    if (min_set) {
+        /* Passing information of min_set through the node variable to
+        save some bits */
+        tb_index = vToVerify.range(7, 0);
+        iv_pos = vToVerify.range(15, 8);
+        cycles = vToVerify.range(31, 16);
+        // std::cout << "it is a min set with " << (int)tb_index << " "
+        //           << (int)iv_pos << " " << (int)cycles << std::endl;
+    } else {
+        /* Checking inner loop end condition.
+        Inner loop cycles on nodes over an edge; Doing single node over the edges
+        would have been much more easier but this rearrangment achieve better hit ratios
+        since each edge is a single table */
+        if (last_inner) {
+            query_edge++;
+            buffer_size = buffer_p;
+            buffer_p = 0;
+            // std::cout << "it is a last " << (int)query_edge;
+
+            /* Checking outer loop end condition */
+            if (query_edge == cycles) {
+                // std::cout << " final";
+                buffer_size = 0;
+                query_edge = 0;
+                tuple_out.last = true; 
+                stream_tuple_out.write(tuple_out);
+            }
+            // std::cout << std::endl;
+        } else {
+            // std::cout << "it is a node " << (int)vToVerify << std::endl;
+            tuple_out.node = vToVerify;
+            tuple_out.tb_index = tb_index;
+            tuple_out.iv_pos = iv_pos;
+            tuple_out.pos = buffer_p;
+            tuple_out.query_edge = query_edge;
+            tuple_out.bit_last = (query_edge == (cycles - 1));
+            tuple_out.last = false;
+            stream_tuple_out.write(tuple_out);
+            buffer_p++;
+        }
+    }
 }
 
 template<size_t BATCH_SIZE_LOG,
@@ -846,8 +968,7 @@ void
 mwj_tuplebuild(const unsigned char hash1_w,
                const unsigned char hash2_w,
                QueryVertex* qVertices,
-               hls::stream<homomorphism_tuple_t<ap_uint<V_ID_W> > >& stream_set_in,
-               hls::stream<tuplebuild_tuple_t>& stream_tuple_in,
+               hls::stream<sequencebuild_tuple_t<ap_uint<V_ID_W> > >& stream_tuple_in,
                hls::stream<ap_uint<V_ID_W> >& stream_sol_in,
                hls::stream<bool>& stream_sol_end_in,
                hls::stream<bool>& stream_stop,
@@ -857,18 +978,14 @@ mwj_tuplebuild(const unsigned char hash1_w,
                hls::stream<bool>& stream_sol_end_out)
 {
     const ap_uint<V_ID_W> MASK_FINAL_SOLUTION = ~(1UL << (V_ID_W - 1));
-    ap_uint<V_ID_W> buffer[(1UL << BATCH_SIZE_LOG)];
-    ap_uint<BATCH_SIZE_LOG> buffer_size = 0;
-    ap_uint<BATCH_SIZE_LOG> buffer_p;
     ap_uint<V_ID_W> curEmb[MAX_QV];
     ap_uint<V_ID_W> vToVerify;
     hls::stream<ap_uint<V_ID_W>, 4> hash_in0, hash_in1;
     hls::stream<ap_uint<LKP3_HASH_W>, 4> hash_out0, hash_out1;
     unsigned long addr_counter;
     intersect_tuple_t tuple_out;
-    homomorphism_tuple_t< ap_uint<V_ID_W> > tuple_in;
+    sequencebuild_tuple_t< ap_uint<V_ID_W> > tuple_in;
     unsigned char curQV = 0;
-    unsigned char query_edge = 0;
     bool stop, last;
     bool inverted = true;
 
@@ -876,9 +993,6 @@ TUPLEBUILD_TASK_LOOP:
     while (true) {
         if (stream_sol_end_in.read_nb(last)) {
             curQV = 0;
-            buffer_size = 0;
-            buffer_p = 0;
-            query_edge = 0;
 
         TUPLEBUILD_COPYING_EMBEDDING_LOOP:
             while (!last) {
@@ -891,30 +1005,17 @@ TUPLEBUILD_TASK_LOOP:
             }
             stream_sol_end_out.write(true);
 
-            tuplebuild_tuple_t tuple = stream_tuple_in.read();
-            unsigned char cycles = qVertices[curQV].numTablesIndexed;
-
-            /* Flatten the inner loop cycling on vertices of min set
-            into the outer cycle over query edges, Vitis HLS 2022.2 is
-            not able to do it on its own */
-            tuple_in = stream_set_in.read();
-            bool last_outer = tuple_in.last;
-            bool last_inner = false;
+            tuple_in = stream_tuple_in.read();
         TUPLEBUILD_EDGE_LOOP:
-            while (!last_outer) {
+            while (!tuple_in.last) {
 #pragma HLS pipeline II = 1
-                uint8_t tableIndex = qVertices[curQV].tables_indexed[query_edge];
-                uint8_t ivPos = qVertices[curQV].vertex_indexing[query_edge];
-                bool bit_last = (query_edge == (cycles - 1));
+                uint8_t tableIndex = qVertices[curQV].tables_indexed[tuple_in.query_edge];
+                uint8_t ivPos = qVertices[curQV].vertex_indexing[tuple_in.query_edge];
+                bool bit_last = tuple_in.bit_last;
                 bool bit_min =
-                  (tuple.tb_index == tableIndex && tuple.iv_pos == ivPos);
+                  (tuple_in.tb_index == tableIndex && tuple_in.iv_pos == ivPos);
 
-                if (query_edge == 0) {
-                    vToVerify = tuple_in.node;
-                } else {
-                    vToVerify = buffer[buffer_p];
-                }
-
+                vToVerify = tuple_in.node;
                 hash_in0.write(vToVerify);
                 hash_in1.write(curEmb[ivPos] & MASK_FINAL_SOLUTION);
                 xf::database::hashLookup3<V_ID_W>(hash_in0, hash_out0);
@@ -930,11 +1031,23 @@ TUPLEBUILD_TASK_LOOP:
                 tuple_out.indexing_v = curEmb[ivPos] & MASK_FINAL_SOLUTION;
                 tuple_out.addr_counter = addr_counter;
                 tuple_out.tb_index = tableIndex;
-                tuple_out.pos = buffer_p;
+                tuple_out.pos = tuple_in.pos;
                 tuple_out.bit_last_edge = bit_last;
                 tuple_out.flag = (bit_min) ? MIN_SET : CHECK;
                 tuple_out.skip_counter = false;
                 tuple_out.last = false;
+
+                // std::cout 
+                // << " " << (int)tuple_out.indexed_v 
+                // << " " << (int)tuple_out.indexing_v
+                // << " " << (int)tuple_out.addr_counter 
+                // << " " << (int)tuple_out.tb_index
+                // << " " << (int)tuple_out.pos
+                // << " " << tuple_out.bit_last_edge
+                // << " " << (int)tuple_out.flag 
+                // << " " << tuple_out.skip_counter 
+                // << " " << tuple_out.last 
+                // << std::endl;
 
                 if (inverted) {
                     stream_tuple_out[0].write(tuple_out);
@@ -946,31 +1059,26 @@ TUPLEBUILD_TASK_LOOP:
                     tuple_out.skip_counter = true;
                 tuple_out.addr_counter = addr_counter - 1;
                 
+                // std::cout 
+                // << " " << (int)tuple_out.indexed_v 
+                // << " " << (int)tuple_out.indexing_v
+                // << " " << (int)tuple_out.addr_counter 
+                // << " " << (int)tuple_out.tb_index
+                // << " " << (int)tuple_out.pos
+                // << " " << tuple_out.bit_last_edge
+                // << " " << (int)tuple_out.flag 
+                // << " " << tuple_out.skip_counter 
+                // << " " << tuple_out.last 
+                // << std::endl;
                 if (inverted) {
                     stream_tuple_out[1].write(tuple_out);
                 } else {
                     stream_tuple_out[0].write(tuple_out);
                 }
-                
-                buffer[buffer_p++] = vToVerify;
 
-                /* End condition inner flatten loop */
-                if (query_edge == 0) {
-                    tuple_in = stream_set_in.read();
-                    last_inner = tuple_in.last;
-                } else {
-                    last_inner = (buffer_p == buffer_size);
-                }
-
-                if (last_inner) {
-                    query_edge++;
-                    buffer_size = buffer_p;
-                    buffer_p = 0;
-                }
-
-                /* End condition outer loop */
-                last_outer = last_inner && (query_edge == cycles);
+                tuple_in = stream_tuple_in.read();
             }
+
             tuple_out.last = true;
             if (inverted){
                 stream_tuple_out[0].write(tuple_out);
@@ -978,6 +1086,7 @@ TUPLEBUILD_TASK_LOOP:
                 stream_tuple_out[1].write(tuple_out);
             }
             inverted = !inverted;
+
         }
 #if DEBUG_INTERFACE
         else {
@@ -985,8 +1094,9 @@ TUPLEBUILD_TASK_LOOP:
         }
 #endif
 
-        if (stream_stop.read_nb(stop))
+        if (stream_stop.read_nb(stop)){
             break;
+        }
     }
 }
 
@@ -1942,10 +2052,16 @@ void multiwayJoin(
         ("Batchbuild - partial solution");
     hls_thread_local hls::stream<bool, MAX_QV> b_stream_sol_end
         ("Batchbuild - partial solution end flag");
-    hls_thread_local hls::stream<homomorphism_tuple_t< ap_uint<V_ID_W> >, S_D> b_stream_set
+    hls_thread_local hls::stream<batchbuild_tuple_t< ap_uint<V_ID_W> >, S_D> b_stream_set
         ("Batchbuild - set nodes");
-    hls_thread_local hls::stream<tuplebuild_tuple_t, S_D> b_stream_tuple
-        ("Batchbuild - tuples");
+    
+    /* Sequencebuild data out */    
+    hls_thread_local hls::stream<ap_uint<V_ID_W>, MAX_QV> sb_stream_sol
+        ("Batchbuild - partial solution");
+    hls_thread_local hls::stream<bool, MAX_QV> sb_stream_sol_end
+        ("Batchbuild - partial solution end flag");
+    hls_thread_local hls::stream<sequencebuild_tuple_t< ap_uint<V_ID_W> >, S_D> sb_stream_set
+        ("Sequencebuild - set nodes");
     
     /* Tuplebuild data out */    
     hls_thread_local hls::stream<ap_uint<V_ID_W>, MAX_QV> t_stream_sol
@@ -2078,9 +2194,20 @@ void multiwayJoin(
         h_stream_sol_end,
         merge_in[0],
         b_stream_set,
-        b_stream_tuple,
         b_stream_sol,
         b_stream_sol_end);
+    
+    hls_thread_local hls::task mwj_sequencebuild_t(
+        mwj_sequencebuild<PROPOSE_BATCH_LOG>,
+        b_stream_set,
+        sb_stream_set);
+    
+    hls_thread_local hls::task mwj_bypass_sol_sequence_build(
+        mwj_bypass_sol,
+        b_stream_sol,
+        b_stream_sol_end,
+        sb_stream_sol,
+        sb_stream_sol_end);
 
     hls_thread_local hls::task mwj_bypass_sol_intersect(
         mwj_bypass_sol,
@@ -2220,10 +2347,9 @@ void multiwayJoin(
         hash1_w,
         hash2_w,
         qVertices0,
-        b_stream_set,
-        b_stream_tuple,
-        b_stream_sol,
-        b_stream_sol_end,
+        sb_stream_set,
+        sb_stream_sol,
+        sb_stream_sol_end,
         streams_stop[4],
         t_stream_tuple,
         t_stream_sol,
@@ -2353,10 +2479,9 @@ void multiwayJoin(
       hash1_w,
       hash2_w,
       qVertices0,
-      std::ref(b_stream_set),
-      std::ref(b_stream_tuple),
-      std::ref(b_stream_sol),
-      std::ref(b_stream_sol_end),
+      std::ref(sb_stream_set),
+      std::ref(sb_stream_sol),
+      std::ref(sb_stream_sol_end),
       std::ref(streams_stop[4]),
       std::ref(t_stream_tuple),
       std::ref(t_stream_sol),
