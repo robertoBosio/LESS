@@ -219,8 +219,8 @@ void MMU_slow(
         unsigned long &diagnostic,
         hls::stream<DDR_WORD_T> &in_stream,
         hls::stream<DDR_WORD_T> &out_stream,
-        hls::stream<bool> &stop_req_stream,
-        hls::stream<bool> &overflow_stream)
+        hls::stream<bool> &stop_req_stream)
+        // hls::stream<bool> &overflow_stream)
 {
 
     enum State_slow
@@ -278,9 +278,9 @@ MMU_SLOW_TASK_LOOP:
                     max_space = space_used;
                 }
 
-                if (space_used > space){
-                    overflow_stream.write(true);
-                }
+                // if (space_used > space){
+                //     overflow_stream.write(true);
+                // }
                 state = stall_ddr;
                 break;
 
@@ -339,8 +339,8 @@ void dynfifo_init(
         hls::stream<DATA_T> &in_stream,
         hls::stream<DATA_T> &out_stream,
         hls::stream<bool> &stop_req_stream_fast,
-        hls::stream<bool> &stop_req_stream_slow,
-        hls::stream<bool> &overflow)
+        hls::stream<bool> &stop_req_stream_slow)
+        // hls::stream<bool> &overflow)
 {
 
 #pragma HLS inline 
@@ -380,8 +380,8 @@ void dynfifo_init(
             diagnostic,
             store_p_stream,
             load_p_stream,
-            stop_req_stream_slow,
-            overflow);
+            stop_req_stream_slow);
+            // overflow);
 
 #else
 
@@ -407,8 +407,8 @@ void dynfifo_init(
             std::ref(diagnostic),
             std::ref(store_p_stream),
             std::ref(load_p_stream),
-            std::ref(stop_req_stream_slow),
-            std::ref(overflow));
+            std::ref(stop_req_stream_slow));
+            // std::ref(overflow));
 
     mmu_fast_t.detach();
     mmu_slow_t.detach();
