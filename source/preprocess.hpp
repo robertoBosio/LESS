@@ -1159,7 +1159,7 @@ countEdgePerBlock(row_t* edge_buf,
     constexpr size_t LABELDST_NODE = 96;
     const unsigned int block_per_table = hash1_w + hash2_w - COUNTERS_PER_BLOCK;
 
-COUNT_EDGE_PER_BLOCK_LOOP:
+COUNT_EDGE_IN_BLOCK_LOOP:
     for (auto s = 0; s < numDataEdges; s++) {
 /* We can safely remove the intra dependency by checking if the two addresses collide */
 #pragma HLS dependence variable = block_n_edges type = intra false
@@ -1255,7 +1255,7 @@ storeEdgePerBlock(row_t* edge_buf,
     constexpr size_t LABELDST_NODE = 96;
     const unsigned int block_per_table = hash1_w + hash2_w - COUNTERS_PER_BLOCK;
 
-STORE_EDGE_BLOCK_LOOP:
+STORE_EDGE_IN_BLOCK_LOOP:
     for (auto s = 0; s < numDataEdges; s++) {
         /* We can remove this dependency since writing and reading are on
         different portion of memory */
@@ -1610,8 +1610,8 @@ fillTablesURAM(row_t* edge_buf,
     const unsigned int block_per_table =
       (1UL << (hash1_w + hash2_w - COUNTERS_PER_BLOCK));
     unsigned long start_addr = 0;
-    unsigned int block_n_edges[2048] = {};
-#pragma HLS bind_storage variable = block_n_edges type = RAM_2P impl = BRAM
+    unsigned int block_n_edges[2048];
+#pragma HLS bind_storage variable = block_n_edges type = RAM_T2P impl = BRAM
 
 #ifndef __SYNTHESIS__
     unsigned long end_addr = numTables * htb_size;
@@ -1621,6 +1621,12 @@ STORE_HASHTABLES_POINTER_LOOP:
     for (unsigned int ntb = 0; ntb < numTables; ntb++){
         hTables0[ntb].start_offset = start_addr;
         start_addr += htb_size;
+    }
+    
+INITIALIZE_BRAM_LOOP:
+    for (auto g = 0; g < numTables * block_per_table; g++) {
+#pragma HLS pipeline II = 1
+        block_n_edges[g] = 0;
     }
 
     countEdgePerBlock<NODE_W, LAB_W, LKP3_HASH_W, MAX_HASH_W, MAX_LABELS>(

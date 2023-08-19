@@ -4,7 +4,7 @@
 == Synthesis Summary Report of 'subgraphIsomorphism'
 ================================================================
 + General Information: 
-    * Date:           Sat Aug 19 06:32:10 2023
+    * Date:           Sat Aug 19 13:02:35 2023
     * Version:        2022.2 (Build 3670227 on Oct 13 2022)
     * Project:        subgraphiso-kria
     * Solution:       solution1 (Vivado IP Flow Target)
@@ -15,173 +15,173 @@
 + Performance & Resource Estimates: 
     
     PS: '+' for module; 'o' for loop; '*' for dataflow
-    +-------------------------------------------------------------------------------------+--------+-------+---------+-----------+----------+---------+-------+----------+-----------+---------+-------------+-------------+---------+
-    |                                       Modules                                       |  Issue |       | Latency |  Latency  | Iteration|         |  Trip |          |           |         |             |             |         |
-    |                                       & Loops                                       |  Type  | Slack | (cycles)|    (ns)   |  Latency | Interval| Count | Pipelined|   BRAM    |   DSP   |      FF     |     LUT     |   URAM  |
-    +-------------------------------------------------------------------------------------+--------+-------+---------+-----------+----------+---------+-------+----------+-----------+---------+-------------+-------------+---------+
-    |+ subgraphIsomorphism                                                                |  Timing|  -1.75|        -|          -|         -|        -|      -|        no|  217 (75%)|  13 (1%)|  74133 (31%)|  66063 (56%)|  8 (12%)|
-    | + subgraphIsomorphism_Pipeline_1                                                    |       -|   0.58|       34|    102.102|         -|       34|      -|        no|          -|        -|      7 (~0%)|     48 (~0%)|        -|
-    |  o Loop 1                                                                           |       -|   1.80|       32|     96.096|         1|        1|     32|       yes|          -|        -|            -|            -|        -|
-    | + subgraphIsomorphism_Pipeline_2                                                    |       -|   0.58|       34|    102.102|         -|       34|      -|        no|          -|        -|      7 (~0%)|     48 (~0%)|        -|
-    |  o Loop 1                                                                           |       -|   1.80|       32|     96.096|         1|        1|     32|       yes|          -|        -|            -|            -|        -|
-    | + subgraphIsomorphism_Pipeline_INITIALIZE_LABELTOTABLE_LOOP_VITIS_LOOP_1705_1       |       -|   0.20|     2050|  6.156e+03|         -|     2050|      -|        no|          -|        -|     50 (~0%)|    201 (~0%)|        -|
-    |  o INITIALIZE_LABELTOTABLE_LOOP_VITIS_LOOP_1705_1                                   |       -|   1.80|     2048|  6.150e+03|         3|        2|   1024|       yes|          -|        -|            -|            -|        -|
-    | + buildTableDescriptors_32ul_32ul_32ul_5ul_32ul_s                                   |  Timing|  -0.00|   327701|  9.841e+05|         -|   327701|      -|        no|          -|        -|    624 (~0%)|    1274 (1%)|        -|
-    |  + buildTableDescriptors_32ul_32ul_32ul_5ul_32ul_Pipeline_FILL_ORDER_LOOP           |  Timing|  -0.00|    65538|  1.968e+05|         -|    65538|      -|        no|          -|        -|     86 (~0%)|     87 (~0%)|        -|
-    |   o FILL_ORDER_LOOP                                                                 |       -|   1.80|    65536|  1.968e+05|         3|        1|  65535|       yes|          -|        -|            -|            -|        -|
-    |  + buildTableDescriptors_32ul_32ul_32ul_5ul_32ul_Pipeline_CREATE_TABDESC_LOOP       |  Timing|  -0.00|   262145|  7.872e+05|         -|   262145|      -|        no|          -|        -|    365 (~0%)|    740 (~0%)|        -|
-    |   o CREATE_TABDESC_LOOP                                                             |       -|   1.80|   262143|  7.872e+05|         8|        4|  65535|       yes|          -|        -|            -|            -|        -|
-    | + fillTablesURAM                                                                    |  Timing|  -0.89|        -|          -|         -|        -|      -|        no|    14 (4%)|  5 (~0%)|   13473 (5%)|  19235 (16%)|  8 (12%)|
-    |  + fillTablesURAM_Pipeline_1                                                        |       -|   0.40|     2050|  6.156e+03|         -|     2050|      -|        no|          -|        -|     27 (~0%)|     69 (~0%)|        -|
-    |   o Loop 1                                                                          |       -|   1.80|     2048|  6.150e+03|         2|        1|   2048|       yes|          -|        -|            -|            -|        -|
-    |  + fillTablesURAM_Pipeline_STORE_HASHTABLES_POINTER_LOOP                            |       -|   0.27|    65537|  1.968e+05|         -|    65537|      -|        no|          -|        -|     99 (~0%)|    154 (~0%)|        -|
-    |   o STORE_HASHTABLES_POINTER_LOOP                                                   |       -|   1.80|    65535|  1.968e+05|         2|        1|  65535|       yes|          -|        -|            -|            -|        -|
-    |  + countEdgePerBlock_32ul_5ul_64ul_20ul_32ul_s                                      |  Timing|  -0.00|        -|          -|         -|        -|      -|        no|          -|        -|   1120 (~0%)|    2395 (2%)|        -|
-    |   + countEdgePerBlock_Pipeline_COUNT_EDGE_PER_BLOCK_LOOP                            |  Timing|  -0.00|        -|          -|         -|        -|      -|        no|          -|        -|    981 (~0%)|    1937 (1%)|        -|
-    |    o COUNT_EDGE_PER_BLOCK_LOOP                                                      |      II|   1.80|        -|          -|        16|        5|      -|       yes|          -|        -|            -|            -|        -|
-    |  + fillTablesURAM_Pipeline_COUNTER_TO_OFFSET_BLOCK_LOOP                             |       -|   0.36|     1027|  3.084e+03|         -|     1027|      -|        no|          -|        -|    102 (~0%)|    116 (~0%)|        -|
-    |   o COUNTER_TO_OFFSET_BLOCK_LOOP                                                    |       -|   1.80|     1025|  3.078e+03|         3|        1|   1024|       yes|          -|        -|            -|            -|        -|
-    |  + storeEdgePerBlock_32ul_5ul_64ul_20ul_32ul_s                                      |  Timing|  -0.45|        -|          -|         -|        -|      -|        no|          -|        -|   2100 (~0%)|    3205 (2%)|        -|
-    |   + storeEdgePerBlock_32ul_5ul_64ul_20ul_32ul_Pipeline_STORE_EDGE_BLOCK_LOOP        |  Timing|  -0.45|        -|          -|         -|        -|      -|        no|          -|        -|   1957 (~0%)|    2855 (2%)|        -|
-    |    o STORE_EDGE_BLOCK_LOOP                                                          |       -|   1.80|        -|          -|        30|        4|      -|       yes|          -|        -|            -|            -|        -|
-    |  + counterToOffset_ap_uint_128_5ul_7ul_20ul_s                                       |  Timing|  -0.37|        -|          -|         -|        -|      -|        no|     4 (1%)|        -|   1220 (~0%)|    1301 (1%)|        -|
-    |   o COUNTER_TO_OFFSET_DDR_LOOP                                                      |       -|   1.80|        -|          -|         -|        -|      -|        no|          -|        -|            -|            -|        -|
-    |    o COUNTER_TO_OFFSET_BLOCK                                                        |       -|   1.80|        -|          -|        87|        -|      -|        no|          -|        -|            -|            -|        -|
-    |     + counterToOffset_ap_uint_5ul_7ul_20ul_Pipeline_COUNTER_TO_OFFSET_READ_LOOP     |  Timing|  -0.37|       37|    111.111|         -|       37|      -|        no|          -|        -|    566 (~0%)|    367 (~0%)|        -|
-    |      o COUNTER_TO_OFFSET_READ_LOOP                                                  |       -|   1.80|       35|    105.105|         5|        1|     32|       yes|          -|        -|            -|            -|        -|
-    |  + fillTablesURAM_Pipeline_STORE_EDGES_POINTER_LOOP                                 |  Timing|  -0.89|    65544|  1.968e+05|         -|    65544|      -|        no|          -|  1 (~0%)|    369 (~0%)|    273 (~0%)|        -|
-    |   o STORE_EDGES_POINTER_LOOP                                                        |       -|   1.80|    65542|  1.968e+05|         9|        1|  65535|       yes|          -|        -|            -|            -|        -|
-    |  + storeEdgesHTB_ap_uint_32_7ul_6ul_32ul_5ul_64ul_20ul_32ul_s                       |  Timing|  -0.00|        -|          -|         -|        -|      -|        no|          -|        -|   1735 (~0%)|    4036 (3%)|   4 (6%)|
-    |   o STORE_EDGES_TOP_LOOP                                                            |       -|   1.80|        -|          -|         -|        -|      -|        no|          -|        -|            -|            -|        -|
-    |    + storeEdgesHTB_Pipeline_LOAD_URAM_OFFSETS_LOOP                                  |  Timing|  -0.00|     8195|  2.461e+04|         -|     8195|      -|        no|          -|        -|    184 (~0%)|    204 (~0%)|        -|
-    |     o LOAD_URAM_OFFSETS_LOOP                                                        |      II|   1.80|     8193|  2.460e+04|         4|        2|   4096|       yes|          -|        -|            -|            -|        -|
-    |    + storeEdgesHTB_Pipeline_STORE_EDGES_BLOCK_LOOP                                  |  Timing|  -0.00|        -|          -|         -|        -|      -|        no|          -|        -|    843 (~0%)|    2205 (1%)|        -|
-    |     o STORE_EDGES_BLOCK_LOOP                                                        |      II|   1.80|        -|          -|        14|        2|      -|       yes|          -|        -|            -|            -|        -|
-    |    + storeEdgesHTB_Pipeline_STORE_OFFSETS_BLOCK_LOOP                                |  Timing|  -0.00|     8196|  2.461e+04|         -|     8196|      -|        no|          -|        -|    174 (~0%)|    185 (~0%)|        -|
-    |     o STORE_OFFSETS_BLOCK_LOOP                                                      |      II|   1.80|     8194|  2.461e+04|         4|        2|   4096|       yes|          -|        -|            -|            -|        -|
-    |  + writeBloom*                                                                      |  Timing|  -0.00|        -|          -|         -|        -|      -|  dataflow|     6 (2%)|        -|    4627 (1%)|    4207 (3%)|        -|
-    |   + bloom_read_ap_uint_128_5ul_7ul_32ul_6ul_64ul_20ul_64ul_s                        |  Timing|  -0.00|        -|          -|         -|        -|      -|        no|          -|        -|    2801 (1%)|    3236 (2%)|        -|
-    |    o BLOOM_READ_TABLES_LOOP                                                         |       -|   1.80|        -|          -|         -|        -|      -|        no|          -|        -|            -|            -|        -|
-    |     + bloom_read_Pipeline_BLOOM_READ_EDGES_BLOCK                                    |  Timing|  -0.00|        -|          -|         -|        -|      -|        no|          -|        -|   2028 (~0%)|    2209 (1%)|        -|
-    |      o BLOOM_READ_EDGES_BLOCK                                                       |       -|   1.80|        -|          -|        17|        2|      -|       yes|          -|        -|            -|            -|        -|
-    |       + hashlookup3_core_32_s                                                       |       -|   0.78|        6|     18.018|         -|        1|      -|       yes|          -|        -|    481 (~0%)|    575 (~0%)|        -|
-    |       + hashlookup3_core_32_s                                                       |       -|   0.78|        6|     18.018|         -|        1|      -|       yes|          -|        -|    481 (~0%)|    575 (~0%)|        -|
-    |   + entry_proc                                                                      |       -|   0.90|        0|      0.000|         -|        0|      -|        no|          -|        -|      3 (~0%)|     29 (~0%)|        -|
-    |   + bloom_write_ap_uint_128_7ul_64ul_3ul_s                                          |  Timing|  -0.00|        -|          -|         -|        -|      -|        no|          -|        -|   1466 (~0%)|    611 (~0%)|        -|
-    |    + bloom_write_ap_uint_128_7ul_64ul_3ul_Pipeline_BLOOM_WRITE_TASK_LOOP            |  Timing|  -0.00|        -|          -|         -|        -|      -|        no|          -|        -|   1396 (~0%)|    512 (~0%)|        -|
-    |     o BLOOM_WRITE_TASK_LOOP                                                         |       -|   1.80|        -|          -|        36|        8|      -|       yes|          -|        -|            -|            -|        -|
-    |  o COUNT_OCCURENCIES_TOP_LOOP                                                       |       -|   1.80|        -|          -|         -|        -|      -|        no|          -|        -|            -|            -|        -|
-    |   + fillTablesURAM_Pipeline_INITIALIZE_URAM_LOOP                                    |       -|   0.30|    16386|  4.921e+04|         -|    16386|      -|        no|          -|        -|     33 (~0%)|     73 (~0%)|        -|
-    |    o INITIALIZE_URAM_LOOP                                                           |       -|   1.80|    16384|  4.920e+04|         2|        1|  16384|       yes|          -|        -|            -|            -|        -|
-    |   + fillTablesURAM_Pipeline_COUNT_EDGES_BLOCK_LOOP                                  |  Timing|  -0.00|        -|          -|         -|        -|      -|        no|          -|        -|    406 (~0%)|    328 (~0%)|        -|
-    |    o COUNT_EDGES_BLOCK_LOOP                                                         |      II|   1.80|        -|          -|         7|        2|      -|       yes|          -|        -|            -|            -|        -|
-    |   + fillTablesURAM_Pipeline_STORE_COUNTERS_BLOCK_LOOP                               |  Timing|  -0.00|     8196|  2.461e+04|         -|     8196|      -|        no|          -|        -|    174 (~0%)|    185 (~0%)|        -|
-    |    o STORE_COUNTERS_BLOCK_LOOP                                                      |      II|   1.80|     8194|  2.461e+04|         4|        2|   4096|       yes|          -|        -|            -|            -|        -|
-    | + multiwayJoinWrap_ap_uint_128_7ul_3ul_64ul_20ul_64ul_s*                            |  Timing|  -1.75|        -|          -|         -|        -|      -|  dataflow|  191 (66%)|  8 (~0%)|  51399 (21%)|  31758 (27%)|        -|
-    |  + mwj_batch_64ul_20ul_64ul_s                                                       |  Timing|  -0.00|        -|          -|         -|        -|      -|        no|    1 (~0%)|        -|   1251 (~0%)|    2202 (1%)|        -|
-    |   + mwj_batch_64ul_20ul_64ul_Pipeline_PROPOSE_TBINDEXING_LOOP                       |       -|   0.11|      261|    783.783|         -|      261|      -|        no|          -|        -|    228 (~0%)|    198 (~0%)|        -|
-    |    o PROPOSE_TBINDEXING_LOOP                                                        |       -|   1.80|      259|    777.777|         6|        1|    255|       yes|          -|        -|            -|            -|        -|
-    |   o PROPOSE_READ_MIN_INDEXING_LOOP                                                  |       -|   1.80|        -|          -|         -|        -|      -|        no|          -|        -|            -|            -|        -|
-    |    + mwj_batch_64ul_20ul_64ul_Pipeline_EXTRACT_BAGTOSET_SETCHECKER_LOOP             |       -|   0.38|        -|          -|         -|        -|      -|        no|          -|        -|     55 (~0%)|    111 (~0%)|        -|
-    |     o EXTRACT_BAGTOSET_SETCHECKER_LOOP                                              |      II|   1.80|        -|          -|         3|        3|      -|       yes|          -|        -|            -|            -|        -|
-    |    + mwj_batch_64ul_20ul_64ul_Pipeline_EXTRACT_BAGTOSET_SETCHECKER_LOOP16           |       -|   0.38|        -|          -|         -|        -|      -|        no|          -|        -|     55 (~0%)|    111 (~0%)|        -|
-    |     o EXTRACT_BAGTOSET_SETCHECKER_LOOP                                              |      II|   1.80|        -|          -|         3|        3|      -|       yes|          -|        -|            -|            -|        -|
-    |  + multiwayJoin_ap_uint_128_7ul_3ul_64ul_20ul_64ul_s*                               |  Timing|  -1.75|        -|          -|         -|        -|      -|  dataflow|  188 (65%)|  8 (~0%)|  49890 (21%)|  29292 (25%)|        -|
-    |   + entry_proc48                                                                    |       -|   0.90|        0|      0.000|         -|        0|      -|        no|          -|        -|      2 (~0%)|     20 (~0%)|        -|
-    |   + run_mem_if                                                                      |  Timing|  -0.00|        -|          -|         -|        -|      -|        no|          -|        -|   2026 (~0%)|    249 (~0%)|        -|
-    |    o MEM_IF_LOOP                                                                    |       -|   1.80|        -|          -|        18|        -|      -|        no|          -|        -|            -|            -|        -|
-    |   + MMU_fast_ap_uint_32_4ul_s                                                       |  Timing|  -1.75|        -|          -|         -|        -|      -|        no|          -|        -|    134 (~0%)|    888 (~0%)|        -|
-    |    o VITIS_LOOP_110_1                                                               |       -|   1.80|        -|          -|         1|        1|      -|       yes|          -|        -|            -|            -|        -|
-    |   + MMU_slow_ap_uint_128_64ul_4194304ul_32ul_s                                      |  Timing|  -1.09|        -|          -|         -|        -|      -|        no|          -|        -|    752 (~0%)|    1195 (1%)|        -|
-    |    o MMU_SLOW_TASK_LOOP                                                             |       -|   1.80|        -|          -|        45|       32|      -|       yes|          -|        -|            -|            -|        -|
-    |   + KPN_1622_1*                                                                     |  Timing|  -0.63|        -|          -|         -|        -|      -|  dataflow|          -|        -|    708 (~0%)|    854 (~0%)|        -|
-    |    + mwj_blockbuild_64ul_0ul_s                                                      |  Timing|  -0.63|        -|          -|         -|        -|      -|        no|          -|        -|    354 (~0%)|    427 (~0%)|        -|
-    |     + mwj_blockbuild_64ul_0ul_Pipeline_SPLIT_MAIN_LOOP                              |  Timing|  -0.63|        -|          -|         -|        -|      -|        no|          -|        -|     67 (~0%)|    206 (~0%)|        -|
-    |      o SPLIT_MAIN_LOOP                                                              |       -|   1.80|        -|          -|         1|        1|      -|       yes|          -|        -|            -|            -|        -|
-    |    + mwj_blockbuild_64ul_0ul_10                                                     |  Timing|  -0.63|        -|          -|         -|        -|      -|        no|          -|        -|    354 (~0%)|    427 (~0%)|        -|
-    |     + mwj_blockbuild_64ul_0ul_10_Pipeline_SPLIT_MAIN_LOOP                           |  Timing|  -0.63|        -|          -|         -|        -|      -|        no|          -|        -|     67 (~0%)|    206 (~0%)|        -|
-    |      o SPLIT_MAIN_LOOP                                                              |       -|   1.80|        -|          -|         1|        1|      -|       yes|          -|        -|            -|            -|        -|
-    |   + KPN_1*                                                                          |  Timing|  -1.56|       11|     37.004|         -|        1|      -|  dataflow|    1 (~0%)|        -|   1994 (~0%)|    2749 (2%)|        -|
-    |    + mwj_bypass_sol_4                                                               |  Timing|  -0.00|        1|      3.003|         -|        1|      -|  yes(flp)|          -|        -|     37 (~0%)|     79 (~0%)|        -|
-    |    + mwj_bypass_sol_5                                                               |  Timing|  -0.00|        1|      3.003|         -|        1|      -|  yes(flp)|          -|        -|      5 (~0%)|     79 (~0%)|        -|
-    |    + mwj_bypass_sol_6                                                               |  Timing|  -0.00|        1|      3.003|         -|        1|      -|  yes(flp)|          -|        -|      5 (~0%)|     79 (~0%)|        -|
-    |    + mwj_bypass_sol                                                                 |  Timing|  -0.00|        1|      3.003|         -|        1|      -|  yes(flp)|          -|        -|     37 (~0%)|     79 (~0%)|        -|
-    |    + mwj_bypass_sol_7                                                               |  Timing|  -0.00|        1|      3.003|         -|        1|      -|  yes(flp)|          -|        -|      5 (~0%)|     79 (~0%)|        -|
-    |    + mwj_bypass_sol_1                                                               |  Timing|  -0.00|        1|      3.003|         -|        1|      -|  yes(flp)|          -|        -|      5 (~0%)|     79 (~0%)|        -|
-    |    + mwj_bypass_sol_8                                                               |  Timing|  -0.00|        1|      3.003|         -|        1|      -|  yes(flp)|          -|        -|      5 (~0%)|     79 (~0%)|        -|
-    |    + MMU_pack_ap_uint_32_ap_uint_128_32ul_4ul_128ul_s                               |       -|   0.36|        1|      3.003|         -|        1|      -|  yes(flp)|          -|        -|    165 (~0%)|    118 (~0%)|        -|
-    |    + MMU_unpack_ap_uint_32_ap_uint_128_32ul_4ul_128ul_s                             |       -|   0.05|        1|      3.003|         -|        1|      -|  yes(flp)|          -|        -|    140 (~0%)|     97 (~0%)|        -|
-    |    + mwj_bypass_sol_2                                                               |  Timing|  -0.00|        1|      3.003|         -|        1|      -|  yes(flp)|          -|        -|      5 (~0%)|     79 (~0%)|        -|
-    |    + mwj_sequencebuild_6ul_s                                                        |  Timing|  -1.56|        1|      3.364|         -|        1|      -|  yes(flp)|    1 (~0%)|        -|    157 (~0%)|    540 (~0%)|        -|
-    |    + mwj_bypass_sol_3                                                               |  Timing|  -0.00|        1|      3.003|         -|        1|      -|  yes(flp)|          -|        -|     37 (~0%)|     79 (~0%)|        -|
-    |    + mwj_bypass_sol_9                                                               |  Timing|  -0.00|        1|      3.003|         -|        1|      -|  yes(flp)|          -|        -|      5 (~0%)|     79 (~0%)|        -|
-    |   + KPN_1623_1*                                                                     |       -|   0.47|        1|      3.003|         -|        1|      -|  dataflow|          -|        -|    121 (~0%)|     68 (~0%)|        -|
-    |    + mwj_split_merge_2ul_s                                                          |       -|   0.47|        1|      3.003|         -|        1|      -|  yes(flp)|          -|        -|    121 (~0%)|     68 (~0%)|        -|
-    |   + mwj_propose                                                                     |       -|   0.02|        -|          -|         -|        -|      -|        no|    1 (~0%)|        -|    375 (~0%)|    800 (~0%)|        -|
-    |    o PROPOSE_TASK_LOOP                                                              |       -|   1.80|        -|          -|         -|        -|      -|        no|          -|        -|            -|            -|        -|
-    |     + mwj_propose_Pipeline_PROPOSE_READ_NEW_SOLUTION_LOOP                           |       -|   0.36|        -|          -|         -|        -|      -|        no|          -|        -|     67 (~0%)|     90 (~0%)|        -|
-    |      o PROPOSE_READ_NEW_SOLUTION_LOOP                                               |       -|   1.80|        -|          -|         1|        1|      -|       yes|          -|        -|            -|            -|        -|
-    |     + mwj_propose_Pipeline_PROPOSE_NEW_SOLUTION_OUT_LOOP                            |       -|   0.11|        -|          -|         -|        -|      -|        no|          -|        -|     69 (~0%)|    184 (~0%)|        -|
-    |      o PROPOSE_NEW_SOLUTION_OUT_LOOP                                                |       -|   1.80|        -|          -|         3|        1|      -|       yes|          -|        -|            -|            -|        -|
-    |   + mwj_edgebuild_64ul_20ul_64ul_s                                                  |  Timing|  -0.00|        -|          -|         -|        -|      -|        no|          -|        -|    916 (~0%)|    1469 (1%)|        -|
-    |    o EDGEBUILD_TASK_LOOP                                                            |       -|   1.80|        -|          -|         -|        -|      -|        no|          -|        -|            -|            -|        -|
-    |     + mwj_edgebuild_64ul_20ul_64ul_Pipeline_EDGEBUILD_COPYING_EMBEDDING_LOOP        |  Timing|  -0.00|        -|          -|         -|        -|      -|        no|          -|        -|     21 (~0%)|    117 (~0%)|        -|
-    |      o EDGEBUILD_COPYING_EMBEDDING_LOOP                                             |       -|   1.80|        -|          -|         2|        1|      -|       yes|          -|        -|            -|            -|        -|
-    |     + mwj_edgebuild_64ul_20ul_64ul_Pipeline_EDGEBUILD_MAIN_LOOP                     |       -|   0.12|      267|    801.801|         -|      267|      -|        no|          -|        -|    725 (~0%)|    984 (~0%)|        -|
-    |      o EDGEBUILD_MAIN_LOOP                                                          |       -|   1.80|      265|    795.795|        12|        1|    255|       yes|          -|        -|            -|            -|        -|
-    |   + verifycache_wrapper_6ul_s                                                       |  Timing|  -0.35|        -|          -|         -|        -|      -|        no|          -|        -|    9529 (4%)|    1772 (1%)|        -|
-    |    + verifycache_wrapper_6ul_Pipeline_VITIS_LOOP_88_1                               |       -|   0.46|      514|  1.544e+03|         -|      514|      -|        no|          -|        -|     23 (~0%)|     66 (~0%)|        -|
-    |     o VITIS_LOOP_88_1                                                               |       -|   1.80|      512|  1.538e+03|         2|        1|    512|       yes|          -|        -|            -|            -|        -|
-    |    + mwj_verify_6ul_s                                                               |  Timing|  -0.35|        -|          -|         -|        -|      -|        no|          -|        -|    9498 (4%)|    1522 (1%)|        -|
-    |     o VERIFY_TASK_LOOP                                                              |       -|   1.80|        -|          -|        11|        1|      -|       yes|          -|        -|            -|            -|        -|
-    |      + write_dep                                                                    |       -|   0.90|        0|      0.000|         -|        1|      -|       yes|          -|        -|      1 (~0%)|     11 (~0%)|        -|
-    |      + delay_1ul_bool_s                                                             |       -|   1.80|        1|      3.003|         -|        1|      -|       yes|          -|        -|      3 (~0%)|     14 (~0%)|        -|
-    |      + read_dep                                                                     |       -|   0.90|        0|      0.000|         -|        1|      -|       yes|          -|        -|      1 (~0%)|     11 (~0%)|        -|
-    |   + mwj_findmin_ap_uint_128_7ul_3ul_s                                               |  Timing|  -0.35|        -|          -|         -|        -|      -|        no|          -|  8 (~0%)|    4918 (2%)|    2067 (1%)|        -|
-    |    o FINDMIN_TASK_LOOP                                                              |       -|   1.80|        -|          -|        47|        8|      -|       yes|          -|        -|            -|            -|        -|
-    |     + bloom_intersect_ap_uint_128_7ul_s                                             |       -|   0.07|        7|     21.021|         -|        1|      -|       yes|          -|  8 (~0%)|   1487 (~0%)|    776 (~0%)|        -|
-    |   + mwj_tuplebuild_6ul_64ul_20ul_64ul_s                                             |  Timing|  -0.00|        -|          -|         -|        -|      -|        no|          -|        -|    2553 (1%)|    2894 (2%)|        -|
-    |    o TUPLEBUILD_TASK_LOOP                                                           |       -|   1.80|        -|          -|         -|        -|      -|        no|          -|        -|            -|            -|        -|
-    |     + mwj_tuplebuild_6ul_64ul_20ul_64ul_Pipeline_TUPLEBUILD_COPYING_EMBEDDING_LOOP  |  Timing|  -0.00|        -|          -|         -|        -|      -|        no|          -|        -|     21 (~0%)|    117 (~0%)|        -|
-    |      o TUPLEBUILD_COPYING_EMBEDDING_LOOP                                            |       -|   1.80|        -|          -|         2|        1|      -|       yes|          -|        -|            -|            -|        -|
-    |     + mwj_tuplebuild_6ul_64ul_20ul_64ul_Pipeline_TUPLEBUILD_EDGE_LOOP               |       -|   0.11|        -|          -|         -|        -|      -|        no|          -|        -|   2063 (~0%)|    2106 (1%)|        -|
-    |      o TUPLEBUILD_EDGE_LOOP                                                         |       -|   1.80|        -|          -|        18|        1|      -|       yes|          -|        -|            -|            -|        -|
-    |   + mwj_compact                                                                     |       -|   0.19|        -|          -|         -|        -|      -|        no|          -|        -|     89 (~0%)|    239 (~0%)|        -|
-    |    o COMPACT_TASK_LOOP                                                              |       -|   1.80|        -|          -|         2|        1|      -|       yes|          -|        -|            -|            -|        -|
-    |   + mwj_readmin_counter_ap_uint_128_7ul_3ul_64ul_20ul_64ul_s                        |  Timing|  -0.00|        -|          -|         -|        -|      -|        no|          -|        -|   1494 (~0%)|    2147 (1%)|        -|
-    |    + mwj_readmin_counter_Pipeline_READMIN_COUNTER_TASK_LOOP                         |  Timing|  -0.00|        -|          -|         -|        -|      -|        no|          -|        -|   1418 (~0%)|    1780 (1%)|        -|
-    |     o READMIN_COUNTER_TASK_LOOP                                                     |       -|   1.80|        -|          -|        23|        8|      -|       yes|          -|        -|            -|            -|        -|
-    |   + intersectcache_wrapper_6ul_s                                                    |  Timing|  -0.55|        -|          -|         -|        -|      -|        no|          -|        -|    9735 (4%)|    1417 (1%)|        -|
-    |    + mwj_intersect_6ul_s                                                            |  Timing|  -0.55|        -|          -|         -|        -|      -|        no|          -|        -|    9707 (4%)|    1197 (1%)|        -|
-    |     o INTERSECT_TASK_LOOP                                                           |       -|   1.80|        -|          -|        10|        1|      -|       yes|          -|        -|            -|            -|        -|
-    |      + write_dep                                                                    |       -|   0.90|        0|      0.000|         -|        1|      -|       yes|          -|        -|      1 (~0%)|     11 (~0%)|        -|
-    |      + delay_1ul_bool_s                                                             |       -|   1.80|        1|      3.003|         -|        1|      -|       yes|          -|        -|      3 (~0%)|     14 (~0%)|        -|
-    |      + read_dep                                                                     |       -|   0.90|        0|      0.000|         -|        1|      -|       yes|          -|        -|      1 (~0%)|     11 (~0%)|        -|
-    |    o VITIS_LOOP_88_1                                                                |       -|   1.80|      512|  1.538e+03|         2|        1|    512|       yes|          -|        -|            -|            -|        -|
-    |   + mwj_filter_64ul_s                                                               |       -|   0.19|        -|          -|         -|        -|      -|        no|          -|        -|    316 (~0%)|    299 (~0%)|        -|
-    |    + mwj_filter_64ul_Pipeline_VITIS_LOOP_1458_1                                     |       -|   0.19|        -|          -|         -|        -|      -|        no|          -|        -|    247 (~0%)|    232 (~0%)|        -|
-    |     o VITIS_LOOP_1458_1                                                             |       -|   1.80|        -|          -|         3|        1|      -|       yes|          -|        -|            -|            -|        -|
-    |   + mwj_readmin_edge_ap_uint_128_7ul_3ul_64ul_s                                     |  Timing|  -0.00|        -|          -|         -|        -|      -|        no|          -|        -|    2371 (1%)|    1579 (1%)|        -|
-    |    o READMIN_EDGE_TASK_LOOP                                                         |       -|   1.80|        -|          -|         -|        -|      -|        no|          -|        -|            -|            -|        -|
-    |     + mwj_readmin_edge_ap_uint_128_7ul_3ul_64ul_Pipeline_READMIN_EDGES_MAIN_LOOP    |  Timing|  -0.00|        -|          -|         -|        -|      -|        no|          -|        -|   1077 (~0%)|   1023 (~0%)|        -|
-    |      o READMIN_EDGES_MAIN_LOOP                                                      |       -|   1.80|        -|          -|        13|        2|      -|       yes|          -|        -|            -|            -|        -|
-    |       + hash_wrapper_32ul_s                                                         |       -|   0.78|        6|     18.018|         -|        1|      -|       yes|          -|        -|    481 (~0%)|    575 (~0%)|        -|
-    |       + bloom_test_ap_uint_128_7ul_8ul_64ul_s                                       |       -|   0.94|        0|      0.000|         -|        1|      -|       yes|          -|        -|            -|     14 (~0%)|        -|
-    |   + mwj_offset                                                                      |       -|   0.43|        -|          -|         -|        -|      -|        no|          -|        -|    320 (~0%)|    257 (~0%)|        -|
-    |    o OFFSET_TASK_LOOP                                                               |       -|   1.80|        -|          -|         4|        2|      -|       yes|          -|        -|            -|            -|        -|
-    |   + mwj_homomorphism                                                                |  Timing|  -0.00|        -|          -|         -|        -|      -|        no|          -|        -|    3885 (1%)|    3232 (2%)|        -|
-    |    o VITIS_LOOP_768_1                                                               |       -|   1.80|        -|          -|         -|        -|      -|        no|          -|        -|            -|            -|        -|
-    |     + mwj_homomorphism_Pipeline_HOMOMORPHISM_COPYING_EMBEDDING_LOOP                 |  Timing|  -0.00|        -|          -|         -|        -|      -|        no|          -|        -|     21 (~0%)|    117 (~0%)|        -|
-    |      o HOMOMORPHISM_COPYING_EMBEDDING_LOOP                                          |       -|   1.80|        -|          -|         2|        1|      -|       yes|          -|        -|            -|            -|        -|
-    |     + mwj_homomorphism_Pipeline_HOMOMORPHISM_CHECK_LOOP                             |       -|   0.00|        -|          -|         -|        -|      -|        no|          -|        -|    2749 (1%)|    2345 (2%)|        -|
-    |      o HOMOMORPHISM_CHECK_LOOP                                                      |       -|   1.80|        -|          -|        11|        1|      -|       yes|          -|        -|            -|            -|        -|
-    |   + mwj_assembly                                                                    |  Timing|  -0.00|        -|          -|         -|        -|      -|        no|          -|        -|    612 (~0%)|    1175 (1%)|        -|
-    |    o ASSEMBLY_TASK_LOOP                                                             |       -|   1.80|        -|          -|         -|        -|      -|        no|          -|        -|            -|            -|        -|
-    |     + mwj_assembly_Pipeline_ASSEMBLY_COPYING_EMBEDDING_LOOP                         |       -|   0.36|        -|          -|         -|        -|      -|        no|          -|        -|    104 (~0%)|    167 (~0%)|        -|
-    |      o ASSEMBLY_COPYING_EMBEDDING_LOOP                                              |       -|   1.80|        -|          -|         3|        1|      -|       yes|          -|        -|            -|            -|        -|
-    |     + mwj_assembly_Pipeline_ASSEMBLY_SET_LOOP                                       |       -|   0.29|        -|          -|         -|        -|      -|        no|          -|        -|     68 (~0%)|    238 (~0%)|        -|
-    |      o ASSEMBLY_SET_LOOP                                                            |       -|   1.80|        -|          -|         2|        1|      -|       yes|          -|        -|            -|            -|        -|
-    +-------------------------------------------------------------------------------------+--------+-------+---------+-----------+----------+---------+-------+----------+-----------+---------+-------------+-------------+---------+
+    +-------------------------------------------------------------------------------------+--------+-------+---------+-----------+----------+---------+-------+----------+-----------+---------+-------------+-------------+--------+
+    |                                       Modules                                       |  Issue |       | Latency |  Latency  | Iteration|         |  Trip |          |           |         |             |             |        |
+    |                                       & Loops                                       |  Type  | Slack | (cycles)|    (ns)   |  Latency | Interval| Count | Pipelined|   BRAM    |   DSP   |      FF     |     LUT     |  URAM  |
+    +-------------------------------------------------------------------------------------+--------+-------+---------+-----------+----------+---------+-------+----------+-----------+---------+-------------+-------------+--------+
+    |+ subgraphIsomorphism                                                                |  Timing|  -1.75|        -|          -|         -|        -|      -|        no|  217 (75%)|  13 (1%)|  75639 (32%)|  67274 (57%)|  4 (6%)|
+    | + subgraphIsomorphism_Pipeline_1                                                    |       -|   0.58|       34|    102.102|         -|       34|      -|        no|          -|        -|      7 (~0%)|     48 (~0%)|       -|
+    |  o Loop 1                                                                           |       -|   1.80|       32|     96.096|         1|        1|     32|       yes|          -|        -|            -|            -|       -|
+    | + subgraphIsomorphism_Pipeline_2                                                    |       -|   0.58|       34|    102.102|         -|       34|      -|        no|          -|        -|      7 (~0%)|     48 (~0%)|       -|
+    |  o Loop 1                                                                           |       -|   1.80|       32|     96.096|         1|        1|     32|       yes|          -|        -|            -|            -|       -|
+    | + subgraphIsomorphism_Pipeline_INITIALIZE_LABELTOTABLE_LOOP_VITIS_LOOP_1778_1       |       -|   0.20|     2050|  6.156e+03|         -|     2050|      -|        no|          -|        -|     50 (~0%)|    201 (~0%)|       -|
+    |  o INITIALIZE_LABELTOTABLE_LOOP_VITIS_LOOP_1778_1                                   |       -|   1.80|     2048|  6.150e+03|         3|        2|   1024|       yes|          -|        -|            -|            -|       -|
+    | + buildTableDescriptors_32ul_32ul_32ul_5ul_32ul_s                                   |  Timing|  -0.00|   327701|  9.841e+05|         -|   327701|      -|        no|          -|        -|    624 (~0%)|    1274 (1%)|       -|
+    |  + buildTableDescriptors_32ul_32ul_32ul_5ul_32ul_Pipeline_FILL_ORDER_LOOP           |  Timing|  -0.00|    65538|  1.968e+05|         -|    65538|      -|        no|          -|        -|     86 (~0%)|     87 (~0%)|       -|
+    |   o FILL_ORDER_LOOP                                                                 |       -|   1.80|    65536|  1.968e+05|         3|        1|  65535|       yes|          -|        -|            -|            -|       -|
+    |  + buildTableDescriptors_32ul_32ul_32ul_5ul_32ul_Pipeline_CREATE_TABDESC_LOOP       |  Timing|  -0.00|   262145|  7.872e+05|         -|   262145|      -|        no|          -|        -|    365 (~0%)|    740 (~0%)|       -|
+    |   o CREATE_TABDESC_LOOP                                                             |       -|   1.80|   262143|  7.872e+05|         8|        4|  65535|       yes|          -|        -|            -|            -|       -|
+    | + fillTablesURAM                                                                    |  Timing|  -0.89|        -|          -|         -|        -|      -|        no|    14 (4%)|  5 (~0%)|   14979 (6%)|  20446 (17%)|  4 (6%)|
+    |  + fillTablesURAM_Pipeline_STORE_HASHTABLES_POINTER_LOOP                            |       -|   0.27|    65537|  1.968e+05|         -|    65537|      -|        no|          -|        -|     99 (~0%)|    154 (~0%)|       -|
+    |   o STORE_HASHTABLES_POINTER_LOOP                                                   |       -|   1.80|    65535|  1.968e+05|         2|        1|  65535|       yes|          -|        -|            -|            -|       -|
+    |  + fillTablesURAM_Pipeline_INITIALIZE_BRAM_LOOP                                     |       -|   0.36|        -|          -|         -|        -|      -|        no|          -|        -|     67 (~0%)|     97 (~0%)|       -|
+    |   o INITIALIZE_BRAM_LOOP                                                            |       -|   1.80|        -|          -|         2|        1|      -|       yes|          -|        -|            -|            -|       -|
+    |  + fillTablesURAM_Pipeline_INITIALIZE_URAM_LOOP                                     |       -|   0.37|     4098|  1.231e+04|         -|     4098|      -|        no|          -|        -|     29 (~0%)|     70 (~0%)|       -|
+    |   o INITIALIZE_URAM_LOOP                                                            |       -|   1.80|     4096|  1.230e+04|         2|        1|   4096|       yes|          -|        -|            -|            -|       -|
+    |  + countEdgePerBlock_32ul_5ul_64ul_20ul_32ul_s                                      |  Timing|  -0.00|        -|          -|         -|        -|      -|        no|          -|        -|   1333 (~0%)|    2477 (2%)|       -|
+    |   + countEdgePerBlock_32ul_5ul_64ul_20ul_32ul_Pipeline_COUNT_EDGE_IN_BLOCK_LOOP     |  Timing|  -0.00|        -|          -|         -|        -|      -|        no|          -|        -|   1194 (~0%)|    2019 (1%)|       -|
+    |    o COUNT_EDGE_IN_BLOCK_LOOP                                                       |       -|   1.80|        -|          -|        18|        4|      -|       yes|          -|        -|            -|            -|       -|
+    |  + fillTablesURAM_Pipeline_COUNTER_TO_OFFSET_BLOCK_LOOP                             |       -|   0.36|        -|          -|         -|        -|      -|        no|          -|        -|    123 (~0%)|    145 (~0%)|       -|
+    |   o COUNTER_TO_OFFSET_BLOCK_LOOP                                                    |       -|   1.80|        -|          -|         3|        1|      -|       yes|          -|        -|            -|            -|       -|
+    |  + storeEdgePerBlock_32ul_5ul_64ul_20ul_32ul_s                                      |  Timing|  -0.45|        -|          -|         -|        -|      -|        no|          -|        -|   2100 (~0%)|    3205 (2%)|       -|
+    |   + storeEdgePerBlock_32ul_5ul_64ul_20ul_32ul_Pipeline_STORE_EDGE_IN_BLOCK_LOOP     |  Timing|  -0.45|        -|          -|         -|        -|      -|        no|          -|        -|   1957 (~0%)|    2855 (2%)|       -|
+    |    o STORE_EDGE_IN_BLOCK_LOOP                                                       |       -|   1.80|        -|          -|        30|        4|      -|       yes|          -|        -|            -|            -|       -|
+    |  + counterToOffset_ap_uint_128_5ul_7ul_20ul_s                                       |  Timing|  -0.37|        -|          -|         -|        -|      -|        no|     4 (1%)|        -|   1220 (~0%)|    1301 (1%)|       -|
+    |   o COUNTER_TO_OFFSET_DDR_LOOP                                                      |       -|   1.80|        -|          -|         -|        -|      -|        no|          -|        -|            -|            -|       -|
+    |    o COUNTER_TO_OFFSET_BLOCK                                                        |       -|   1.80|        -|          -|        87|        -|      -|        no|          -|        -|            -|            -|       -|
+    |     + counterToOffset_ap_uint_5ul_7ul_20ul_Pipeline_COUNTER_TO_OFFSET_READ_LOOP     |  Timing|  -0.37|       37|    111.111|         -|       37|      -|        no|          -|        -|    566 (~0%)|    367 (~0%)|       -|
+    |      o COUNTER_TO_OFFSET_READ_LOOP                                                  |       -|   1.80|       35|    105.105|         5|        1|     32|       yes|          -|        -|            -|            -|       -|
+    |  + fillTablesURAM_Pipeline_STORE_EDGES_POINTER_LOOP                                 |  Timing|  -0.89|    65544|  1.968e+05|         -|    65544|      -|        no|          -|  1 (~0%)|    369 (~0%)|    273 (~0%)|       -|
+    |   o STORE_EDGES_POINTER_LOOP                                                        |       -|   1.80|    65542|  1.968e+05|         9|        1|  65535|       yes|          -|        -|            -|            -|       -|
+    |  + storeEdgesHTB_ap_uint_32_7ul_6ul_32ul_5ul_64ul_20ul_32ul_s                       |  Timing|  -0.28|        -|          -|         -|        -|      -|        no|          -|        -|   2319 (~0%)|    4505 (3%)|  2 (3%)|
+    |   o STORE_EDGES_TOP_LOOP                                                            |       -|   1.80|        -|          -|         -|        -|      -|        no|          -|        -|            -|            -|       -|
+    |    + storeEdgesHTB_Pipeline_LOAD_URAM_OFFSETS_LOOP                                  |  Timing|  -0.00|     4099|  1.231e+04|         -|     4099|      -|        no|          -|        -|    173 (~0%)|     83 (~0%)|       -|
+    |     o LOAD_URAM_OFFSETS_LOOP                                                        |       -|   1.80|     4097|  1.230e+04|         3|        1|   4096|       yes|          -|        -|            -|            -|       -|
+    |    + storeEdgesHTB_Pipeline_STORE_EDGES_BLOCK_LOOP                                  |  Timing|  -0.28|        -|          -|         -|        -|      -|        no|          -|        -|   1465 (~0%)|    2836 (2%)|       -|
+    |     o STORE_EDGES_BLOCK_LOOP                                                        |       -|   1.80|        -|          -|        15|        2|      -|       yes|          -|        -|            -|            -|       -|
+    |    + storeEdgesHTB_Pipeline_STORE_OFFSETS_BLOCK_LOOP                                |  Timing|  -0.00|     4099|  1.231e+04|         -|     4099|      -|        no|          -|        -|    147 (~0%)|     81 (~0%)|       -|
+    |     o STORE_OFFSETS_BLOCK_LOOP                                                      |       -|   1.80|     4097|  1.230e+04|         3|        1|   4096|       yes|          -|        -|            -|            -|       -|
+    |  + writeBloom*                                                                      |  Timing|  -0.00|        -|          -|         -|        -|      -|  dataflow|     6 (2%)|        -|    4627 (1%)|    4207 (3%)|       -|
+    |   + bloom_read_ap_uint_128_5ul_7ul_32ul_6ul_64ul_20ul_64ul_s                        |  Timing|  -0.00|        -|          -|         -|        -|      -|        no|          -|        -|    2801 (1%)|    3236 (2%)|       -|
+    |    o BLOOM_READ_TABLES_LOOP                                                         |       -|   1.80|        -|          -|         -|        -|      -|        no|          -|        -|            -|            -|       -|
+    |     + bloom_read_Pipeline_BLOOM_READ_EDGES_BLOCK                                    |  Timing|  -0.00|        -|          -|         -|        -|      -|        no|          -|        -|   2028 (~0%)|    2209 (1%)|       -|
+    |      o BLOOM_READ_EDGES_BLOCK                                                       |       -|   1.80|        -|          -|        17|        2|      -|       yes|          -|        -|            -|            -|       -|
+    |       + hashlookup3_core_32_s                                                       |       -|   0.78|        6|     18.018|         -|        1|      -|       yes|          -|        -|    481 (~0%)|    575 (~0%)|       -|
+    |       + hashlookup3_core_32_s                                                       |       -|   0.78|        6|     18.018|         -|        1|      -|       yes|          -|        -|    481 (~0%)|    575 (~0%)|       -|
+    |   + entry_proc                                                                      |       -|   0.90|        0|      0.000|         -|        0|      -|        no|          -|        -|      3 (~0%)|     29 (~0%)|       -|
+    |   + bloom_write_ap_uint_128_7ul_64ul_3ul_s                                          |  Timing|  -0.00|        -|          -|         -|        -|      -|        no|          -|        -|   1466 (~0%)|    611 (~0%)|       -|
+    |    + bloom_write_ap_uint_128_7ul_64ul_3ul_Pipeline_BLOOM_WRITE_TASK_LOOP            |  Timing|  -0.00|        -|          -|         -|        -|      -|        no|          -|        -|   1396 (~0%)|    512 (~0%)|       -|
+    |     o BLOOM_WRITE_TASK_LOOP                                                         |       -|   1.80|        -|          -|        36|        8|      -|       yes|          -|        -|            -|            -|       -|
+    |  o COUNT_OCCURENCIES_TOP_LOOP                                                       |       -|   1.80|        -|          -|         -|        -|      -|        no|          -|        -|            -|            -|       -|
+    |   + fillTablesURAM_Pipeline_COUNT_EDGES_BLOCK_LOOP                                  |  Timing|  -0.28|        -|          -|         -|        -|      -|        no|          -|        -|   1055 (~0%)|    876 (~0%)|       -|
+    |    o COUNT_EDGES_BLOCK_LOOP                                                         |       -|   1.80|        -|          -|         7|        2|      -|       yes|          -|        -|            -|            -|       -|
+    |   + fillTablesURAM_Pipeline_STORE_COUNTERS_BLOCK_LOOP                               |  Timing|  -0.00|     4099|  1.231e+04|         -|     4099|      -|        no|          -|        -|    171 (~0%)|     81 (~0%)|       -|
+    |    o STORE_COUNTERS_BLOCK_LOOP                                                      |       -|   1.80|     4097|  1.230e+04|         3|        1|   4096|       yes|          -|        -|            -|            -|       -|
+    | + multiwayJoinWrap_ap_uint_128_7ul_3ul_64ul_20ul_64ul_s*                            |  Timing|  -1.75|        -|          -|         -|        -|      -|  dataflow|  191 (66%)|  8 (~0%)|  51399 (21%)|  31758 (27%)|       -|
+    |  + mwj_batch_64ul_20ul_64ul_s                                                       |  Timing|  -0.00|        -|          -|         -|        -|      -|        no|    1 (~0%)|        -|   1251 (~0%)|    2202 (1%)|       -|
+    |   + mwj_batch_64ul_20ul_64ul_Pipeline_PROPOSE_TBINDEXING_LOOP                       |       -|   0.11|      261|    783.783|         -|      261|      -|        no|          -|        -|    228 (~0%)|    198 (~0%)|       -|
+    |    o PROPOSE_TBINDEXING_LOOP                                                        |       -|   1.80|      259|    777.777|         6|        1|    255|       yes|          -|        -|            -|            -|       -|
+    |   o PROPOSE_READ_MIN_INDEXING_LOOP                                                  |       -|   1.80|        -|          -|         -|        -|      -|        no|          -|        -|            -|            -|       -|
+    |    + mwj_batch_64ul_20ul_64ul_Pipeline_EXTRACT_BAGTOSET_SETCHECKER_LOOP             |       -|   0.38|        -|          -|         -|        -|      -|        no|          -|        -|     55 (~0%)|    111 (~0%)|       -|
+    |     o EXTRACT_BAGTOSET_SETCHECKER_LOOP                                              |      II|   1.80|        -|          -|         3|        3|      -|       yes|          -|        -|            -|            -|       -|
+    |    + mwj_batch_64ul_20ul_64ul_Pipeline_EXTRACT_BAGTOSET_SETCHECKER_LOOP16           |       -|   0.38|        -|          -|         -|        -|      -|        no|          -|        -|     55 (~0%)|    111 (~0%)|       -|
+    |     o EXTRACT_BAGTOSET_SETCHECKER_LOOP                                              |      II|   1.80|        -|          -|         3|        3|      -|       yes|          -|        -|            -|            -|       -|
+    |  + multiwayJoin_ap_uint_128_7ul_3ul_64ul_20ul_64ul_s*                               |  Timing|  -1.75|        -|          -|         -|        -|      -|  dataflow|  188 (65%)|  8 (~0%)|  49890 (21%)|  29292 (25%)|       -|
+    |   + entry_proc48                                                                    |       -|   0.90|        0|      0.000|         -|        0|      -|        no|          -|        -|      2 (~0%)|     20 (~0%)|       -|
+    |   + run_mem_if                                                                      |  Timing|  -0.00|        -|          -|         -|        -|      -|        no|          -|        -|   2026 (~0%)|    249 (~0%)|       -|
+    |    o MEM_IF_LOOP                                                                    |       -|   1.80|        -|          -|        18|        -|      -|        no|          -|        -|            -|            -|       -|
+    |   + MMU_fast_ap_uint_32_4ul_s                                                       |  Timing|  -1.75|        -|          -|         -|        -|      -|        no|          -|        -|    134 (~0%)|    888 (~0%)|       -|
+    |    o VITIS_LOOP_110_1                                                               |       -|   1.80|        -|          -|         1|        1|      -|       yes|          -|        -|            -|            -|       -|
+    |   + MMU_slow_ap_uint_128_64ul_4194304ul_32ul_s                                      |  Timing|  -1.09|        -|          -|         -|        -|      -|        no|          -|        -|    752 (~0%)|    1195 (1%)|       -|
+    |    o MMU_SLOW_TASK_LOOP                                                             |       -|   1.80|        -|          -|        45|       32|      -|       yes|          -|        -|            -|            -|       -|
+    |   + KPN_1622_1*                                                                     |  Timing|  -0.63|        -|          -|         -|        -|      -|  dataflow|          -|        -|    708 (~0%)|    854 (~0%)|       -|
+    |    + mwj_blockbuild_64ul_0ul_s                                                      |  Timing|  -0.63|        -|          -|         -|        -|      -|        no|          -|        -|    354 (~0%)|    427 (~0%)|       -|
+    |     + mwj_blockbuild_64ul_0ul_Pipeline_SPLIT_MAIN_LOOP                              |  Timing|  -0.63|        -|          -|         -|        -|      -|        no|          -|        -|     67 (~0%)|    206 (~0%)|       -|
+    |      o SPLIT_MAIN_LOOP                                                              |       -|   1.80|        -|          -|         1|        1|      -|       yes|          -|        -|            -|            -|       -|
+    |    + mwj_blockbuild_64ul_0ul_10                                                     |  Timing|  -0.63|        -|          -|         -|        -|      -|        no|          -|        -|    354 (~0%)|    427 (~0%)|       -|
+    |     + mwj_blockbuild_64ul_0ul_10_Pipeline_SPLIT_MAIN_LOOP                           |  Timing|  -0.63|        -|          -|         -|        -|      -|        no|          -|        -|     67 (~0%)|    206 (~0%)|       -|
+    |      o SPLIT_MAIN_LOOP                                                              |       -|   1.80|        -|          -|         1|        1|      -|       yes|          -|        -|            -|            -|       -|
+    |   + KPN_1*                                                                          |  Timing|  -1.56|       11|     37.004|         -|        1|      -|  dataflow|    1 (~0%)|        -|   1994 (~0%)|    2749 (2%)|       -|
+    |    + mwj_bypass_sol_4                                                               |  Timing|  -0.00|        1|      3.003|         -|        1|      -|  yes(flp)|          -|        -|     37 (~0%)|     79 (~0%)|       -|
+    |    + mwj_bypass_sol_5                                                               |  Timing|  -0.00|        1|      3.003|         -|        1|      -|  yes(flp)|          -|        -|      5 (~0%)|     79 (~0%)|       -|
+    |    + mwj_bypass_sol_6                                                               |  Timing|  -0.00|        1|      3.003|         -|        1|      -|  yes(flp)|          -|        -|      5 (~0%)|     79 (~0%)|       -|
+    |    + mwj_bypass_sol                                                                 |  Timing|  -0.00|        1|      3.003|         -|        1|      -|  yes(flp)|          -|        -|     37 (~0%)|     79 (~0%)|       -|
+    |    + mwj_bypass_sol_7                                                               |  Timing|  -0.00|        1|      3.003|         -|        1|      -|  yes(flp)|          -|        -|      5 (~0%)|     79 (~0%)|       -|
+    |    + mwj_bypass_sol_1                                                               |  Timing|  -0.00|        1|      3.003|         -|        1|      -|  yes(flp)|          -|        -|      5 (~0%)|     79 (~0%)|       -|
+    |    + mwj_bypass_sol_8                                                               |  Timing|  -0.00|        1|      3.003|         -|        1|      -|  yes(flp)|          -|        -|      5 (~0%)|     79 (~0%)|       -|
+    |    + MMU_pack_ap_uint_32_ap_uint_128_32ul_4ul_128ul_s                               |       -|   0.36|        1|      3.003|         -|        1|      -|  yes(flp)|          -|        -|    165 (~0%)|    118 (~0%)|       -|
+    |    + MMU_unpack_ap_uint_32_ap_uint_128_32ul_4ul_128ul_s                             |       -|   0.05|        1|      3.003|         -|        1|      -|  yes(flp)|          -|        -|    140 (~0%)|     97 (~0%)|       -|
+    |    + mwj_bypass_sol_2                                                               |  Timing|  -0.00|        1|      3.003|         -|        1|      -|  yes(flp)|          -|        -|      5 (~0%)|     79 (~0%)|       -|
+    |    + mwj_sequencebuild_6ul_s                                                        |  Timing|  -1.56|        1|      3.364|         -|        1|      -|  yes(flp)|    1 (~0%)|        -|    157 (~0%)|    540 (~0%)|       -|
+    |    + mwj_bypass_sol_3                                                               |  Timing|  -0.00|        1|      3.003|         -|        1|      -|  yes(flp)|          -|        -|     37 (~0%)|     79 (~0%)|       -|
+    |    + mwj_bypass_sol_9                                                               |  Timing|  -0.00|        1|      3.003|         -|        1|      -|  yes(flp)|          -|        -|      5 (~0%)|     79 (~0%)|       -|
+    |   + KPN_1623_1*                                                                     |       -|   0.47|        1|      3.003|         -|        1|      -|  dataflow|          -|        -|    121 (~0%)|     68 (~0%)|       -|
+    |    + mwj_split_merge_2ul_s                                                          |       -|   0.47|        1|      3.003|         -|        1|      -|  yes(flp)|          -|        -|    121 (~0%)|     68 (~0%)|       -|
+    |   + mwj_propose                                                                     |       -|   0.02|        -|          -|         -|        -|      -|        no|    1 (~0%)|        -|    375 (~0%)|    800 (~0%)|       -|
+    |    o PROPOSE_TASK_LOOP                                                              |       -|   1.80|        -|          -|         -|        -|      -|        no|          -|        -|            -|            -|       -|
+    |     + mwj_propose_Pipeline_PROPOSE_READ_NEW_SOLUTION_LOOP                           |       -|   0.36|        -|          -|         -|        -|      -|        no|          -|        -|     67 (~0%)|     90 (~0%)|       -|
+    |      o PROPOSE_READ_NEW_SOLUTION_LOOP                                               |       -|   1.80|        -|          -|         1|        1|      -|       yes|          -|        -|            -|            -|       -|
+    |     + mwj_propose_Pipeline_PROPOSE_NEW_SOLUTION_OUT_LOOP                            |       -|   0.11|        -|          -|         -|        -|      -|        no|          -|        -|     69 (~0%)|    184 (~0%)|       -|
+    |      o PROPOSE_NEW_SOLUTION_OUT_LOOP                                                |       -|   1.80|        -|          -|         3|        1|      -|       yes|          -|        -|            -|            -|       -|
+    |   + mwj_edgebuild_64ul_20ul_64ul_s                                                  |  Timing|  -0.00|        -|          -|         -|        -|      -|        no|          -|        -|    916 (~0%)|    1469 (1%)|       -|
+    |    o EDGEBUILD_TASK_LOOP                                                            |       -|   1.80|        -|          -|         -|        -|      -|        no|          -|        -|            -|            -|       -|
+    |     + mwj_edgebuild_64ul_20ul_64ul_Pipeline_EDGEBUILD_COPYING_EMBEDDING_LOOP        |  Timing|  -0.00|        -|          -|         -|        -|      -|        no|          -|        -|     21 (~0%)|    117 (~0%)|       -|
+    |      o EDGEBUILD_COPYING_EMBEDDING_LOOP                                             |       -|   1.80|        -|          -|         2|        1|      -|       yes|          -|        -|            -|            -|       -|
+    |     + mwj_edgebuild_64ul_20ul_64ul_Pipeline_EDGEBUILD_MAIN_LOOP                     |       -|   0.12|      267|    801.801|         -|      267|      -|        no|          -|        -|    725 (~0%)|    984 (~0%)|       -|
+    |      o EDGEBUILD_MAIN_LOOP                                                          |       -|   1.80|      265|    795.795|        12|        1|    255|       yes|          -|        -|            -|            -|       -|
+    |   + verifycache_wrapper_6ul_s                                                       |  Timing|  -0.35|        -|          -|         -|        -|      -|        no|          -|        -|    9529 (4%)|    1772 (1%)|       -|
+    |    + verifycache_wrapper_6ul_Pipeline_VITIS_LOOP_88_1                               |       -|   0.46|      514|  1.544e+03|         -|      514|      -|        no|          -|        -|     23 (~0%)|     66 (~0%)|       -|
+    |     o VITIS_LOOP_88_1                                                               |       -|   1.80|      512|  1.538e+03|         2|        1|    512|       yes|          -|        -|            -|            -|       -|
+    |    + mwj_verify_6ul_s                                                               |  Timing|  -0.35|        -|          -|         -|        -|      -|        no|          -|        -|    9498 (4%)|    1522 (1%)|       -|
+    |     o VERIFY_TASK_LOOP                                                              |       -|   1.80|        -|          -|        11|        1|      -|       yes|          -|        -|            -|            -|       -|
+    |      + write_dep                                                                    |       -|   0.90|        0|      0.000|         -|        1|      -|       yes|          -|        -|      1 (~0%)|     11 (~0%)|       -|
+    |      + delay_1ul_bool_s                                                             |       -|   1.80|        1|      3.003|         -|        1|      -|       yes|          -|        -|      3 (~0%)|     14 (~0%)|       -|
+    |      + read_dep                                                                     |       -|   0.90|        0|      0.000|         -|        1|      -|       yes|          -|        -|      1 (~0%)|     11 (~0%)|       -|
+    |   + mwj_findmin_ap_uint_128_7ul_3ul_s                                               |  Timing|  -0.35|        -|          -|         -|        -|      -|        no|          -|  8 (~0%)|    4918 (2%)|    2067 (1%)|       -|
+    |    o FINDMIN_TASK_LOOP                                                              |       -|   1.80|        -|          -|        47|        8|      -|       yes|          -|        -|            -|            -|       -|
+    |     + bloom_intersect_ap_uint_128_7ul_s                                             |       -|   0.07|        7|     21.021|         -|        1|      -|       yes|          -|  8 (~0%)|   1487 (~0%)|    776 (~0%)|       -|
+    |   + mwj_tuplebuild_6ul_64ul_20ul_64ul_s                                             |  Timing|  -0.00|        -|          -|         -|        -|      -|        no|          -|        -|    2553 (1%)|    2894 (2%)|       -|
+    |    o TUPLEBUILD_TASK_LOOP                                                           |       -|   1.80|        -|          -|         -|        -|      -|        no|          -|        -|            -|            -|       -|
+    |     + mwj_tuplebuild_6ul_64ul_20ul_64ul_Pipeline_TUPLEBUILD_COPYING_EMBEDDING_LOOP  |  Timing|  -0.00|        -|          -|         -|        -|      -|        no|          -|        -|     21 (~0%)|    117 (~0%)|       -|
+    |      o TUPLEBUILD_COPYING_EMBEDDING_LOOP                                            |       -|   1.80|        -|          -|         2|        1|      -|       yes|          -|        -|            -|            -|       -|
+    |     + mwj_tuplebuild_6ul_64ul_20ul_64ul_Pipeline_TUPLEBUILD_EDGE_LOOP               |       -|   0.11|        -|          -|         -|        -|      -|        no|          -|        -|   2063 (~0%)|    2106 (1%)|       -|
+    |      o TUPLEBUILD_EDGE_LOOP                                                         |       -|   1.80|        -|          -|        18|        1|      -|       yes|          -|        -|            -|            -|       -|
+    |   + mwj_compact                                                                     |       -|   0.19|        -|          -|         -|        -|      -|        no|          -|        -|     89 (~0%)|    239 (~0%)|       -|
+    |    o COMPACT_TASK_LOOP                                                              |       -|   1.80|        -|          -|         2|        1|      -|       yes|          -|        -|            -|            -|       -|
+    |   + mwj_readmin_counter_ap_uint_128_7ul_3ul_64ul_20ul_64ul_s                        |  Timing|  -0.00|        -|          -|         -|        -|      -|        no|          -|        -|   1494 (~0%)|    2147 (1%)|       -|
+    |    + mwj_readmin_counter_Pipeline_READMIN_COUNTER_TASK_LOOP                         |  Timing|  -0.00|        -|          -|         -|        -|      -|        no|          -|        -|   1418 (~0%)|    1780 (1%)|       -|
+    |     o READMIN_COUNTER_TASK_LOOP                                                     |       -|   1.80|        -|          -|        23|        8|      -|       yes|          -|        -|            -|            -|       -|
+    |   + intersectcache_wrapper_6ul_s                                                    |  Timing|  -0.55|        -|          -|         -|        -|      -|        no|          -|        -|    9735 (4%)|    1417 (1%)|       -|
+    |    + mwj_intersect_6ul_s                                                            |  Timing|  -0.55|        -|          -|         -|        -|      -|        no|          -|        -|    9707 (4%)|    1197 (1%)|       -|
+    |     o INTERSECT_TASK_LOOP                                                           |       -|   1.80|        -|          -|        10|        1|      -|       yes|          -|        -|            -|            -|       -|
+    |      + write_dep                                                                    |       -|   0.90|        0|      0.000|         -|        1|      -|       yes|          -|        -|      1 (~0%)|     11 (~0%)|       -|
+    |      + delay_1ul_bool_s                                                             |       -|   1.80|        1|      3.003|         -|        1|      -|       yes|          -|        -|      3 (~0%)|     14 (~0%)|       -|
+    |      + read_dep                                                                     |       -|   0.90|        0|      0.000|         -|        1|      -|       yes|          -|        -|      1 (~0%)|     11 (~0%)|       -|
+    |    o VITIS_LOOP_88_1                                                                |       -|   1.80|      512|  1.538e+03|         2|        1|    512|       yes|          -|        -|            -|            -|       -|
+    |   + mwj_filter_64ul_s                                                               |       -|   0.19|        -|          -|         -|        -|      -|        no|          -|        -|    316 (~0%)|    299 (~0%)|       -|
+    |    + mwj_filter_64ul_Pipeline_VITIS_LOOP_1458_1                                     |       -|   0.19|        -|          -|         -|        -|      -|        no|          -|        -|    247 (~0%)|    232 (~0%)|       -|
+    |     o VITIS_LOOP_1458_1                                                             |       -|   1.80|        -|          -|         3|        1|      -|       yes|          -|        -|            -|            -|       -|
+    |   + mwj_readmin_edge_ap_uint_128_7ul_3ul_64ul_s                                     |  Timing|  -0.00|        -|          -|         -|        -|      -|        no|          -|        -|    2371 (1%)|    1579 (1%)|       -|
+    |    o READMIN_EDGE_TASK_LOOP                                                         |       -|   1.80|        -|          -|         -|        -|      -|        no|          -|        -|            -|            -|       -|
+    |     + mwj_readmin_edge_ap_uint_128_7ul_3ul_64ul_Pipeline_READMIN_EDGES_MAIN_LOOP    |  Timing|  -0.00|        -|          -|         -|        -|      -|        no|          -|        -|   1077 (~0%)|   1023 (~0%)|       -|
+    |      o READMIN_EDGES_MAIN_LOOP                                                      |       -|   1.80|        -|          -|        13|        2|      -|       yes|          -|        -|            -|            -|       -|
+    |       + hash_wrapper_32ul_s                                                         |       -|   0.78|        6|     18.018|         -|        1|      -|       yes|          -|        -|    481 (~0%)|    575 (~0%)|       -|
+    |       + bloom_test_ap_uint_128_7ul_8ul_64ul_s                                       |       -|   0.94|        0|      0.000|         -|        1|      -|       yes|          -|        -|            -|     14 (~0%)|       -|
+    |   + mwj_offset                                                                      |       -|   0.43|        -|          -|         -|        -|      -|        no|          -|        -|    320 (~0%)|    257 (~0%)|       -|
+    |    o OFFSET_TASK_LOOP                                                               |       -|   1.80|        -|          -|         4|        2|      -|       yes|          -|        -|            -|            -|       -|
+    |   + mwj_homomorphism                                                                |  Timing|  -0.00|        -|          -|         -|        -|      -|        no|          -|        -|    3885 (1%)|    3232 (2%)|       -|
+    |    o VITIS_LOOP_768_1                                                               |       -|   1.80|        -|          -|         -|        -|      -|        no|          -|        -|            -|            -|       -|
+    |     + mwj_homomorphism_Pipeline_HOMOMORPHISM_COPYING_EMBEDDING_LOOP                 |  Timing|  -0.00|        -|          -|         -|        -|      -|        no|          -|        -|     21 (~0%)|    117 (~0%)|       -|
+    |      o HOMOMORPHISM_COPYING_EMBEDDING_LOOP                                          |       -|   1.80|        -|          -|         2|        1|      -|       yes|          -|        -|            -|            -|       -|
+    |     + mwj_homomorphism_Pipeline_HOMOMORPHISM_CHECK_LOOP                             |       -|   0.00|        -|          -|         -|        -|      -|        no|          -|        -|    2749 (1%)|    2345 (2%)|       -|
+    |      o HOMOMORPHISM_CHECK_LOOP                                                      |       -|   1.80|        -|          -|        11|        1|      -|       yes|          -|        -|            -|            -|       -|
+    |   + mwj_assembly                                                                    |  Timing|  -0.00|        -|          -|         -|        -|      -|        no|          -|        -|    612 (~0%)|    1175 (1%)|       -|
+    |    o ASSEMBLY_TASK_LOOP                                                             |       -|   1.80|        -|          -|         -|        -|      -|        no|          -|        -|            -|            -|       -|
+    |     + mwj_assembly_Pipeline_ASSEMBLY_COPYING_EMBEDDING_LOOP                         |       -|   0.36|        -|          -|         -|        -|      -|        no|          -|        -|    104 (~0%)|    167 (~0%)|       -|
+    |      o ASSEMBLY_COPYING_EMBEDDING_LOOP                                              |       -|   1.80|        -|          -|         3|        1|      -|       yes|          -|        -|            -|            -|       -|
+    |     + mwj_assembly_Pipeline_ASSEMBLY_SET_LOOP                                       |       -|   0.29|        -|          -|         -|        -|      -|        no|          -|        -|     68 (~0%)|    238 (~0%)|       -|
+    |      o ASSEMBLY_SET_LOOP                                                            |       -|   1.80|        -|          -|         2|        1|      -|       yes|          -|        -|            -|            -|       -|
+    +-------------------------------------------------------------------------------------+--------+-------+---------+-----------+----------+---------+-------+----------+-----------+---------+-------------+-------------+--------+
 
 
 ================================================================
@@ -437,16 +437,16 @@
 +------------------+--------------------------------+-----------+----------+-------+---------------------------------------+
 | m_axi_fifo       | FILL_ORDER_LOOP                | read      | variable | 128   | source/preprocess.hpp:80:5            |
 | m_axi_fifo       | CREATE_TABDESC_LOOP            | read      | variable | 128   | source/preprocess.hpp:92:5            |
-| m_axi_fifo       | COUNT_EDGE_PER_BLOCK_LOOP      | read      | variable | 128   | source/preprocess.hpp:1163:5          |
+| m_axi_fifo       | COUNT_EDGE_IN_BLOCK_LOOP       | read      | variable | 128   | source/preprocess.hpp:1163:5          |
 | m_axi_prop_batch | COUNTER_TO_OFFSET_READ_LOOP    | read      | 32       | 128   | source/preprocess.hpp:267:13          |
 | m_axi_prop_batch |                                | write     | 32       | 128   | source/preprocess.hpp:292:50          |
-| m_axi_prop_batch | LOAD_URAM_OFFSETS_LOOP         | read      | 4096     | 128   | source/preprocess.hpp:1447:9          |
-| m_axi_fifo       | STORE_EDGES_BLOCK_LOOP         | read      | variable | 128   | source/preprocess.hpp:1456:9          |
-| m_axi_prop_batch | STORE_OFFSETS_BLOCK_LOOP       | write     | 4096     | 128   | source/preprocess.hpp:1495:9          |
+| m_axi_prop_batch | LOAD_URAM_OFFSETS_LOOP         | read      | 4096     | 128   | source/preprocess.hpp:1484:9          |
+| m_axi_fifo       | STORE_EDGES_BLOCK_LOOP         | read      | variable | 128   | source/preprocess.hpp:1492:9          |
+| m_axi_prop_batch | STORE_OFFSETS_BLOCK_LOOP       | write     | 4096     | 128   | source/preprocess.hpp:1563:9          |
 | m_axi_prop_batch | BLOOM_READ_EDGES_BLOCK         | read      | variable | 128   | source/preprocess.hpp:345:9           |
 | m_axi_bloom      |                                | write     | 8        | 128   | source/preprocess.hpp:424:44          |
-| m_axi_prop_batch | COUNT_OCCURENCIES_TOP_LOOP     | write     | variable | 128   | source/preprocess.hpp:1370:5          |
-| m_axi_fifo       | COUNT_EDGES_BLOCK_LOOP         | read      | variable | 128   | source/preprocess.hpp:1380:9          |
+| m_axi_prop_batch | COUNT_OCCURENCIES_TOP_LOOP     | write     | variable | 128   | source/preprocess.hpp:1381:5          |
+| m_axi_fifo       | COUNT_EDGES_BLOCK_LOOP         | read      | variable | 128   | source/preprocess.hpp:1385:9          |
 | m_axi_prop_batch | PROPOSE_READ_MIN_INDEXING_LOOP | read      | variable | 128   | source/subgraphIsomorphism.cpp:1730:5 |
 | m_axi_cache      |                                | read      | 8        | 128   | source/cache.h:823:12                 |
 | m_axi_fifo       |                                | write     | 32       | 128   | source/dynfifo_utils.hpp:268:44       |
@@ -459,15 +459,15 @@
 +------------------+----------+--------------------------------+----------------------------------------------------------------------------------------------------------+------------+---------------------------------------+
 | HW Interface     | Variable | Loop                           | Problem                                                                                                  | Resolution | Location                              |
 +------------------+----------+--------------------------------+----------------------------------------------------------------------------------------------------------+------------+---------------------------------------+
-| m_axi_fifo       | edge_buf | COUNT_OCCURENCIES_TOP_LOOP     | Access call is in the conditional branch                                                                 | 214-232    | source/preprocess.hpp:1370:5          |
+| m_axi_fifo       | edge_buf | COUNT_OCCURENCIES_TOP_LOOP     | Access call is in the conditional branch                                                                 | 214-232    | source/preprocess.hpp:1381:5          |
 | m_axi_fifo       | edge_buf |                                | Access is clobbered by store                                                                             | 214-231    | source/preprocess.hpp:1265:15         |
-| m_axi_fifo       | edge_buf | STORE_EDGE_BLOCK_LOOP          | Access store is in the conditional branch                                                                | 214-232    | source/preprocess.hpp:1259:5          |
-| m_axi_fifo       | edge_buf | STORE_EDGE_BLOCK_LOOP          | Access store is in the conditional branch                                                                | 214-232    | source/preprocess.hpp:1259:5          |
-| m_axi_prop_batch | htb_buf  | STORE_EDGES_BLOCK_LOOP         | Could not analyze pattern                                                                                | 214-229    | source/preprocess.hpp:1456:9          |
-| m_axi_prop_batch | htb_buf  | STORE_EDGES_BLOCK_LOOP         | Could not analyze pattern                                                                                | 214-229    | source/preprocess.hpp:1456:9          |
-| m_axi_prop_batch | htb_buf  |                                | Access is clobbered by store                                                                             | 214-231    | source/preprocess.hpp:1447:9          |
-| m_axi_fifo       | edge_buf | STORE_EDGES_TOP_LOOP           | Access call is in the conditional branch                                                                 | 214-232    | source/preprocess.hpp:1441:5          |
-| m_axi_prop_batch | htb_buf  |                                | Access is clobbered by load                                                                              | 214-231    | source/preprocess.hpp:1495:9          |
+| m_axi_fifo       | edge_buf | STORE_EDGE_IN_BLOCK_LOOP       | Access store is in the conditional branch                                                                | 214-232    | source/preprocess.hpp:1259:5          |
+| m_axi_fifo       | edge_buf | STORE_EDGE_IN_BLOCK_LOOP       | Access store is in the conditional branch                                                                | 214-232    | source/preprocess.hpp:1259:5          |
+| m_axi_prop_batch | htb_buf  | STORE_EDGES_BLOCK_LOOP         | Could not analyze pattern                                                                                | 214-229    | source/preprocess.hpp:1492:9          |
+| m_axi_prop_batch | htb_buf  | STORE_EDGES_BLOCK_LOOP         | Could not analyze pattern                                                                                | 214-229    | source/preprocess.hpp:1492:9          |
+| m_axi_prop_batch | htb_buf  |                                | Access is clobbered by store                                                                             | 214-231    | source/preprocess.hpp:1484:9          |
+| m_axi_fifo       | edge_buf | STORE_EDGES_TOP_LOOP           | Access call is in the conditional branch                                                                 | 214-232    | source/preprocess.hpp:1478:5          |
+| m_axi_prop_batch | htb_buf  |                                | Access is clobbered by load                                                                              | 214-231    | source/preprocess.hpp:1563:9          |
 | m_axi_prop_batch | htb_buf  | BLOOM_READ_TABLES_LOOP         | Could not analyze pattern                                                                                | 214-229    | source/preprocess.hpp:334:5           |
 | m_axi_prop_batch | htb_buf  | PROPOSE_READ_MIN_INDEXING_LOOP | Could not widen since type i128 size is greater than or equal to the max_widen_bitwidth threshold of 0   | 214-353    | source/subgraphIsomorphism.cpp:1730:5 |
 | m_axi_bloom      | bloom_p  |                                | Could not widen since type i128 size is greater than or equal to the max_widen_bitwidth threshold of 128 | 214-353    | source/subgraphIsomorphism.cpp:468:70 |
@@ -476,14 +476,14 @@
 | m_axi_fifo       | mem      |                                | Could not widen since type i128 size is greater than or equal to the max_widen_bitwidth threshold of 128 | 214-353    | source/dynfifo_utils.hpp:290:13       |
 | m_axi_fifo       | edge_buf | CREATE_TABDESC_LOOP            | Could not widen since type i128 size is greater than or equal to the max_widen_bitwidth threshold of 128 | 214-353    | source/preprocess.hpp:92:5            |
 | m_axi_fifo       | edge_buf | FILL_ORDER_LOOP                | Could not widen since type i128 size is greater than or equal to the max_widen_bitwidth threshold of 128 | 214-353    | source/preprocess.hpp:80:5            |
-| m_axi_prop_batch | htb_buf  | STORE_COUNTERS_BLOCK_LOOP      | Could not widen since type i128 size is greater than or equal to the max_widen_bitwidth threshold of 0   | 214-353    | source/preprocess.hpp:1402:9          |
-| m_axi_fifo       | edge_buf | COUNT_EDGES_BLOCK_LOOP         | Could not widen since type i128 size is greater than or equal to the max_widen_bitwidth threshold of 128 | 214-353    | source/preprocess.hpp:1380:9          |
-| m_axi_fifo       | edge_buf | COUNT_EDGE_PER_BLOCK_LOOP      | Could not widen since type i128 size is greater than or equal to the max_widen_bitwidth threshold of 128 | 214-353    | source/preprocess.hpp:1163:5          |
+| m_axi_prop_batch | htb_buf  | STORE_COUNTERS_BLOCK_LOOP      | Could not widen since type i128 size is greater than or equal to the max_widen_bitwidth threshold of 0   | 214-353    | source/preprocess.hpp:1436:9          |
+| m_axi_fifo       | edge_buf | COUNT_EDGES_BLOCK_LOOP         | Could not widen since type i128 size is greater than or equal to the max_widen_bitwidth threshold of 128 | 214-353    | source/preprocess.hpp:1385:9          |
+| m_axi_fifo       | edge_buf | COUNT_EDGE_IN_BLOCK_LOOP       | Could not widen since type i128 size is greater than or equal to the max_widen_bitwidth threshold of 128 | 214-353    | source/preprocess.hpp:1163:5          |
 | m_axi_prop_batch | htb_buf  |                                | Could not widen since type i128 size is greater than or equal to the max_widen_bitwidth threshold of 0   | 214-353    | source/preprocess.hpp:292:50          |
 | m_axi_prop_batch | htb_buf  | COUNTER_TO_OFFSET_READ_LOOP    | Could not widen since type i128 size is greater than or equal to the max_widen_bitwidth threshold of 0   | 214-353    | source/preprocess.hpp:267:13          |
-| m_axi_prop_batch | htb_buf  | STORE_OFFSETS_BLOCK_LOOP       | Could not widen since type i128 size is greater than or equal to the max_widen_bitwidth threshold of 0   | 214-353    | source/preprocess.hpp:1495:9          |
-| m_axi_fifo       | edge_buf | STORE_EDGES_BLOCK_LOOP         | Could not widen since type i128 size is greater than or equal to the max_widen_bitwidth threshold of 128 | 214-353    | source/preprocess.hpp:1456:9          |
-| m_axi_prop_batch | htb_buf  | LOAD_URAM_OFFSETS_LOOP         | Could not widen since type i128 size is greater than or equal to the max_widen_bitwidth threshold of 0   | 214-353    | source/preprocess.hpp:1447:9          |
+| m_axi_prop_batch | htb_buf  | STORE_OFFSETS_BLOCK_LOOP       | Could not widen since type i128 size is greater than or equal to the max_widen_bitwidth threshold of 0   | 214-353    | source/preprocess.hpp:1563:9          |
+| m_axi_fifo       | edge_buf | STORE_EDGES_BLOCK_LOOP         | Could not widen since type i128 size is greater than or equal to the max_widen_bitwidth threshold of 128 | 214-353    | source/preprocess.hpp:1492:9          |
+| m_axi_prop_batch | htb_buf  | LOAD_URAM_OFFSETS_LOOP         | Could not widen since type i128 size is greater than or equal to the max_widen_bitwidth threshold of 0   | 214-353    | source/preprocess.hpp:1484:9          |
 | m_axi_prop_batch | htb_buf  | BLOOM_READ_EDGES_BLOCK         | Could not widen since type i128 size is greater than or equal to the max_widen_bitwidth threshold of 0   | 214-353    | source/preprocess.hpp:345:9           |
 | m_axi_bloom      | bloom_p  |                                | Could not widen since type i128 size is greater than or equal to the max_widen_bitwidth threshold of 128 | 214-353    | source/preprocess.hpp:424:44          |
 | m_axi_cache      | main_mem |                                | Could not widen since type i128 size is greater than or equal to the max_widen_bitwidth threshold of 0   | 214-353    | source/cache.h:823:12                 |
@@ -498,17 +498,17 @@
 | Name                                                                               | DSP | Pragma | Variable                   | Op   | Impl   | Latency |
 +------------------------------------------------------------------------------------+-----+--------+----------------------------+------+--------+---------+
 | + subgraphIsomorphism                                                              | 13  |        |                            |      |        |         |
-|   add_ln1712_fu_708_p2                                                             | -   |        | add_ln1712                 | add  | fabric | 0       |
-|   add_ln1712_1_fu_719_p2                                                           | -   |        | add_ln1712_1               | add  | fabric | 0       |
+|   add_ln1785_fu_708_p2                                                             | -   |        | add_ln1785                 | add  | fabric | 0       |
+|   add_ln1785_1_fu_719_p2                                                           | -   |        | add_ln1785_1               | add  | fabric | 0       |
 |  + subgraphIsomorphism_Pipeline_1                                                  | 0   |        |                            |      |        |         |
 |    add_ln2833_fu_68_p2                                                             | -   |        | add_ln2833                 | add  | fabric | 0       |
 |  + subgraphIsomorphism_Pipeline_2                                                  | 0   |        |                            |      |        |         |
 |    add_ln2833_fu_68_p2                                                             | -   |        | add_ln2833                 | add  | fabric | 0       |
-|  + subgraphIsomorphism_Pipeline_INITIALIZE_LABELTOTABLE_LOOP_VITIS_LOOP_1705_1     | 0   |        |                            |      |        |         |
-|    add_ln1704_1_fu_92_p2                                                           | -   |        | add_ln1704_1               | add  | fabric | 0       |
-|    add_ln1704_fu_104_p2                                                            | -   |        | add_ln1704                 | add  | fabric | 0       |
-|    add_ln1707_fu_156_p2                                                            | -   |        | add_ln1707                 | add  | fabric | 0       |
-|    add_ln1705_fu_162_p2                                                            | -   |        | add_ln1705                 | add  | fabric | 0       |
+|  + subgraphIsomorphism_Pipeline_INITIALIZE_LABELTOTABLE_LOOP_VITIS_LOOP_1778_1     | 0   |        |                            |      |        |         |
+|    add_ln1777_1_fu_92_p2                                                           | -   |        | add_ln1777_1               | add  | fabric | 0       |
+|    add_ln1777_fu_104_p2                                                            | -   |        | add_ln1777                 | add  | fabric | 0       |
+|    add_ln1780_fu_156_p2                                                            | -   |        | add_ln1780                 | add  | fabric | 0       |
+|    add_ln1778_fu_162_p2                                                            | -   |        | add_ln1778                 | add  | fabric | 0       |
 |  + buildTableDescriptors_32ul_32ul_32ul_5ul_32ul_s                                 | 0   |        |                            |      |        |         |
 |    add_ln92_fu_189_p2                                                              | -   |        | add_ln92                   | add  | fabric | 0       |
 |   + buildTableDescriptors_32ul_32ul_32ul_5ul_32ul_Pipeline_FILL_ORDER_LOOP         | 0   |        |                            |      |        |         |
@@ -536,59 +536,61 @@
 |     qVertices0_numTablesIndexed_d0                                                 | -   |        | add_ln157                  | add  | fabric | 0       |
 |     qVertices1_numTablesIndexed_d0                                                 | -   |        | add_ln158                  | add  | fabric | 0       |
 |  + fillTablesURAM                                                                  | 5   |        |                            |      |        |         |
-|    add_ln1542_fu_394_p2                                                            | -   |        | add_ln1542                 | add  | fabric | 0       |
-|    add_ln1542_1_fu_404_p2                                                          | -   |        | add_ln1542_1               | add  | fabric | 0       |
-|    add_ln1544_fu_410_p2                                                            | -   |        | add_ln1544                 | add  | fabric | 0       |
-|    add_ln1554_fu_460_p2                                                            | -   |        | add_ln1554                 | add  | fabric | 0       |
-|    add_ln1554_1_fu_473_p2                                                          | -   |        | add_ln1554_1               | add  | fabric | 0       |
-|    add_ln1560_fu_487_p2                                                            | -   |        | add_ln1560                 | add  | fabric | 0       |
-|    add_ln1560_1_fu_517_p2                                                          | -   |        | add_ln1560_1               | add  | fabric | 0       |
-|    mul_32s_16ns_32_5_1_U198                                                        | 2   |        | mul_i                      | mul  | auto   | 4       |
-|    add_ln1370_fu_573_p2                                                            | -   |        | add_ln1370                 | add  | fabric | 0       |
-|    block_edges_fu_587_p2                                                           | -   |        | block_edges                | sub  | fabric | 0       |
-|    add_ln1380_fu_609_p2                                                            | -   |        | add_ln1380                 | add  | fabric | 0       |
-|   + fillTablesURAM_Pipeline_1                                                      | 0   |        |                            |      |        |         |
-|     empty_276_fu_68_p2                                                             | -   |        | empty_276                  | add  | fabric | 0       |
+|    add_ln1609_fu_402_p2                                                            | -   |        | add_ln1609                 | add  | fabric | 0       |
+|    add_ln1609_1_fu_412_p2                                                          | -   |        | add_ln1609_1               | add  | fabric | 0       |
+|    add_ln1611_fu_431_p2                                                            | -   |        | add_ln1611                 | add  | fabric | 0       |
+|    add_ln1621_fu_468_p2                                                            | -   |        | add_ln1621                 | add  | fabric | 0       |
+|    add_ln1621_1_fu_481_p2                                                          | -   |        | add_ln1621_1               | add  | fabric | 0       |
+|    phitmp_fu_495_p2                                                                | -   |        | phitmp                     | add  | fabric | 0       |
+|    mul_32s_16ns_32_5_1_U206                                                        | 2   |        | mul                        | mul  | auto   | 4       |
+|    add_ln1633_fu_539_p2                                                            | -   |        | add_ln1633                 | add  | fabric | 0       |
+|    add_ln1381_fu_581_p2                                                            | -   |        | add_ln1381                 | add  | fabric | 0       |
+|    block_edges_fu_595_p2                                                           | -   |        | block_edges                | sub  | fabric | 0       |
+|    add_ln1385_fu_617_p2                                                            | -   |        | add_ln1385                 | add  | fabric | 0       |
 |   + fillTablesURAM_Pipeline_STORE_HASHTABLES_POINTER_LOOP                          | 0   |        |                            |      |        |         |
-|     add_ln1554_fu_86_p2                                                            | -   |        | add_ln1554                 | add  | fabric | 0       |
+|     add_ln1621_fu_86_p2                                                            | -   |        | add_ln1621                 | add  | fabric | 0       |
 |     start_addr_1_fu_109_p2                                                         | -   |        | start_addr_1               | add  | fabric | 0       |
+|   + fillTablesURAM_Pipeline_INITIALIZE_BRAM_LOOP                                   | 0   |        |                            |      |        |         |
+|     add_ln1627_fu_66_p2                                                            | -   |        | add_ln1627                 | add  | fabric | 0       |
+|   + fillTablesURAM_Pipeline_INITIALIZE_URAM_LOOP                                   | 0   |        |                            |      |        |         |
+|     add_ln1373_fu_90_p2                                                            | -   |        | add_ln1373                 | add  | fabric | 0       |
 |   + countEdgePerBlock_32ul_5ul_64ul_20ul_32ul_s                                    | 0   |        |                            |      |        |         |
 |     add_ln1160_fu_141_p2                                                           | -   |        | add_ln1160                 | add  | fabric | 0       |
 |     block_per_table_fu_151_p2                                                      | -   |        | block_per_table            | add  | fabric | 0       |
 |     sub29_fu_160_p2                                                                | -   |        | sub29                      | add  | fabric | 0       |
 |     sub39_fu_166_p2                                                                | -   |        | sub39                      | sub  | fabric | 0       |
-|    + countEdgePerBlock_Pipeline_COUNT_EDGE_PER_BLOCK_LOOP                          | 0   |        |                            |      |        |         |
-|      add_ln1163_fu_250_p2                                                          | -   |        | add_ln1163                 | add  | fabric | 0       |
-|      a_fu_351_p2                                                                   | -   |        | a                          | add  | fabric | 0       |
-|      a_45_fu_366_p2                                                                | -   |        | a_45                       | add  | fabric | 0       |
-|      b_40_fu_413_p2                                                                | -   |        | b_40                       | sub  | fabric | 0       |
-|      c_22_fu_489_p2                                                                | -   |        | c_22                       | sub  | fabric | 0       |
-|      a_47_fu_567_p2                                                                | -   |        | a_47                       | sub  | fabric | 0       |
-|      b_47_fu_643_p2                                                                | -   |        | b_47                       | sub  | fabric | 0       |
-|      sub_ln628_fu_652_p2                                                           | -   |        | sub_ln628                  | sub  | fabric | 0       |
-|      a_48_fu_356_p2                                                                | -   |        | a_48                       | add  | fabric | 0       |
-|      a_50_fu_377_p2                                                                | -   |        | a_50                       | add  | fabric | 0       |
-|      b_44_fu_444_p2                                                                | -   |        | b_44                       | sub  | fabric | 0       |
-|      c_24_fu_520_p2                                                                | -   |        | c_24                       | sub  | fabric | 0       |
-|      a_52_fu_597_p2                                                                | -   |        | a_52                       | sub  | fabric | 0       |
-|      b_48_fu_706_p2                                                                | -   |        | b_48                       | sub  | fabric | 0       |
-|      sub_ln628_5_fu_715_p2                                                         | -   |        | sub_ln628_5                | sub  | fabric | 0       |
-|      sub_ln668_fu_767_p2                                                           | -   |        | sub_ln668                  | sub  | fabric | 0       |
-|      sub_ln668_9_fu_740_p2                                                         | -   |        | sub_ln668_9                | sub  | fabric | 0       |
-|      sub_ln668_10_fu_772_p2                                                        | -   |        | sub_ln668_10               | sub  | fabric | 0       |
-|      sub_ln668_11_fu_795_p2                                                        | -   |        | sub_ln668_11               | sub  | fabric | 0       |
-|      add_ln1494_fu_453_p2                                                          | -   |        | add_ln1494                 | add  | fabric | 0       |
-|      address0_fu_889_p2                                                            | -   |        | address0                   | add  | fabric | 0       |
-|      sub_ln668_12_fu_823_p2                                                        | -   |        | sub_ln668_12               | sub  | fabric | 0       |
-|      sub_ln668_13_fu_749_p2                                                        | -   |        | sub_ln668_13               | sub  | fabric | 0       |
-|      sub_ln668_14_fu_828_p2                                                        | -   |        | sub_ln668_14               | sub  | fabric | 0       |
-|      sub_ln668_15_fu_851_p2                                                        | -   |        | sub_ln668_15               | sub  | fabric | 0       |
-|      add_ln1494_2_fu_537_p2                                                        | -   |        | add_ln1494_2               | add  | fabric | 0       |
-|      address1_fu_916_p2                                                            | -   |        | address1                   | add  | fabric | 0       |
-|      add_ln1225_fu_1008_p2                                                         | -   |        | add_ln1225                 | add  | fabric | 0       |
-|      add_ln1228_fu_1017_p2                                                         | -   |        | add_ln1228                 | add  | fabric | 0       |
+|    + countEdgePerBlock_32ul_5ul_64ul_20ul_32ul_Pipeline_COUNT_EDGE_IN_BLOCK_LOOP   | 0   |        |                            |      |        |         |
+|      add_ln1163_fu_246_p2                                                          | -   |        | add_ln1163                 | add  | fabric | 0       |
+|      a_fu_347_p2                                                                   | -   |        | a                          | add  | fabric | 0       |
+|      a_45_fu_362_p2                                                                | -   |        | a_45                       | add  | fabric | 0       |
+|      b_40_fu_409_p2                                                                | -   |        | b_40                       | sub  | fabric | 0       |
+|      c_22_fu_485_p2                                                                | -   |        | c_22                       | sub  | fabric | 0       |
+|      a_47_fu_563_p2                                                                | -   |        | a_47                       | sub  | fabric | 0       |
+|      b_47_fu_639_p2                                                                | -   |        | b_47                       | sub  | fabric | 0       |
+|      sub_ln628_fu_648_p2                                                           | -   |        | sub_ln628                  | sub  | fabric | 0       |
+|      a_48_fu_352_p2                                                                | -   |        | a_48                       | add  | fabric | 0       |
+|      a_50_fu_373_p2                                                                | -   |        | a_50                       | add  | fabric | 0       |
+|      b_44_fu_440_p2                                                                | -   |        | b_44                       | sub  | fabric | 0       |
+|      c_24_fu_516_p2                                                                | -   |        | c_24                       | sub  | fabric | 0       |
+|      a_52_fu_593_p2                                                                | -   |        | a_52                       | sub  | fabric | 0       |
+|      b_48_fu_702_p2                                                                | -   |        | b_48                       | sub  | fabric | 0       |
+|      sub_ln628_5_fu_711_p2                                                         | -   |        | sub_ln628_5                | sub  | fabric | 0       |
+|      sub_ln668_fu_763_p2                                                           | -   |        | sub_ln668                  | sub  | fabric | 0       |
+|      sub_ln668_9_fu_736_p2                                                         | -   |        | sub_ln668_9                | sub  | fabric | 0       |
+|      sub_ln668_10_fu_768_p2                                                        | -   |        | sub_ln668_10               | sub  | fabric | 0       |
+|      sub_ln668_11_fu_791_p2                                                        | -   |        | sub_ln668_11               | sub  | fabric | 0       |
+|      add_ln1494_fu_449_p2                                                          | -   |        | add_ln1494                 | add  | fabric | 0       |
+|      address0_fu_885_p2                                                            | -   |        | address0                   | add  | fabric | 0       |
+|      sub_ln668_12_fu_819_p2                                                        | -   |        | sub_ln668_12               | sub  | fabric | 0       |
+|      sub_ln668_13_fu_745_p2                                                        | -   |        | sub_ln668_13               | sub  | fabric | 0       |
+|      sub_ln668_14_fu_824_p2                                                        | -   |        | sub_ln668_14               | sub  | fabric | 0       |
+|      sub_ln668_15_fu_847_p2                                                        | -   |        | sub_ln668_15               | sub  | fabric | 0       |
+|      add_ln1494_2_fu_533_p2                                                        | -   |        | add_ln1494_2               | add  | fabric | 0       |
+|      address1_fu_912_p2                                                            | -   |        | address1                   | add  | fabric | 0       |
+|      add_ln1225_fu_1005_p2                                                         | -   |        | add_ln1225                 | add  | fabric | 0       |
+|      add_ln1228_fu_1014_p2                                                         | -   |        | add_ln1228                 | add  | fabric | 0       |
 |   + fillTablesURAM_Pipeline_COUNTER_TO_OFFSET_BLOCK_LOOP                           | 0   |        |                            |      |        |         |
-|     add_ln1569_fu_78_p2                                                            | -   |        | add_ln1569                 | add  | fabric | 0       |
+|     add_ln1642_fu_78_p2                                                            | -   |        | add_ln1642                 | add  | fabric | 0       |
 |     base_addr_1_fu_98_p2                                                           | -   |        | base_addr_1                | add  | fabric | 0       |
 |   + storeEdgePerBlock_32ul_5ul_64ul_20ul_32ul_s                                    | 0   |        |                            |      |        |         |
 |     add_ln1256_fu_125_p2                                                           | -   |        | add_ln1256                 | add  | fabric | 0       |
@@ -596,7 +598,7 @@
 |     sub30_fu_147_p2                                                                | -   |        | sub30                      | add  | fabric | 0       |
 |     sub40_fu_152_p2                                                                | -   |        | sub40                      | sub  | fabric | 0       |
 |     sub93_fu_170_p2                                                                | -   |        | sub93                      | add  | fabric | 0       |
-|    + storeEdgePerBlock_32ul_5ul_64ul_20ul_32ul_Pipeline_STORE_EDGE_BLOCK_LOOP      | 0   |        |                            |      |        |         |
+|    + storeEdgePerBlock_32ul_5ul_64ul_20ul_32ul_Pipeline_STORE_EDGE_IN_BLOCK_LOOP   | 0   |        |                            |      |        |         |
 |      add_ln1259_fu_326_p2                                                          | -   |        | add_ln1259                 | add  | fabric | 0       |
 |      add_ln1265_fu_336_p2                                                          | -   |        | add_ln1265                 | add  | fabric | 0       |
 |      add_ln1265_1_fu_350_p2                                                        | -   |        | add_ln1265_1               | add  | fabric | 0       |
@@ -633,57 +635,59 @@
 |      sub_ln628_3_fu_1272_p2                                                        | -   |        | sub_ln628_3                | sub  | fabric | 0       |
 |      add_ln1335_fu_1229_p2                                                         | -   |        | add_ln1335                 | add  | fabric | 0       |
 |      add_ln1336_fu_1247_p2                                                         | -   |        | add_ln1336                 | add  | fabric | 0       |
-|   + fillTablesURAM_Pipeline_INITIALIZE_URAM_LOOP                                   | 0   |        |                            |      |        |         |
-|     add_ln1374_fu_70_p2                                                            | -   |        | add_ln1374                 | add  | fabric | 0       |
 |   + fillTablesURAM_Pipeline_COUNT_EDGES_BLOCK_LOOP                                 | 0   |        |                            |      |        |         |
-|     add_ln1380_fu_152_p2                                                           | -   |        | add_ln1380                 | add  | fabric | 0       |
-|     address_2_fu_189_p2                                                            | -   |        | address_2                  | add  | fabric | 0       |
-|     add_ln1393_fu_222_p2                                                           | -   |        | add_ln1393                 | add  | fabric | 0       |
+|     add_ln1385_fu_207_p2                                                           | -   |        | add_ln1385                 | add  | fabric | 0       |
+|     address_6_fu_283_p2                                                            | -   |        | address_6                  | add  | fabric | 0       |
+|     add_ln1396_fu_270_p2                                                           | -   |        | add_ln1396                 | add  | fabric | 0       |
+|     add_ln368_2_fu_362_p2                                                          | -   |        | add_ln368_2                | add  | fabric | 0       |
+|     add_ln368_fu_372_p2                                                            | -   |        | add_ln368                  | add  | fabric | 0       |
 |   + fillTablesURAM_Pipeline_STORE_COUNTERS_BLOCK_LOOP                              | 0   |        |                            |      |        |         |
-|     add_ln1402_fu_175_p2                                                           | -   |        | add_ln1402                 | add  | fabric | 0       |
+|     add_ln1436_fu_132_p2                                                           | -   |        | add_ln1436                 | add  | fabric | 0       |
 |   + counterToOffset_ap_uint_128_5ul_7ul_20ul_s                                     | 0   |        |                            |      |        |         |
 |     add_ln258_fu_801_p2                                                            | -   |        | add_ln258                  | add  | fabric | 0       |
 |     add_ln263_fu_825_p2                                                            | -   |        | add_ln263                  | add  | fabric | 0       |
-|     empty_280_fu_843_p2                                                            | -   |        | empty_280                  | add  | fabric | 0       |
-|     empty_281_fu_865_p2                                                            | -   |        | empty_281                  | add  | fabric | 0       |
+|     empty_284_fu_843_p2                                                            | -   |        | empty_284                  | add  | fabric | 0       |
+|     empty_285_fu_865_p2                                                            | -   |        | empty_285                  | add  | fabric | 0       |
 |     start_1_fu_848_p2                                                              | -   |        | start_1                    | add  | fabric | 0       |
 |    + counterToOffset_ap_uint_5ul_7ul_20ul_Pipeline_COUNTER_TO_OFFSET_READ_LOOP     | 0   |        |                            |      |        |         |
 |      add_ln267_fu_138_p2                                                           | -   |        | add_ln267                  | add  | fabric | 0       |
 |      sum1_fu_189_p2                                                                | -   |        | sum1                       | add  | fabric | 0       |
 |      add_ln368_fu_196_p2                                                           | -   |        | add_ln368                  | add  | fabric | 0       |
-|      add_ln368_1_fu_201_p2                                                         | -   |        | add_ln368_1                | add  | fabric | 0       |
+|      add_ln368_3_fu_201_p2                                                         | -   |        | add_ln368_3                | add  | fabric | 0       |
 |      base_addr_V_2_fu_216_p2                                                       | -   |        | base_addr_V_2              | add  | fabric | 0       |
 |   + fillTablesURAM_Pipeline_STORE_EDGES_POINTER_LOOP                               | 1   |        |                            |      |        |         |
-|     add_ln1596_fu_223_p2                                                           | -   |        | add_ln1596                 | add  | fabric | 0       |
-|     ama_addmuladd_11ns_1ns_11s_1s_11_4_1_U109                                      | 1   |        | add_ln1598                 | add  | dsp48  | 3       |
-|     ama_addmuladd_11ns_1ns_11s_1s_11_4_1_U109                                      | 1   |        | mul_ln1598                 | mul  | dsp48  | 3       |
-|     ama_addmuladd_11ns_1ns_11s_1s_11_4_1_U109                                      | 1   |        | add_ln1598_1               | add  | dsp48  | 3       |
-|     sub_ln1599_fu_254_p2                                                           | -   |        | sub_ln1599                 | sub  | fabric | 0       |
-|     add_ln1602_1_fu_276_p2                                                         | -   |        | add_ln1602_1               | add  | fabric | 0       |
-|     add_ln1602_fu_298_p2                                                           | -   |        | add_ln1602                 | add  | fabric | 0       |
+|     add_ln1669_fu_223_p2                                                           | -   |        | add_ln1669                 | add  | fabric | 0       |
+|     ama_addmuladd_11ns_1ns_11s_1s_11_4_1_U114                                      | 1   |        | add_ln1671                 | add  | dsp48  | 3       |
+|     ama_addmuladd_11ns_1ns_11s_1s_11_4_1_U114                                      | 1   |        | mul_ln1671                 | mul  | dsp48  | 3       |
+|     ama_addmuladd_11ns_1ns_11s_1s_11_4_1_U114                                      | 1   |        | add_ln1671_1               | add  | dsp48  | 3       |
+|     sub_ln1672_fu_254_p2                                                           | -   |        | sub_ln1672                 | sub  | fabric | 0       |
+|     add_ln1675_1_fu_276_p2                                                         | -   |        | add_ln1675_1               | add  | fabric | 0       |
+|     add_ln1675_fu_298_p2                                                           | -   |        | add_ln1675                 | add  | fabric | 0       |
 |   + storeEdgesHTB_ap_uint_32_7ul_6ul_32ul_5ul_64ul_20ul_32ul_s                     | 0   |        |                            |      |        |         |
-|     add_ln1435_fu_210_p2                                                           | -   |        | add_ln1435                 | add  | fabric | 0       |
-|     add_ln1435_1_fu_233_p2                                                         | -   |        | add_ln1435_1               | add  | fabric | 0       |
-|     add_ln1441_fu_273_p2                                                           | -   |        | add_ln1441                 | add  | fabric | 0       |
-|     empty_fu_291_p2                                                                | -   |        | empty                      | add  | fabric | 0       |
-|     block_edges_fu_333_p2                                                          | -   |        | block_edges                | sub  | fabric | 0       |
-|     add_ln1456_fu_355_p2                                                           | -   |        | add_ln1456                 | add  | fabric | 0       |
+|     add_ln1470_fu_217_p2                                                           | -   |        | add_ln1470                 | add  | fabric | 0       |
+|     add_ln1470_1_fu_240_p2                                                         | -   |        | add_ln1470_1               | add  | fabric | 0       |
+|     add_ln1478_fu_280_p2                                                           | -   |        | add_ln1478                 | add  | fabric | 0       |
+|     empty_fu_298_p2                                                                | -   |        | empty                      | add  | fabric | 0       |
+|     block_edges_fu_340_p2                                                          | -   |        | block_edges                | sub  | fabric | 0       |
+|     add_ln1492_fu_362_p2                                                           | -   |        | add_ln1492                 | add  | fabric | 0       |
 |    + storeEdgesHTB_Pipeline_LOAD_URAM_OFFSETS_LOOP                                 | 0   |        |                            |      |        |         |
-|      add_ln1447_fu_160_p2                                                          | -   |        | add_ln1447                 | add  | fabric | 0       |
+|      add_ln1484_fu_129_p2                                                          | -   |        | add_ln1484                 | add  | fabric | 0       |
 |    + storeEdgesHTB_Pipeline_STORE_EDGES_BLOCK_LOOP                                 | 0   |        |                            |      |        |         |
-|      add_ln1456_fu_223_p2                                                          | -   |        | add_ln1456                 | add  | fabric | 0       |
-|      address_V_2_fu_266_p2                                                         | -   |        | address_V_2                | add  | fabric | 0       |
-|      addr_row_edge_V_fu_313_p2                                                     | -   |        | addr_row_edge_V            | add  | fabric | 0       |
-|      add_ln1483_fu_371_p2                                                          | -   |        | add_ln1483                 | add  | fabric | 0       |
-|      add_ln1490_fu_342_p2                                                          | -   |        | add_ln1490                 | add  | fabric | 0       |
+|      add_ln1492_fu_284_p2                                                          | -   |        | add_ln1492                 | add  | fabric | 0       |
+|      address_3_fu_377_p2                                                           | -   |        | address_3                  | add  | fabric | 0       |
+|      add_ln1507_fu_364_p2                                                          | -   |        | add_ln1507                 | add  | fabric | 0       |
+|      add_ln368_1_fu_456_p2                                                         | -   |        | add_ln368_1                | add  | fabric | 0       |
+|      add_ln368_fu_466_p2                                                           | -   |        | add_ln368                  | add  | fabric | 0       |
+|      addr_row_edge_V_fu_547_p2                                                     | -   |        | addr_row_edge_V            | add  | fabric | 0       |
+|      add_ln1552_fu_594_p2                                                          | -   |        | add_ln1552                 | add  | fabric | 0       |
 |    + storeEdgesHTB_Pipeline_STORE_OFFSETS_BLOCK_LOOP                               | 0   |        |                            |      |        |         |
-|      add_ln1495_fu_175_p2                                                          | -   |        | add_ln1495                 | add  | fabric | 0       |
+|      add_ln1563_fu_122_p2                                                          | -   |        | add_ln1563                 | add  | fabric | 0       |
 |   + writeBloom                                                                     | 0   |        |                            |      |        |         |
 |    + bloom_read_ap_uint_128_5ul_7ul_32ul_6ul_64ul_20ul_64ul_s                      | 0   |        |                            |      |        |         |
 |      sub30_fu_231_p2                                                               | -   |        | sub30                      | add  | fabric | 0       |
 |      add_ln334_fu_264_p2                                                           | -   |        | add_ln334                  | add  | fabric | 0       |
 |      add_ln345_fu_303_p2                                                           | -   |        | add_ln345                  | add  | fabric | 0       |
-|      empty_291_fu_320_p2                                                           | -   |        | empty_291                  | add  | fabric | 0       |
+|      empty_295_fu_320_p2                                                           | -   |        | empty_295                  | add  | fabric | 0       |
 |      tuple_out_address_fu_360_p2                                                   | -   |        | tuple_out_address          | add  | fabric | 0       |
 |     + bloom_read_Pipeline_BLOOM_READ_EDGES_BLOCK                                   | 0   |        |                            |      |        |         |
 |       add_ln345_1_fu_331_p2                                                        | -   |        | add_ln345_1                | add  | fabric | 0       |
@@ -743,7 +747,7 @@
 |   + multiwayJoin_ap_uint_128_7ul_3ul_64ul_20ul_64ul_s                              | 8   |        |                            |      |        |         |
 |     mwj_blockbuild_split_t_U                                                       | -   |        | mwj_blockbuild_split_t_in  | fifo | memory | 0       |
 |    + run_mem_if                                                                    | 0   |        |                            |      |        |         |
-|      empty_205_fu_259_p2                                                           | -   |        | empty_205                  | add  | fabric | 0       |
+|      empty_211_fu_259_p2                                                           | -   |        | empty_211                  | add  | fabric | 0       |
 |    + MMU_fast_ap_uint_32_4ul_s                                                     | 0   |        |                            |      |        |         |
 |      p_counter_6_fu_205_p2                                                         | -   |        | p_counter_6                | add  | fabric | 0       |
 |      ddr_data_11_fu_211_p2                                                         | -   |        | ddr_data_11                | add  | fabric | 0       |
@@ -820,16 +824,16 @@
 |     + bloom_intersect_ap_uint_128_7ul_s                                            | 8   |        |                            |      |        |         |
 |       u_1_fu_420_p2                                                                | -   |        | u_1                        | sub  | fabric | 0       |
 |       u_2_fu_1808_p2                                                               | -   |        | u_2                        | add  | fabric | 0       |
-|       mul_28ns_26ns_32_5_0_U422                                                    | 2   |        | mul_ln413                  | mul  | auto   | 4       |
+|       mul_28ns_26ns_32_5_0_U429                                                    | 2   |        | mul_ln413                  | mul  | auto   | 4       |
 |       u_4_fu_788_p2                                                                | -   |        | u_4                        | sub  | fabric | 0       |
 |       u_5_fu_1992_p2                                                               | -   |        | u_5                        | add  | fabric | 0       |
-|       mul_28ns_26ns_32_5_0_U423                                                    | 2   |        | mul_ln413_1                | mul  | auto   | 4       |
+|       mul_28ns_26ns_32_5_0_U430                                                    | 2   |        | mul_ln413_1                | mul  | auto   | 4       |
 |       u_7_fu_1156_p2                                                               | -   |        | u_7                        | sub  | fabric | 0       |
 |       u_8_fu_2176_p2                                                               | -   |        | u_8                        | add  | fabric | 0       |
-|       mul_28ns_26ns_32_5_0_U424                                                    | 2   |        | mul_ln413_2                | mul  | auto   | 4       |
+|       mul_28ns_26ns_32_5_0_U431                                                    | 2   |        | mul_ln413_2                | mul  | auto   | 4       |
 |       u_10_fu_1524_p2                                                              | -   |        | u_10                       | sub  | fabric | 0       |
 |       u_11_fu_2360_p2                                                              | -   |        | u_11                       | add  | fabric | 0       |
-|       mul_28ns_26ns_32_5_0_U425                                                    | 2   |        | mul_ln413_3                | mul  | auto   | 4       |
+|       mul_28ns_26ns_32_5_0_U432                                                    | 2   |        | mul_ln413_3                | mul  | auto   | 4       |
 |       add_ln413_4_fu_2571_p2                                                       | -   |        | add_ln413_4                | add  | fabric | 0       |
 |    + mwj_tuplebuild_6ul_64ul_20ul_64ul_s                                           | 0   |        |                            |      |        |         |
 |      sub_fu_188_p2                                                                 | -   |        | sub                        | add  | fabric | 0       |
@@ -932,7 +936,7 @@
 +----------------------------------------------------------------+------+------+--------+-------------------------------------------+---------+--------+---------+
 | Name                                                           | BRAM | URAM | Pragma | Variable                                  | Storage | Impl   | Latency |
 +----------------------------------------------------------------+------+------+--------+-------------------------------------------+---------+--------+---------+
-| + subgraphIsomorphism                                          | 217  | 8    |        |                                           |         |        |         |
+| + subgraphIsomorphism                                          | 217  | 4    |        |                                           |         |        |         |
 |   labelToTable_V_U                                             | 1    | -    |        | labelToTable_V                            | ram_s2p | auto   | 1       |
 |   qVertices0_tables_indexed_U                                  | 1    | -    |        | qVertices0_tables_indexed                 | ram_1p  | auto   | 1       |
 |   qVertices0_vertex_indexing_U                                 | 1    | -    |        | qVertices0_vertex_indexing                | ram_1p  | auto   | 1       |
@@ -952,13 +956,15 @@
 |   hTables1_n_edges_U                                           | 1    | -    |        | hTables1_n_edges                          | ram_1p  | auto   | 1       |
 |  + buildTableDescriptors_32ul_32ul_32ul_5ul_32ul_s             | 0    | 0    |        |                                           |         |        |         |
 |    fromNumToPos_U                                              | -    | -    |        | fromNumToPos                              | ram_s2p | auto   | 1       |
-|  + fillTablesURAM                                              | 14   | 8    |        |                                           |         |        |         |
-|    block_counter_U                                             | -    | 4    | yes    | block_counter                             | ram_2p  | uram   | 1       |
-|    block_n_edges_U                                             | 4    | -    | yes    | block_n_edges                             | ram_2p  | bram   | 1       |
+|  + fillTablesURAM                                              | 14   | 4    |        |                                           |         |        |         |
+|    block_counter0_V_U                                          | -    | 1    | yes    | block_counter0_V                          | ram_2p  | uram   | 1       |
+|    block_counter1_V_U                                          | -    | 1    | yes    | block_counter1_V                          | ram_2p  | uram   | 1       |
+|    block_n_edges_U                                             | 4    | -    | yes    | block_n_edges                             | ram_t2p | bram   | 1       |
 |   + counterToOffset_ap_uint_128_5ul_7ul_20ul_s                 | 4    | 0    |        |                                           |         |        |         |
 |     row_V_U                                                    | 4    | -    |        | row_V                                     | ram_1p  | auto   | 1       |
-|   + storeEdgesHTB_ap_uint_32_7ul_6ul_32ul_5ul_64ul_20ul_32ul_s | 0    | 4    |        |                                           |         |        |         |
-|     block_counter_U                                            | -    | 4    | yes    | block_counter                             | ram_t2p | uram   | 1       |
+|   + storeEdgesHTB_ap_uint_32_7ul_6ul_32ul_5ul_64ul_20ul_32ul_s | 0    | 2    |        |                                           |         |        |         |
+|     block_offset0_V_U                                          | -    | 1    | yes    | block_offset0_V                           | ram_2p  | uram   | 1       |
+|     block_offset1_V_U                                          | -    | 1    | yes    | block_offset1_V                           | ram_2p  | uram   | 1       |
 |   + writeBloom                                                 | 6    | 0    |        |                                           |         |        |         |
 |     bloom_p_c_U                                                | -    | -    |        | bloom_p_c                                 | fifo    | srl    | 0       |
 |     stream_tuple_U                                             | 6    | -    |        | stream_tuple                              | fifo    | memory | 0       |
@@ -1203,12 +1209,20 @@
 | dependence           | variable = edge_buf type = inter direction = RAW false                                                                                               | source/preprocess.hpp:1262 in storeedgeperblock                                                                                                                                                                |
 | dependence           | variable = block_n_edges type = intra false                                                                                                          | source/preprocess.hpp:1263 in storeedgeperblock                                                                                                                                                                |
 | pipeline             | II = 4                                                                                                                                               | source/preprocess.hpp:1264 in storeedgeperblock                                                                                                                                                                |
-| bind_storage         | variable=block_counter type=RAM_2P impl=URAM                                                                                                         | source/preprocess.hpp:1366 in blocktohtb, block_counter                                                                                                                                                        |
-| pipeline             | II = 1                                                                                                                                               | source/preprocess.hpp:1375 in blocktohtb                                                                                                                                                                       |
-| bind_storage         | variable=block_counter type=RAM_T2P impl=URAM                                                                                                        | source/preprocess.hpp:1437 in storeedgeshtb, block_counter                                                                                                                                                     |
-| bind_storage         | variable = block_n_edges type = RAM_2P impl = BRAM                                                                                                   | source/preprocess.hpp:1547 in filltablesuram                                                                                                                                                                   |
-| pipeline             | II = 1                                                                                                                                               | source/preprocess.hpp:1570 in filltablesuram                                                                                                                                                                   |
-| pipeline             | II = 2                                                                                                                                               | source/preprocess.hpp:1706 in preprocess                                                                                                                                                                       |
+| bind_storage         | variable=block_counter0 type=RAM_2P impl=URAM                                                                                                        | source/preprocess.hpp:1367 in blocktohtb, block_counter0                                                                                                                                                       |
+| bind_storage         | variable=block_counter1 type=RAM_2P impl=URAM                                                                                                        | source/preprocess.hpp:1368 in blocktohtb, block_counter1                                                                                                                                                       |
+| pipeline             | II = 1                                                                                                                                               | source/preprocess.hpp:1374 in blocktohtb                                                                                                                                                                       |
+| pipeline             | II = 2                                                                                                                                               | source/preprocess.hpp:1386 in blocktohtb                                                                                                                                                                       |
+| pipeline             | II = 1                                                                                                                                               | source/preprocess.hpp:1437 in blocktohtb                                                                                                                                                                       |
+| bind_storage         | variable=block_offset0 type=RAM_2P impl=URAM                                                                                                         | source/preprocess.hpp:1473 in storeedgeshtb, block_offset0                                                                                                                                                     |
+| bind_storage         | variable=block_offset1 type=RAM_2P impl=URAM                                                                                                         | source/preprocess.hpp:1474 in storeedgeshtb, block_offset1                                                                                                                                                     |
+| pipeline             | II = 1                                                                                                                                               | source/preprocess.hpp:1485 in storeedgeshtb                                                                                                                                                                    |
+| pipeline             | II = 2                                                                                                                                               | source/preprocess.hpp:1493 in storeedgeshtb                                                                                                                                                                    |
+| pipeline             | II = 1                                                                                                                                               | source/preprocess.hpp:1564 in storeedgeshtb                                                                                                                                                                    |
+| bind_storage         | variable = block_n_edges type = RAM_T2P impl = BRAM                                                                                                  | source/preprocess.hpp:1614 in filltablesuram                                                                                                                                                                   |
+| pipeline             | II = 1                                                                                                                                               | source/preprocess.hpp:1628 in filltablesuram                                                                                                                                                                   |
+| pipeline             | II = 1                                                                                                                                               | source/preprocess.hpp:1643 in filltablesuram                                                                                                                                                                   |
+| pipeline             | II = 2                                                                                                                                               | source/preprocess.hpp:1779 in preprocess                                                                                                                                                                       |
 | array_partition      | variable=m_cache_mem type=complete dim=0                                                                                                             | source/raw_cache.h:28 in raw_cache<word_type, n_lines, n_words_per_line, distance>, m_cache_mem                                                                                                                |
 | array_partition      | variable=m_tag type=complete dim=0                                                                                                                   | source/raw_cache.h:29 in raw_cache<word_type, n_lines, n_words_per_line, distance>, m_tag                                                                                                                      |
 | inline               |                                                                                                                                                      | source/raw_cache.h:33 in init                                                                                                                                                                                  |
