@@ -1159,7 +1159,7 @@ countEdgePerBlock(row_t* edge_buf,
     constexpr size_t LABELDST_NODE = 96;
     const unsigned int block_per_table = hash1_w + hash2_w - COUNTERS_PER_BLOCK;
 
-COUNT_EDGE_IN_BLOCK_LOOP:
+COUNT_EDGE_PER_BLOCK_LOOP:
     for (auto s = 0; s < numDataEdges; s++) {
 /* We can safely remove the intra dependency by checking if the two addresses collide */
 #pragma HLS dependence variable = block_n_edges type = intra false
@@ -1255,7 +1255,7 @@ storeEdgePerBlock(row_t* edge_buf,
     constexpr size_t LABELDST_NODE = 96;
     const unsigned int block_per_table = hash1_w + hash2_w - COUNTERS_PER_BLOCK;
 
-STORE_EDGE_IN_BLOCK_LOOP:
+STORE_EDGE_PER_BLOCK_LOOP:
     for (auto s = 0; s < numDataEdges; s++) {
         /* We can remove this dependency since writing and reading are on
         different portion of memory */
@@ -1345,6 +1345,8 @@ STORE_EDGE_IN_BLOCK_LOOP:
 }
 
 template<size_t NODE_W,
+         size_t ROW_LOG,
+         size_t EDGE_LOG,
          size_t LAB_W,
          size_t LKP3_HASH_W,
          size_t MAX_HASH_W,
@@ -1352,12 +1354,15 @@ template<size_t NODE_W,
 void
 blockToHTB(row_t* edge_buf,
            row_t* htb_buf,
+           AdjHT* hTables,
            const unsigned char hash1_w,
            const unsigned char hash2_w,
            const unsigned int numTables,
            const unsigned int block_n_edges[2048])
 {
     constexpr size_t COUNTERS_PER_BLOCK = 14;
+    constexpr size_t IXG_NODE = 0;
+    constexpr size_t IXD_NODE = 32;
     constexpr size_t IXG_HASH = 64;
     constexpr size_t IXD_HASH = 96;
     const unsigned int block_per_table =
@@ -1377,11 +1382,17 @@ INITIALIZE_URAM_LOOP:
     }
 
     auto prev_offset = 0;
-COUNT_OCCURENCIES_TOP_LOOP:
+    auto prev_ntb = 0;
+    unsigned int base_address = 0;
+BLOCK_HTB_TOP_LOOP:
     for (auto s = 0; s < block_per_table * numTables; s++) {
         auto block_edges = block_n_edges[s] - prev_offset;
+        auto ntb = s >> (hash1_w + hash2_w - COUNTERS_PER_BLOCK);
+        if (prev_ntb != ntb){
+            base_address = 0;
+        }
 
-COUNT_EDGES_BLOCK_LOOP:
+COUNT_EDGES_INSIDE_BLOCK_LOOP:
         for (auto g = 0; g < block_edges; g++) {
 #pragma HLS pipeline II = 2
             row_t edge = edge_buf[g + prev_offset];
@@ -1430,9 +1441,98 @@ COUNT_EDGES_BLOCK_LOOP:
             block_counter0[(address >> 2)] = row_counter0;
         }
 
+COUNTERS_TO_OFFSETS_URAM_LOOP:
+        for (auto g = 0; g < (1UL << (COUNTERS_PER_BLOCK - 2)); g++){
+#pragma HLS pipeline II = 2
+            ap_uint<64> counter0 = block_counter0[g];
+            ap_uint<64> counter1 = block_counter1[g];
+            ap_uint<64> offset0, offset1;
+            offset0.range(31, 0) = base_address;
+            offset0.range(63, 32) = base_address + counter0.range(31, 0);
+            offset1.range(31, 0) =
+              base_address + counter0.range(31, 0) + counter0.range(63, 32);
+            offset1.range(63, 32) = base_address + counter0.range(31, 0) +
+                                    counter0.range(63, 32) +
+                                    counter1.range(31, 0);
+            base_address += counter0.range(31, 0) + counter0.range(63, 32) +
+                            counter1.range(31, 0) + counter1.range(63, 32);
+            block_counter0[g] = offset0;
+            block_counter1[g] = offset1;
+        }
+
+STORE_EDGES_INSIDE_BLOCK_LOOP:
+        for (auto g = 0; g < block_edges; g++) {
+#pragma HLS pipeline II = 2
+            row_t edge = edge_buf[g + prev_offset];
+            
+            ap_uint<NODE_W> indexing_hash =
+              edge.range(IXG_HASH + NODE_W - 1, IXG_HASH);
+            ap_uint<NODE_W> indexed_hash =
+              edge.range(IXD_HASH + NODE_W - 1, IXD_HASH);
+            ap_uint<NODE_W> indexed_node =
+              edge.range(IXD_NODE + NODE_W - 1, IXD_NODE);
+            ap_uint<NODE_W> indexing_node =
+              edge.range(IXG_NODE + NODE_W - 1, IXG_NODE);
+
+            /* Computing the bucket in which the edge will be stored, 
+            restricted to the block of offset in memory */
+            ap_uint<COUNTERS_PER_BLOCK> address = indexing_hash;
+            address <<= hash2_w;
+            address += indexed_hash;
+            ap_uint<64> row_offset0;
+            ap_uint<64> row_offset1;
+            ap_uint<64> row_offset;
+            ap_uint<32>  offset;
+            
+            /* The first bit select which offset in the 64-bit word, the second
+             * one select on which memory read. In this way OFFSETS are
+             * consecutive inside a word */
+            row_offset1 = block_counter1[(address >> 2)];
+            row_offset0 = block_counter0[(address >> 2)];
+
+            if (address.test(1)){
+                row_offset = row_offset1;
+            } else {
+                row_offset = row_offset0;
+            }
+
+            if (address.test(0)){
+                offset = row_offset.range(63, 32);
+                row_offset.range(63, 32) = offset + 1;
+            } else {
+                offset = row_offset.range(31, 0);
+                row_offset.range(31, 0) = offset + 1;
+            }
+
+            if (address.test(1)){
+                row_offset1 = row_offset;
+            } else {
+                row_offset0 = row_offset;
+            }
+
+            block_counter1[(address >> 2)] = row_offset1;
+            block_counter0[(address >> 2)] = row_offset0;
+            
+            /* Compute address of row that will store the edge */
+            ap_uint<32> addr_row_edge =
+              hTables[ntb].start_edges + (offset >> (ROW_LOG - EDGE_LOG));
+            
+            /* Compute address of the edge inside the row */
+            ap_uint<32> addr_inrow = offset.range((ROW_LOG - EDGE_LOG) - 1, 0);
+
+            /* Read, modify and write the edge */
+            row_t row_edge = htb_buf[addr_row_edge];
+            row_edge.range(((addr_inrow + 1) << EDGE_LOG) - 1,
+                           addr_inrow << EDGE_LOG) =
+              indexing_node.concat(indexed_node);
+
+            /* Store offset and edge modified */
+            htb_buf[addr_row_edge] = row_edge;
+        }
+
         /* Store the block counters, packing them in a row */
         row_t row;
-STORE_COUNTERS_BLOCK_LOOP:
+STORE_OFFSETS_BLOCK_LOOP:
         for (auto g = 0; g < (1UL << (COUNTERS_PER_BLOCK - 2)); g++) {
 #pragma HLS pipeline II = 1
             row.range(63, 0) = block_counter0[g];
@@ -1442,6 +1542,7 @@ STORE_COUNTERS_BLOCK_LOOP:
             htb_buf[g + (s * (1UL << (COUNTERS_PER_BLOCK - 2)))] = row;
         }
         prev_offset = block_n_edges[s];
+        prev_ntb = ntb;
     }
 }
 
@@ -1655,13 +1756,6 @@ COUNTER_TO_OFFSET_BLOCK_LOOP:
       numDataEdges,
       block_n_edges);
     
-    blockToHTB<NODE_W, LAB_W, LKP3_HASH_W, MAX_HASH_W, MAX_LABELS>(
-      edge_buf, htb_buf, hash1_w, hash2_w, numTables, block_n_edges);
-
-    /* From counts to offsets */
-    counterToOffset<T_DDR, CNT_LOG, ROW_LOG, MAX_HASH_W>(
-      htb_size, numTables, hTables0, htb_buf);
-
     start_addr = (start_addr + (1UL << CACHE_WORDS_PER_LINE)) &
                  ~((1UL << CACHE_WORDS_PER_LINE) - 1);
     unsigned int prev_offset = 0;
@@ -1682,20 +1776,34 @@ STORE_EDGES_POINTER_LOOP:
         hTables1[ntb].n_edges = hTables0[ntb].n_edges;
     }
 
-    storeEdgesHTB<ap_uint<(1UL << CNT_LOG)>,
-                  ROW_LOG,
-                  EDGE_LOG,
-                  NODE_W,
-                  LAB_W,
-                  LKP3_HASH_W,
-                  MAX_HASH_W,
-                  MAX_LABELS>(edge_buf,
-                              htb_buf,
-                              hTables0,
-                              hash1_w,
-                              hash2_w,
-                              numTables,
-                              block_n_edges);
+    blockToHTB<NODE_W,
+               ROW_LOG,
+               EDGE_LOG,
+               LAB_W,
+               LKP3_HASH_W,
+               MAX_HASH_W,
+               MAX_LABELS>(
+      edge_buf, htb_buf, hTables0, hash1_w, hash2_w, numTables, block_n_edges);
+
+    /* From counts to offsets */
+    // counterToOffset<T_DDR, CNT_LOG, ROW_LOG, MAX_HASH_W>(
+    //   htb_size, numTables, hTables0, htb_buf);
+
+
+    // storeEdgesHTB<ap_uint<(1UL << CNT_LOG)>,
+    //               ROW_LOG,
+    //               EDGE_LOG,
+    //               NODE_W,
+    //               LAB_W,
+    //               LKP3_HASH_W,
+    //               MAX_HASH_W,
+    //               MAX_LABELS>(edge_buf,
+    //                           htb_buf,
+    //                           hTables0,
+    //                           hash1_w,
+    //                           hash2_w,
+    //                           numTables,
+    //                           block_n_edges);
 
     writeBloom<T_DDR,
                T_BLOOM,
