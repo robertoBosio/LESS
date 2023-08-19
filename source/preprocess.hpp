@@ -1362,19 +1362,24 @@ blockToHTB(row_t* edge_buf,
     constexpr size_t IXD_HASH = 96;
     const unsigned int block_per_table =
       (1UL << (hash1_w + hash2_w - COUNTERS_PER_BLOCK));
-    unsigned int block_counter[16384];
-#pragma HLS bind_storage variable=block_counter type=RAM_2P impl=URAM
-    
+    ap_uint<64> block_counter0[4096];
+    ap_uint<64> block_counter1[4096];
+#pragma HLS bind_storage variable=block_counter0 type=RAM_2P impl=URAM
+#pragma HLS bind_storage variable=block_counter1 type=RAM_2P impl=URAM
+
+/* Loop 2^(COUNTERS_PER_BLOCK - 2) since one block is split in two memories and
+ * every memroy keep two counters per line*/
+INITIALIZE_URAM_LOOP:
+    for (auto g = 0; g < (1UL << (COUNTERS_PER_BLOCK - 2)); g++) {
+#pragma HLS pipeline II = 1
+        block_counter0[g] = 0;
+        block_counter1[g] = 0;
+    }
+
     auto prev_offset = 0;
 COUNT_OCCURENCIES_TOP_LOOP:
     for (auto s = 0; s < block_per_table * numTables; s++) {
         auto block_edges = block_n_edges[s] - prev_offset;
-
-INITIALIZE_URAM_LOOP:
-        for (auto g = 0; g < (1UL << 14); g++){
-#pragma HLS pipeline II = 1
-            block_counter[g] = 0;
-        }
 
 COUNT_EDGES_BLOCK_LOOP:
         for (auto g = 0; g < block_edges; g++) {
@@ -1390,20 +1395,42 @@ COUNT_EDGES_BLOCK_LOOP:
             ap_uint<COUNTERS_PER_BLOCK> address = indexing_hash;
             address <<= hash2_w;
             address += indexed_hash;
-            block_counter[address]++;
-#ifndef __SYNTHESIS__
-            assert(block_counter[address] < UINT32_MAX);
-#endif
+            ap_uint<64> row_counter;
+
+            /* The first bit select which counter in the 64-bit word, the second
+             * one select on which memory read. In this way counters are
+             * consecutive inside a word */
+            if (address.test(1)){
+                row_counter = block_counter1[(address >> 2)];
+            } else {
+                row_counter = block_counter0[(address >> 2)];
+            }
+ 
+            if (address.test(0)){
+                ap_uint<32> counter = row_counter.range(63, 32);
+                counter++;
+                row_counter.range(63, 32) = counter;
+            } else {
+                ap_uint<32> counter = row_counter.range(31, 0);
+                counter++;
+                row_counter.range(31, 0) = counter;
+            }
+
+            if (address.test(1)){
+                block_counter1[(address >> 2)] = row_counter;
+            } else {
+                block_counter0[(address >> 2)] = row_counter;
+            }
         }
 
         /* Store the block counters, packing them in a row */
         row_t row;
 STORE_COUNTERS_BLOCK_LOOP:
         for (auto g = 0; g < (1UL << (COUNTERS_PER_BLOCK - 2)); g++) {
-            row.range(31, 0) = block_counter[g * 4];
-            row.range(63, 32) = block_counter[(g * 4) + 1];
-            row.range(95, 64) = block_counter[(g * 4) + 2];
-            row.range(127, 96) = block_counter[(g * 4) + 3];
+            row.range(63, 0) = block_counter0[g];
+            row.range(127, 64) = block_counter1[g];
+            block_counter0[g] = 0;
+            block_counter1[g] = 0;
             htb_buf[g + (s * (1UL << (COUNTERS_PER_BLOCK - 2)))] = row;
         }
         prev_offset = block_n_edges[s];
@@ -1566,7 +1593,7 @@ STORE_HASHTABLES_POINTER_LOOP:
 
     auto base_addr = 0;
 COUNTER_TO_OFFSET_BLOCK_LOOP:
-    for (auto g = 0; g < 1024; g++) {
+    for (auto g = 0; g < numTables * block_per_table; g++) {
 #pragma HLS pipeline II = 1
         auto data = block_n_edges[g];
         block_n_edges[g] = base_addr;
