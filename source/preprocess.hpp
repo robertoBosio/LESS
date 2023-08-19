@@ -1383,6 +1383,7 @@ COUNT_OCCURENCIES_TOP_LOOP:
 
 COUNT_EDGES_BLOCK_LOOP:
         for (auto g = 0; g < block_edges; g++) {
+#pragma HLS pipeline II = 2
             row_t edge = edge_buf[g + prev_offset];
 
             ap_uint<NODE_W> indexing_hash =
@@ -1395,38 +1396,45 @@ COUNT_EDGES_BLOCK_LOOP:
             ap_uint<COUNTERS_PER_BLOCK> address = indexing_hash;
             address <<= hash2_w;
             address += indexed_hash;
+            ap_uint<64> row_counter0;
+            ap_uint<64> row_counter1;
             ap_uint<64> row_counter;
 
             /* The first bit select which counter in the 64-bit word, the second
              * one select on which memory read. In this way counters are
              * consecutive inside a word */
+            row_counter1 = block_counter1[(address >> 2)];
+            row_counter0 = block_counter0[(address >> 2)];
+
             if (address.test(1)){
-                row_counter = block_counter1[(address >> 2)];
+                row_counter = row_counter1;
             } else {
-                row_counter = block_counter0[(address >> 2)];
+                row_counter = row_counter0;
             }
- 
+
             if (address.test(0)){
                 ap_uint<32> counter = row_counter.range(63, 32);
-                counter++;
-                row_counter.range(63, 32) = counter;
+                row_counter.range(63, 32) = counter + 1;
             } else {
                 ap_uint<32> counter = row_counter.range(31, 0);
-                counter++;
-                row_counter.range(31, 0) = counter;
+                row_counter.range(31, 0) = counter + 1;
             }
 
             if (address.test(1)){
-                block_counter1[(address >> 2)] = row_counter;
+                row_counter1 = row_counter;
             } else {
-                block_counter0[(address >> 2)] = row_counter;
+                row_counter0 = row_counter;
             }
+
+            block_counter1[(address >> 2)] = row_counter1;
+            block_counter0[(address >> 2)] = row_counter0;
         }
 
         /* Store the block counters, packing them in a row */
         row_t row;
 STORE_COUNTERS_BLOCK_LOOP:
         for (auto g = 0; g < (1UL << (COUNTERS_PER_BLOCK - 2)); g++) {
+#pragma HLS pipeline II = 1
             row.range(63, 0) = block_counter0[g];
             row.range(127, 64) = block_counter1[g];
             block_counter0[g] = 0;
@@ -1454,33 +1462,35 @@ storeEdgesHTB(row_t* edge_buf,
               const unsigned int numTables,
               const unsigned int block_n_edges[2048])
 {
-    constexpr size_t COUNTERS_PER_BLOCK = 14;
+    constexpr size_t OFFSETS_PER_BLOCK = 14;
     constexpr size_t IXG_NODE = 0;
     constexpr size_t IXD_NODE = 32;
     constexpr size_t IXG_HASH = 64;
     constexpr size_t IXD_HASH = 96;
-    const unsigned int block_per_table = (1UL << (hash1_w + hash2_w - COUNTERS_PER_BLOCK));
-    unsigned int block_counter[16384];
-#pragma HLS bind_storage variable=block_counter type=RAM_T2P impl=URAM
+    const unsigned int block_per_table = (1UL << (hash1_w + hash2_w - OFFSETS_PER_BLOCK));
+    ap_uint<64> block_offset0[4096];
+    ap_uint<64> block_offset1[4096];
+#pragma HLS bind_storage variable=block_offset0 type=RAM_2P impl=URAM
+#pragma HLS bind_storage variable=block_offset1 type=RAM_2P impl=URAM
 
     auto prev_offset = 0;
 STORE_EDGES_TOP_LOOP:
     for (auto s = 0; s < block_per_table * numTables; s++) {
         auto block_edges = block_n_edges[s] - prev_offset;
-        auto ntb = s >> (hash1_w + hash2_w - COUNTERS_PER_BLOCK);
+        auto ntb = s >> (hash1_w + hash2_w - OFFSETS_PER_BLOCK);
         
         row_t row;
 LOAD_URAM_OFFSETS_LOOP:
-        for (auto g = 0; g < (1UL << (COUNTERS_PER_BLOCK - 2)); g++) {
-            row = htb_buf[g + (s * (1UL << (COUNTERS_PER_BLOCK - 2)))];
-            block_counter[g * 4] = row.range(31, 0);
-            block_counter[(g * 4) + 1] = row.range(63, 32);
-            block_counter[(g * 4) + 2] = row.range(95, 64);
-            block_counter[(g * 4) + 3] = row.range(127, 96);
+        for (auto g = 0; g < (1UL << (OFFSETS_PER_BLOCK - 2)); g++) {
+#pragma HLS pipeline II = 1
+            row = htb_buf[g + (s * (1UL << (OFFSETS_PER_BLOCK - 2)))];
+            block_offset0[g] = row.range(63, 0);
+            block_offset1[g] = row.range(127, 64);
         }
 
 STORE_EDGES_BLOCK_LOOP:
         for (auto g = 0; g < block_edges; g++) {
+#pragma HLS pipeline II = 2
             row_t edge = edge_buf[g + prev_offset];
             
             ap_uint<NODE_W> indexing_hash =
@@ -1493,11 +1503,43 @@ STORE_EDGES_BLOCK_LOOP:
               edge.range(IXG_NODE + NODE_W - 1, IXG_NODE);
 
             /* Computing the bucket in which the edge will be stored, 
-            restricted to the block of counter in memory */
-            ap_uint<COUNTERS_PER_BLOCK> address = indexing_hash;
+            restricted to the block of offset in memory */
+            ap_uint<OFFSETS_PER_BLOCK> address = indexing_hash;
             address <<= hash2_w;
             address += indexed_hash;
-            T_CNT offset = block_counter[address];
+            ap_uint<64> row_offset0;
+            ap_uint<64> row_offset1;
+            ap_uint<64> row_offset;
+            ap_uint<32>  offset;
+            
+            /* The first bit select which offset in the 64-bit word, the second
+             * one select on which memory read. In this way OFFSETS are
+             * consecutive inside a word */
+            row_offset1 = block_offset1[(address >> 2)];
+            row_offset0 = block_offset0[(address >> 2)];
+
+            if (address.test(1)){
+                row_offset = row_offset1;
+            } else {
+                row_offset = row_offset0;
+            }
+
+            if (address.test(0)){
+                offset = row_offset.range(63, 32);
+                row_offset.range(63, 32) = offset + 1;
+            } else {
+                offset = row_offset.range(31, 0);
+                row_offset.range(31, 0) = offset + 1;
+            }
+
+            if (address.test(1)){
+                row_offset1 = row_offset;
+            } else {
+                row_offset0 = row_offset;
+            }
+
+            block_offset1[(address >> 2)] = row_offset1;
+            block_offset0[(address >> 2)] = row_offset0;
             
             /* Compute address of row that will store the edge */
             T_CNT addr_row_edge =
@@ -1514,17 +1556,15 @@ STORE_EDGES_BLOCK_LOOP:
 
             /* Store offset and edge modified */
             htb_buf[addr_row_edge] = row_edge;
-            block_counter[address]++;
         }
 
-        /* Store the block counters packing them in a row */
+        /* Store the block OFFSETS packing them in a row */
 STORE_OFFSETS_BLOCK_LOOP:
-        for (auto g = 0; g < (1UL << (COUNTERS_PER_BLOCK - 2)); g++) {
-            row.range(31, 0) = block_counter[g * 4];
-            row.range(63, 32) = block_counter[(g * 4) + 1];
-            row.range(95, 64) = block_counter[(g * 4) + 2];
-            row.range(127, 96) = block_counter[(g * 4) + 3];
-            htb_buf[g + (s * (1UL << (COUNTERS_PER_BLOCK - 2)))] = row;
+        for (auto g = 0; g < (1UL << (OFFSETS_PER_BLOCK - 2)); g++) {
+#pragma HLS pipeline II = 1
+            row.range(63, 0) = block_offset0[g];
+            row.range(127, 64) = block_offset1[g];
+            htb_buf[g + (s * (1UL << (OFFSETS_PER_BLOCK - 2)))] = row;
         }
         prev_offset = block_n_edges[s];
     }
