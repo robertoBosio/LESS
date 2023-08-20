@@ -12,7 +12,6 @@
 #pragma GCC diagnostic error "-Wextra"
 #pragma GCC diagnostic ignored "-Wunused-label"
 
-#define BRAM_LAT 2
 using namespace types;
 
 template <typename WORD_TYPE, size_t MAIN_SIZE, size_t N_SETS, size_t N_WAYS,
@@ -26,6 +25,7 @@ class l1_cache {
 		static const size_t WAY_SIZE = utils::log2_ceil(N_WAYS);
 		static const size_t N_LINES = (((N_SETS * N_WAYS) > 0) ?
 				(N_SETS * N_WAYS) : 1);
+		static const size_t BRAM_LAT = 2;
 
 		static_assert(((MAIN_SIZE > 0) && ((1 << ADDR_SIZE) == MAIN_SIZE)),
 				"MAIN_SIZE must be a power of 2 greater than 0");
@@ -113,7 +113,7 @@ class l1_cache {
             bool hit_last_used = false;
             bool hit_local_storage = false;
 
-            for (auto s = 0; s < BRAM_LAT; s++){
+            for (size_t s = 0; s < BRAM_LAT; s++){
 #pragma HLS unroll
                 auto g = BRAM_LAT - s - 1;
                 if (m_local_raw_cache[g].addr_line == addr.m_addr_line && m_local_valid[g]){
@@ -121,7 +121,7 @@ class l1_cache {
                     hit_last_used = (m_local_raw_cache[g].tag == addr.m_tag);
                 }
             }
-            for (auto s = 0; s < BRAM_LAT - 1; s++){
+            for (size_t s = 0; s < BRAM_LAT - 1; s++){
 #pragma HLS unroll
                 auto g = BRAM_LAT - s - 1;
                 m_local_raw_cache[g].addr_line = m_local_raw_cache[g - 1].addr_line;
