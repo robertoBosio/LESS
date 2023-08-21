@@ -1342,32 +1342,6 @@ INITIALIZE_LABELTOTABLE_LOOP:
                                hash1_w,
                                hash2_w);
     
-    // fillTables<T_DDR,
-    //                T_BLOOM,
-    //                EDGE_LOG,
-    //                CNT_LOG,
-    //                BLOOM_LOG,
-    //                K_FUN_LOG,
-    //                ROW_LOG,
-    //                NODE_W,
-    //                LKP3_HASH_W,
-    //                MAX_HASH_W,
-    //                FULL_HASH_W,
-    //                LAB_W,
-    //                STREAM_D,
-    //                HTB_SPACE,
-    //                MAX_LABELS>(&edge_buf[dynfifo_space],
-    //                            htb_buf,
-    //                            bloom_p,
-    //                            hTables0,
-    //                            hTables1,
-    //                            labelToTable,
-    //                            numDataEdges,
-    //                            numTables,
-    //                            hash1_w,
-    //                            hash2_w);
-
-    // exit(-1);
 }
 
 #pragma GCC diagnostic pop

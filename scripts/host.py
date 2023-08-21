@@ -30,8 +30,8 @@ def parse_args():
 
 def subiso(test, path):
   
-    HASHTABLES_SPACE = 1 << 26  #~ 67 MB
-    BLOOM_SPACE  = 1 << 26  #~ 67 MB
+    HASHTABLES_SPACE = 1 << 27  #~ 67 MB
+    BLOOM_SPACE  = 1 << 27  #~ 67 MB
     RESULTS_SPACE = 1 << 27  #~ 134 MB
     MAX_QDATA = 300
     BURST_SIZE = 32
@@ -79,16 +79,8 @@ def subiso(test, path):
                        ('ldst', node_t)]) 
 
     ol = Overlay(path + "design_1.bit", download=False)
-
-# print(Clocks.fclk0_mhz)
-# Clocks._instance.PL_SRC_PLL_CTRLS[0].FBDIV=45
-# Clocks._instance.PL_SRC_PLL_CTRLS[0].DIV2=0
-# Clocks.fclk0_mhz = 500
-# Clocks._instance.PL_SRC_PLL_CTRLS[0].FBDIV=60
+    
     Clocks._instance.PL_CLK_CTRLS[0].DIVISOR0=10
-    # Clocks.fclk0_mhz = 250
-    #print(Clocks._instance.PL_SRC_PLL_CTRLS)
-    #print(Clocks._instance.PL_CLK_CTRLS)
     
     FIFO = allocate(shape=(int(RESULTS_SPACE/np.dtype(edge_t).itemsize),), dtype=edge_t)
     BLOOM = allocate(shape=(BLOOM_SPACE,), dtype=np.uint8)
@@ -120,17 +112,39 @@ def subiso(test, path):
             letter, node, label, degree = line.split()
             datagraph_la[int(node)] = int(label)
     
-        print("Loading", data, "in DDR...", sep=" ", end = "", flush=True)
-        start = perf_counter()
-        for e in range(datagraph_e):
-            line = fd.readline()
-            letter, nodesrc, nodedst = line.split()
-            nodesrc = int(nodesrc)
-            nodedst = int(nodedst)
-            FIFO[counter] = (nodesrc, nodedst, datagraph_la[int(nodesrc)], datagraph_la[int(nodedst)])
-            counter = counter + 1
-        end = perf_counter()
-        print(" Done in ", end - start, "s", sep="", flush=True)
+#        print("Loading", data, "in DDR...", sep=" ", end = "", flush=True)
+#        start = perf_counter()
+#        for e in range(datagraph_e):
+#            line = fd.readline()
+#            letter, nodesrc, nodedst = line.split()
+#            nodesrc = int(nodesrc)
+#            nodedst = int(nodedst)
+#            FIFO[counter] = (nodesrc, nodedst, datagraph_la[nodesrc], datagraph_la[nodedst])
+#            counter = counter + 1
+#        end = perf_counter()
+#        print(" Done in ", end - start, "s", sep="", flush=True)
+
+
+        print(f"Loading {data} in DDR...", end="", flush=True)
+        start = time.perf_counter()
+
+        # Adjust the buffer size for optimal performance
+        buffer_size = 4096
+
+        while True:
+            lines = fd.readlines(buffer_size)
+            if not lines:
+                break
+
+            for line in lines:
+                letter, nodesrc, nodedst = line.split()
+                nodesrc, nodedst = int(nodesrc), int(nodedst)
+                FIFO[counter] = (nodesrc, nodedst, datagraph_la[nodesrc], datagraph_la[nodedst])
+                counter += 1
+
+        end = time.perf_counter()
+        print(f" Done in {end - start:.2f} s", flush=True)
+
 
         fd.close()
         del datagraph_la
@@ -211,7 +225,6 @@ def subiso(test, path):
             ol.subgraphIsomorphism_0.write(addr_de, datagraph_e)
             ol.subgraphIsomorphism_0.write(addr_dyn_space, dynfifo_space)
 
-           
             hashtable_spaceused = len(tablelist) * (2**hash1_w) * (2**hash2_w) * byte_counter
             hashtable_spaceused += datagraph_e * byte_edge
             bloom_spaceused = len(tablelist) * (2**hash1_w) * byte_bloom

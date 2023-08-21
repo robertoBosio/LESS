@@ -39,7 +39,7 @@
 // #pragma GCC diagnostic ignored "-Wunused-variable"
 // #pragma GCC diagnostic ignored "-Wunused-but-set-variable"
 
-#define STOP_S      14    
+#define STOP_S      13    
 #define V_ID_W      VERTEX_WIDTH_BIT
 #define V_L_W       LABEL_WIDTH
 #define MAX_QV      MAX_QUERY_VERTICES
@@ -1186,57 +1186,44 @@ INTERSECT_TASK_LOOP:
     }
 }
 
+template<size_t NUM_SPLIT>
 void mwj_offset(
     hls::stream<offset_tuple_t> &stream_tuple_in,
-    hls::stream<bool> &stream_stop,
 
-    hls::stream<split_tuple_t> &stream_tuple_out)
+    hls::stream<split_tuple_t> stream_tuple_out[NUM_SPLIT])
 {
+#pragma HLS pipeline II = 2 style = flp
     constexpr size_t EDGE_BLOCK = (CACHE_WORDS_PER_LINE + DDR_BIT - E_W);
+    static unsigned char pointer = 0;
     offset_tuple_t tuple_in;
     split_tuple_t tuple_out;
-    bool stop;
 
-OFFSET_TASK_LOOP:
-    while (true) {
-#pragma HLS pipeline II=2
-        if (stream_tuple_in.read_nb(tuple_in)) {
-            ap_uint<(1UL << C_W)> end_off = tuple_in.offset;
-            tuple_out.indexed_v = tuple_in.indexed_v;
-            tuple_out.indexing_v = tuple_in.indexing_v;
-            tuple_out.pos = tuple_in.pos;
-            tuple_out.tb_index = tuple_in.tb_index;
-            tuple_out.bit_last_edge = tuple_in.bit_last_edge;
+    tuple_in = stream_tuple_in.read();
+    ap_uint<(1UL << C_W)> end_off = tuple_in.offset;
+    tuple_out.indexed_v = tuple_in.indexed_v;
+    tuple_out.indexing_v = tuple_in.indexing_v;
+    tuple_out.pos = tuple_in.pos;
+    tuple_out.tb_index = tuple_in.tb_index;
+    tuple_out.bit_last_edge = tuple_in.bit_last_edge;
 
-            tuple_in = stream_tuple_in.read();
+    tuple_in = stream_tuple_in.read();
 
-            tuple_out.last_set = tuple_in.last_set;
-            tuple_out.last_batch = tuple_in.last_batch;
-            tuple_out.start_off = tuple_in.offset;
-            tuple_out.first_block = tuple_in.offset >> EDGE_BLOCK;
-            tuple_out.end_block =
-              (tuple_in.offset == end_off)
-                ? (unsigned int)(end_off >> EDGE_BLOCK)
-                : (unsigned int)((end_off - 1) >> EDGE_BLOCK);
-            tuple_out.flag =
-              (tuple_in.flag == MIN_SET)
-                ? MIN_SET
-                : ((tuple_in.offset == end_off) ? NO_EDGE : CHECK);
+    tuple_out.last_set = tuple_in.last_set;
+    tuple_out.last_batch = tuple_in.last_batch;
+    tuple_out.start_off = tuple_in.offset;
+    tuple_out.first_block = tuple_in.offset >> EDGE_BLOCK;
+    tuple_out.end_block = (tuple_in.offset == end_off)
+                            ? (unsigned int)(end_off >> EDGE_BLOCK)
+                            : (unsigned int)((end_off - 1) >> EDGE_BLOCK);
+    tuple_out.flag = (tuple_in.flag == MIN_SET)
+                       ? MIN_SET
+                       : ((tuple_in.offset == end_off) ? NO_EDGE : CHECK);
 
 #if DEBUG_STATS
-            debug::intersect_filter += (tuple_out.flag == NO_EDGE) ? 1 : 0;
+    debug::intersect_filter += (tuple_out.flag == NO_EDGE) ? 1 : 0;
 #endif /* DEBUG_STATS */
-            stream_tuple_out.write(tuple_out);
-        }
-#if DEBUG_INTERFACE
-        else {
-            offset_empty++;
-        }
-#endif
-
-        if (stream_stop.read_nb(stop))
-            break;
-    }
+    stream_tuple_out[pointer].write(tuple_out);
+    pointer = (pointer + 1) % NUM_SPLIT;
 }
 
 template<size_t MAX_BATCH_SIZE, size_t COUNTER>
@@ -2063,12 +2050,11 @@ void multiwayJoin(
         ("Intersect - tuples");
     
     /* Offset data out */    
+    hls_thread_local hls::stream<split_tuple_t, S_D> o_stream_tuple[BLOCKBUILD_NUM];
     hls_thread_local hls::stream<ap_uint<V_ID_W>, MAX_QV> o_stream_sol
         ("Offset - partial solution");
     hls_thread_local hls::stream<bool, MAX_QV> o_stream_sol_end
         ("Offset - partial solution end flag");
-    hls_thread_local hls::stream<split_tuple_t, S_D> o_stream_tuple
-        ("Offset - tuples");
     
     /* Blockbuild data out */    
     hls_thread_local hls::stream<ap_uint<V_ID_W>, MAX_QV> bb_stream_sol
@@ -2224,14 +2210,16 @@ void multiwayJoin(
         f_stream_sol,
         f_stream_sol_end);
 
+    hls_thread_local hls::task mwj_offset_t(
+      mwj_offset<BLOCKBUILD_NUM>, i_stream_tuple, o_stream_tuple);
+
     hls_thread_local hls::task mwj_blockbuild_t[BLOCKBUILD_NUM];
-    hls::split::round_robin<split_tuple_t, BLOCKBUILD_NUM, S_D, S_D> mwj_blockbuild_split_t;
 
     for (int g = 0; g < BLOCKBUILD_NUM; g++) {
 #pragma HLS unroll
         mwj_blockbuild_t[g](
           mwj_blockbuild<(1UL << PROPOSE_BATCH_LOG), __COUNTER__>,
-          mwj_blockbuild_split_t.out[g],
+          o_stream_tuple[g],
           bb_stream_tuple[g]);
     }
 
@@ -2265,25 +2253,24 @@ void multiwayJoin(
       //     streams_stop[STOP_S - 1],
       //     dyn_stream_ovf);
 
-      mwj_propose(nQueryVer,
-                  dyn_stream_sol,
-                  streams_stop[7],
-                  p0_stream_sol,
-                  p0_stream_sol_end);
-
+    mwj_propose(nQueryVer,
+                dyn_stream_sol,
+                streams_stop[0],
+                p0_stream_sol,
+                p0_stream_sol_end);
 
     mwj_edgebuild<LKP3_HASH_W, MAX_HASH_W, FULL_HASH_W>(hash1_w,
                                        qVertices0,
                                        p0_stream_sol,
                                        p0_stream_sol_end,
-                                       streams_stop[0],
+                                       streams_stop[1],
                                        e_stream_tuple,
                                        e_stream_sol,
                                        e_stream_sol_end);
 
     mwj_findmin<T_BLOOM, BLOOM_LOG, K_FUN_LOG>(bloom_p,
                                                e_stream_tuple,
-                                               streams_stop[1],
+                                               streams_stop[2],
                                                p_stream_tuple,
                                                p_stream_filter);
 
@@ -2294,7 +2281,7 @@ void multiwayJoin(
       htb_buf1,
       p_stream_tuple,
       p_stream_filter,
-      streams_stop[2],
+      streams_stop[3],
       rc_stream_tuple,
       rc_stream_filter);
 
@@ -2302,7 +2289,7 @@ void multiwayJoin(
       htb_buf2,
       rc_stream_tuple,
       rc_stream_filter,
-      streams_stop[3],
+      streams_stop[4],
       re_stream_set,
       re_stream_tuple);
 
@@ -2310,7 +2297,7 @@ void multiwayJoin(
                      re_stream_tuple,
                      re_stream_sol,
                      re_stream_sol_end,
-                     streams_stop[8],
+                     streams_stop[5],
                      h_stream_set,
                      h_stream_sol,
                      h_stream_sol_end);
@@ -2322,7 +2309,7 @@ void multiwayJoin(
         sb_stream_set,
         sb_stream_sol,
         sb_stream_sol_end,
-        streams_stop[4],
+        streams_stop[6],
         t_stream_tuple,
         t_stream_sol,
         t_stream_sol_end);
@@ -2331,27 +2318,24 @@ void multiwayJoin(
         hTables1,
         htb_cache,
         t_stream_tuple,
-        streams_stop[5],
+        streams_stop[7],
         i_stream_tuple);
 
-    mwj_offset(i_stream_tuple,
-               streams_stop[9],
-               mwj_blockbuild_split_t.in);
+    mwj_compact(v_stream_tuple,
+                streams_stop[8],
+                c_stream_tuple);
+
+    mwj_filter<(1UL << PROPOSE_BATCH_LOG)>(c_stream_tuple,
+                                           streams_stop[9],
+                                           f_stream_set);
 
     verifycache_wrapper<PROPOSE_BATCH_LOG>(
         hTables1,
         htb_cache,
         bb_merge_stream_tuple,
-        streams_stop[6],
+        streams_stop[10],
         v_stream_tuple);
 
-    mwj_compact(v_stream_tuple,
-                streams_stop[10],
-                c_stream_tuple);
-
-    mwj_filter<(1UL << PROPOSE_BATCH_LOG)>(c_stream_tuple,
-                                           streams_stop[11],
-                                           f_stream_set);
 
     mwj_assembly(
         nQueryVer,
@@ -2387,7 +2371,7 @@ void multiwayJoin(
     std::thread mwj_propose_t(mwj_propose,
                               nQueryVer,
                               std::ref(dyn_stream_sol),
-                              std::ref(streams_stop[7]),
+                              std::ref(streams_stop[0]),
                               std::ref(p0_stream_sol),
                               std::ref(p0_stream_sol_end));
 
@@ -2396,7 +2380,7 @@ void multiwayJoin(
                                 qVertices0,
                                 std::ref(p0_stream_sol),
                                 std::ref(p0_stream_sol_end),
-                                std::ref(streams_stop[0]),
+                                std::ref(streams_stop[1]),
                                 std::ref(e_stream_tuple),
                                 std::ref(e_stream_sol),
                                 std::ref(e_stream_sol_end));
@@ -2405,7 +2389,7 @@ void multiwayJoin(
                               bloom_p,
                               // std::ref(bloom_cache),
                               std::ref(e_stream_tuple),
-                              std::ref(streams_stop[1]),
+                              std::ref(streams_stop[2]),
                               std::ref(p_stream_tuple),
                               std::ref(p_stream_filter));
 
@@ -2421,7 +2405,7 @@ void multiwayJoin(
                                       htb_buf1,
                                       std::ref(p_stream_tuple),
                                       std::ref(p_stream_filter),
-                                      std::ref(streams_stop[2]),
+                                      std::ref(streams_stop[3]),
                                       std::ref(rc_stream_tuple),
                                       std::ref(rc_stream_filter));
 
@@ -2430,7 +2414,7 @@ void multiwayJoin(
       htb_buf2,
       std::ref(rc_stream_tuple),
       std::ref(rc_stream_filter),
-      std::ref(streams_stop[3]),
+      std::ref(streams_stop[4]),
       std::ref(re_stream_set),
       std::ref(re_stream_tuple));
     
@@ -2440,7 +2424,7 @@ void multiwayJoin(
         std::ref(re_stream_tuple),
         std::ref(re_stream_sol),
         std::ref(re_stream_sol_end),
-        std::ref(streams_stop[8]),
+        std::ref(streams_stop[5]),
         std::ref(h_stream_set),
         std::ref(h_stream_sol),
         std::ref(h_stream_sol_end));
@@ -2453,7 +2437,7 @@ void multiwayJoin(
       std::ref(sb_stream_set),
       std::ref(sb_stream_sol),
       std::ref(sb_stream_sol_end),
-      std::ref(streams_stop[4]),
+      std::ref(streams_stop[6]),
       std::ref(t_stream_tuple),
       std::ref(t_stream_sol),
       std::ref(t_stream_sol_end));
@@ -2463,25 +2447,19 @@ void multiwayJoin(
         hTables1,
         std::ref(htb_cache),
         std::ref(t_stream_tuple),
-        std::ref(streams_stop[5]),
+        std::ref(streams_stop[7]),
         std::ref(i_stream_tuple));
     
-    std::thread mwj_offset_t(
-        mwj_offset,
-        std::ref(i_stream_tuple),
-        std::ref(streams_stop[9]),
-        std::ref(mwj_blockbuild_split_t.in));
-
     std::thread mwj_compact_t(
         mwj_compact,
         std::ref(v_stream_tuple),
-        std::ref(streams_stop[10]),
+        std::ref(streams_stop[8]),
         std::ref(c_stream_tuple));
 
     std::thread mwj_filter_t(
         mwj_filter<(1UL << PROPOSE_BATCH_LOG)>,
         std::ref(c_stream_tuple),
-        std::ref(streams_stop[11]),
+        std::ref(streams_stop[9]),
         std::ref(f_stream_set));
 
     std::thread mwj_verify_t(
@@ -2489,7 +2467,7 @@ void multiwayJoin(
         hTables1,
         std::ref(htb_cache),
         std::ref(bb_merge_stream_tuple),
-        std::ref(streams_stop[6]),
+        std::ref(streams_stop[10]),
         std::ref(v_stream_tuple));
 
     std::thread mwj_assembly_t(
@@ -2529,7 +2507,6 @@ void multiwayJoin(
     mwj_homomorphism_t.join();
     mwj_tuplebuild_t.join();
     mwj_intersect_t.join(); 
-    mwj_offset_t.join(); 
     mwj_verify_t.join();
     mwj_compact_t.join();
     mwj_filter_t.join();
