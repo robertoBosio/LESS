@@ -332,7 +332,6 @@ def subiso(test, path):
                 empty0 = ol.subgraphIsomorphism_0.read(0x160);
                 empty1 = ol.subgraphIsomorphism_0.read(0x164);
                 empty = (empty1 << 32) | empty0;
-                empty = empty * 2
                 print(f"Tuplebuild empty      {empty} cc, {(empty * 100 / cycles):.2f}%", file=fres)
                 empty = 0
                 empty0 = ol.subgraphIsomorphism_0.read(0x178);
