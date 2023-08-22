@@ -54,21 +54,21 @@
 #define BLOCKBUILD_NUM 2
 
 #if DEBUG_INTERFACE
-    unsigned long propose_empty = 0;
-    unsigned long edgebuild_empty = 0;
-    unsigned long findmin_empty = 0;
-    unsigned long readmin_counter_empty = 0;
-    unsigned long readmin_edge_empty = 0;
-    unsigned long homomorphism_empty = 0;
-    unsigned long batchbuild_empty = 0;
-    unsigned long tuplebuild_empty = 0;
-    unsigned long intersect_empty = 0;
-    unsigned long offset_empty = 0;
-    unsigned long split_empty = 0;
-    unsigned long verify_empty = 0;
-    unsigned long compact_empty = 0;
-    unsigned long filter_empty = 0;
-    unsigned long assembly_empty = 0;
+unsigned long propose_empty = 0;
+unsigned long edgebuild_empty = 0;
+unsigned long findmin_empty = 0;
+unsigned long readmin_counter_empty = 0;
+unsigned long readmin_edge_empty = 0;
+unsigned long homomorphism_empty = 0;
+unsigned long batchbuild_empty = 0;
+unsigned long tuplebuild_empty = 0;
+unsigned long intersect_empty = 0;
+unsigned long offset_empty = 0;
+unsigned long split_empty = 0;
+unsigned long verify_empty = 0;
+unsigned long compact_empty = 0;
+unsigned long filter_empty = 0;
+unsigned long assembly_empty = 0;
 #endif
 
 #if CACHE_ENABLE
@@ -132,19 +132,20 @@ typedef struct
 template<typename NODE_T>
 struct homomorphism_set_t
 {
-    NODE_T node;
-    bool last;
+  NODE_T node;
+  bool last;
+  bool valid;
 };
 
 template<typename NODE_T>
 struct sequencebuild_set_t
 {
-    /* Adding the flag for min set since homomorphism aggregate tuple and set in
-     * a unique stream to let sequencebuild be a simple pipeline */
-    NODE_T node;  // store the node id or the data of the min set
-    bool last;    // last of the set flag
-    bool sol;     // solution node flag
-    bool min_set; // min set information flag
+  /* Adding the flag for min set since homomorphism aggregate tuple and set in
+   * a unique stream to let sequencebuild be a simple pipeline */
+  NODE_T node;  // store the node id or the data of the min set
+  bool last;    // last of the set flag
+  bool sol;     // solution node flag
+  bool min_set; // min set information flag
 };
 
 template<typename NODE_T>
@@ -657,26 +658,26 @@ template<typename T_BLOOM,
          size_t K_FUN_LOG,
          size_t FULL_HASH_W>
 void
-mwj_readmin_edge(row_t* m_axi,
-                 hls::stream<readmin_edge_tuple_t>& stream_tuple_in,
-                 hls::stream<T_BLOOM>& stream_filter_in,
-                 hls::stream<bool>& stream_stop,
+mwj_readmin_edge(
+  row_t* m_axi,
+  hls::stream<readmin_edge_tuple_t>& stream_tuple_in,
+  hls::stream<T_BLOOM>& stream_filter_in,
+  hls::stream<bool>& stream_stop,
 
-                 hls::stream<homomorphism_set_t<ap_uint<V_ID_W> > >& stream_set_out,
-                 hls::stream<minset_tuple_t>& stream_tuple_out)
+  hls::stream<homomorphism_set_t<ap_uint<V_ID_W>>> stream_set_out[2],
+  hls::stream<minset_tuple_t>& stream_tuple_out)
 {
     constexpr size_t K_FUN = (1UL << K_FUN_LOG);
     T_BLOOM filter[K_FUN];
 #pragma HLS array_partition variable = filter type = complete dim = 1
-    readmin_edge_tuple_t tuple_in;
-    hls::stream<ap_uint<V_ID_W>, 2> hash_in_s;
     hls::stream<ap_uint<FULL_HASH_W>, 2> hash_out_s;
-    minset_tuple_t tuple_out;
-    homomorphism_set_t< ap_uint<V_ID_W> > set_out;
-    ap_uint<V_ID_W> vertexCheck;
-    ap_uint<V_ID_W> vertex;
-    ap_uint<V_ID_W * 2> edge;
+    hls::stream<ap_uint<V_ID_W>, 2> hash_in_s;
+    homomorphism_set_t<ap_uint<V_ID_W>> set_out;
+    ap_uint<V_ID_W> indexing_v, indexed_v;
     ap_uint<FULL_HASH_W> hash_out;
+    readmin_edge_tuple_t tuple_in;
+    minset_tuple_t tuple_out;
+    ap_uint<V_ID_W * 2> edge;
     bool stop;
 
 READMIN_EDGE_TASK_LOOP:
@@ -696,39 +697,38 @@ READMIN_EDGE_TASK_LOOP:
         unsigned int cycles = tuple_in.rowend - tuple_in.rowstart;
         READMIN_EDGES_MAIN_LOOP:
             for (int g = 0; g <= cycles; g++) {
-#pragma HLS pipeline II = 2
-#pragma HLS allocation function instances=hash_wrapper<V_ID_W> limit=1 
-#pragma HLS allocation function instances=bloom_test<T_BLOOM, BLOOM_LOG, K_FUN, FULL_HASH_W> limit=1 
+#pragma HLS pipeline II = 1
+// #pragma HLS allocation function instances=hash_wrapper<V_ID_W> limit=1 
+// #pragma HLS allocation function instances=bloom_test<T_BLOOM, BLOOM_LOG, K_FUN, FULL_HASH_W> limit=1 
                 row_t row = m_axi[tuple_in.rowstart + g];
                 for (int i = 0; i < EDGE_ROW; i++) {
 #pragma HLS unroll
-                    edge = row.range(((i + 1) << E_W) - 1, i << E_W);
-                    vertexCheck = edge.range(V_ID_W * 2 - 1, V_ID_W);
-                    vertex = edge.range(V_ID_W - 1, 0);
+                  edge = row.range(((i + 1) << E_W) - 1, i << E_W);
+                  indexing_v = edge.range(V_ID_W * 2 - 1, V_ID_W);
+                  indexed_v = edge.range(V_ID_W - 1, 0);
 
-                    hash_wrapper<V_ID_W>(vertex, hash_out);
-                    bool test = true;
-                    bloom_test<T_BLOOM, BLOOM_LOG, K_FUN, FULL_HASH_W>(
-                      filter, hash_out, test);
+                  hash_wrapper<V_ID_W>(indexed_v, hash_out);
+                  bool test = true;
+                  bloom_test<T_BLOOM, BLOOM_LOG, K_FUN, FULL_HASH_W>(
+                    filter, hash_out, test);
 
-                    set_out.node = vertex;
-                    set_out.last = false;
-                    if (test && (tuple_in.indexing_v == vertexCheck)) {
-                      stream_set_out.write(set_out);
-                    }
+                  set_out.node = indexed_v;
+                  set_out.last = false;
+                  set_out.valid = test && tuple_in.indexing_v == indexing_v;
+                  stream_set_out[i].write(set_out);
 #if DEBUG_STATS
-                    if (tuple_in.indexing_v == vertexCheck) {
-                      if (test) {
-                        debug::readmin_vstream++;
-                      } else {
-                        debug::bloom_filter++;
-                      }
+                  if (tuple_in.indexing_v == indexing_v) {
+                    if (test) {
+                      debug::readmin_vstream++;
+                    } else {
+                      debug::bloom_filter++;
                     }
+                  }
 #endif
                 }
             }
             set_out.last = true;
-            stream_set_out.write(set_out);
+            stream_set_out[0].write(set_out);
 
 #if DEBUG_STATS
             debug::readmin_edge_reads +=
@@ -749,13 +749,13 @@ READMIN_EDGE_TASK_LOOP:
 
 void
 mwj_homomorphism(
-  hls::stream<homomorphism_set_t<ap_uint<V_ID_W> > >& stream_set_in,
-  hls::stream<minset_tuple_t>& stream_tuple_in, 
+  hls::stream<homomorphism_set_t<ap_uint<V_ID_W>>> stream_set_in[2],
+  hls::stream<minset_tuple_t>& stream_tuple_in,
   hls::stream<ap_uint<V_ID_W>>& stream_sol_in,
   hls::stream<bool>& stream_sol_end_in,
   hls::stream<bool>& stream_stop,
 
-  hls::stream<sequencebuild_set_t<ap_uint<V_ID_W> > >& stream_set_out)
+  hls::stream<sequencebuild_set_t<ap_uint<V_ID_W>>>& stream_set_out)
 {
     const ap_uint<V_ID_W> MASK_FINAL_SOLUTION = ~(1UL << (V_ID_W - 1));
     ap_uint<8> curQV;
@@ -770,6 +770,7 @@ mwj_homomorphism(
     while (true) {
         if (stream_sol_end_in.read_nb(last_sol)) {
             curQV = 0;
+            ap_uint<1> select = 0;
 
         HOMOMORPHISM_COPYING_EMBEDDING_LOOP:
             do {
@@ -783,8 +784,8 @@ mwj_homomorphism(
                 curQV++;
                 last_sol = stream_sol_end_in.read();
                 // std::cout << (int)curEmb[curQV - 1] << " sol in " << select << std::endl;
-            }while (!last_sol);
-            
+            } while (!last_sol);
+
             /* Fake node is the tuple about min_set data */
             minset_tuple_t tuple = stream_tuple_in.read();
             fake_node.range(7, 0) = tuple.tb_index;
@@ -800,7 +801,8 @@ mwj_homomorphism(
         HOMOMORPHISM_CHECK_LOOP:
             do {
 #pragma HLS pipeline II = 1
-                set_in = stream_set_in.read();
+                set_in = stream_set_in[select].read();
+                select++;
                 ap_uint<V_ID_W> vToVerify = set_in.node;
                 equal_bits = 0;
 
@@ -818,7 +820,8 @@ mwj_homomorphism(
 
                 /* Write out in case of not duplicate in current solution or
                 delimeter node */
-                if ((equal_bits & valid_bits) == 0 || set_in.last) {
+                if (((equal_bits & valid_bits) == 0 && set_in.valid) ||
+                    set_in.last) {
                     stream_set_out.write(set_out);
                 }
 #if DEBUG_STATS
@@ -1954,8 +1957,8 @@ void multiwayJoin(
         ("Readmin edge - partial solution");
     hls_thread_local hls::stream<bool, MAX_QV> re_stream_sol_end
         ("Readmin edge - partial solution end flag");
-    hls_thread_local hls::stream<homomorphism_set_t< ap_uint<V_ID_W> >, S_D> re_stream_set
-        ("Readmin edge - set nodes");
+    hls_thread_local hls::stream<homomorphism_set_t<ap_uint<V_ID_W>>, S_D>
+      re_stream_set[2];
     hls_thread_local hls::stream<minset_tuple_t, S_D> re_stream_tuple
         ("Readmin edge - tuples");
 
@@ -2337,12 +2340,12 @@ void multiwayJoin(
       std::ref(rc_stream_tuple),
       std::ref(rc_stream_filter),
       std::ref(streams_stop[4]),
-      std::ref(re_stream_set),
+      re_stream_set,
       std::ref(re_stream_tuple));
     
     std::thread mwj_homomorphism_t(
         mwj_homomorphism,
-        std::ref(re_stream_set),
+        re_stream_set,
         std::ref(re_stream_tuple),
         std::ref(re_stream_sol),
         std::ref(re_stream_sol_end),
