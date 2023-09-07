@@ -44,7 +44,7 @@ def subiso(test, path):
     querygraph_v = 0
     querygraph_e = 0
     mem_counter = 0
-    byte_bloom = 16 * 8
+    byte_bloom = 16 * 4
     byte_counter = 4
     byte_edge = 5
    
@@ -302,13 +302,13 @@ def subiso(test, path):
                 empty0 = ol.subgraphIsomorphism_0.read(0xe8);
                 empty1 = ol.subgraphIsomorphism_0.read(0xec);
                 empty = (empty1 << 32) | empty0;
-                empty = empty * 8
+                empty = empty * 4
                 print(f"Findmin empty         {empty} cc, {(empty * 100 / cycles):.2f}%", file=fres)
                 empty = 0
                 empty0 = ol.subgraphIsomorphism_0.read(0x100);
                 empty1 = ol.subgraphIsomorphism_0.read(0x104);
                 empty = (empty1 << 32) | empty0;
-                empty = empty * 8
+                empty = empty * 2
                 print(f"Readmin counter empty {empty} cc, {(empty * 100 / cycles):.2f}%", file=fres)
                 empty = 0
                 empty0 = ol.subgraphIsomorphism_0.read(0x118);
@@ -342,8 +342,8 @@ def subiso(test, path):
                 empty0 = ol.subgraphIsomorphism_0.read(0x190);
                 empty1 = ol.subgraphIsomorphism_0.read(0x194);
                 empty = (empty1 << 32) | empty0;
-                empty = empty * 2
-                print(f"Offset empty          {empty} cc, {(empty * 100 / cycles):.2f}%", file=fres)
+                empty = empty
+                print(f"Bypass filter empty          {empty} cc, {(empty * 100 / cycles):.2f}%", file=fres)
                 empty = 0
                 empty0 = ol.subgraphIsomorphism_0.read(0x1a8);
                 empty1 = ol.subgraphIsomorphism_0.read(0x1ac);

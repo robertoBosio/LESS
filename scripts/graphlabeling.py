@@ -4,6 +4,7 @@ import getopt
 import argparse
 import sys
 import os.path 
+import numpy as np
 import networkx as nx
 from random import randint as rnd
 
@@ -11,10 +12,35 @@ def main():
     args = parse_args()
 
     #data_graph = nx.read_edgelist(args.input_file, nodetype=int, create_using=nx.DiGraph)
-    data_graph = nx.read_edgelist(args.input_file, nodetype=int, create_using=nx.Graph)
-    remap_vertices(data_graph)
-    assign_edge_labels(data_graph, args.labels_edges)
-    assign_node_labels(data_graph, args.labels_vertices)
+    #data_graph = nx.read_edgelist(args.input_file, nodetype=int, create_using=nx.Graph)
+    vertices_set = set()
+    edges = []
+    with open(args.input_file, 'r') as input_file:
+        for line in input_file:
+            parts = line.strip().split()
+            if len(parts) == 2:
+                vertex1, vertex2 = int(parts[0]), int(parts[1])
+                vertices_set.add(vertex1)
+                vertices_set.add(vertex2)
+                edges.append((vertex1, vertex2))
+                
+    # Create a set to store all unique vertices
+    n_edges = len(edges)
+    n_vertices = len(vertices_set)
+
+    labels_edges = np.zeros(n_edges, dtype=np.int32)
+    labels_vertices = np.zeros(n_vertices, dtype=np.int32)
+    unique_vertices = np.zeros(n_vertices, dtype=np.int32)
+    reverse_vertices = np.zeros(n_vertices, dtype=np.int32)
+    degree = np.zeros(n_vertices, dtype=np.int32)
+    
+    remap_vertices_orderedID(unique_vertices, reverse_vertices, degree, args.input_file)
+    for i in range(n_vertices):
+        unique_vertices[i] -= 1
+
+    assign_edge_labels(args.labels_edges, n_edges, labels_edges)
+    assign_node_labels(args.labels_vertices, n_vertices, labels_vertices)
+
     if (args.GF):
         print("Producing for GF")
         if (not args.query):
@@ -31,9 +57,9 @@ def main():
     if (args.RM):
         print("Producing for RM")
         if (not args.query):
-            produce_datagraph_file_RM(data_graph, args.output_path)
+            produce_datagraph_file_RM(n_vertices, n_edges, unique_vertices, reverse_vertices, edges, labels_vertices, degree, args.output_path)
         else:
-            produce_querygraph_file_RM(data_graph, args.output_path)
+            produce_querygraph_file_RM(n_vertices, n_edges, unique_vertices, edges, labels_vertices, degree, args.output_path)
     if (args.VF3):
         print("Producing for VF3")
         if (not args.query):
@@ -52,6 +78,12 @@ def main():
             produce_datagraph_file_GSI(data_graph, args.output_path)
         else:
             produce_querygraph_file_GSI(data_graph, args.output_path)
+    if (args.STMATCH):
+        print("Producing for STMatch")
+        if (not args.query):
+            produce_datagraph_file_STMATCH(edges, unique_vertices, reverse_vertices, labels_vertices, args.output_path)
+        else:
+            produce_querygraph_file_STMATCH(data_graph, args.output_path)
         
 
 def parse_args():
@@ -95,6 +127,9 @@ def parse_args():
     parser.add_argument('--GSI',
             action='store_true',
             help='produce for GSI algorithm')
+    parser.add_argument('--STMATCH',
+            action='store_true',
+            help='produce for STMATCH algorithm')
     
     args = parser.parse_args()
   
@@ -131,18 +166,32 @@ def remap_vertices(graph):
         n_id = n_id + 1
     nx.set_node_attributes(graph, node_ids, "id")
 
+def remap_vertices_orderedID(unique_vertices, reverse_vertices, degree, input_filename):
+    idnum = 1
 
-def assign_edge_labels(graph, n_edge_labels):
-    edge_labels = {}
-    for edge in nx.edges(graph):
-        edge_labels[edge] = rnd(0, n_edge_labels)
-    nx.set_edge_attributes(graph, edge_labels, "label")
+    with open(input_filename, 'r') as input_file:
+        for line in input_file:
+            parts = line.strip().split()
+            if len(parts) == 2:
+                old_vertex1, old_vertex2 = int(parts[0]), int(parts[1])
+                if (unique_vertices[old_vertex1] == 0):
+                    unique_vertices[old_vertex1] = idnum
+                    reverse_vertices[idnum - 1] = old_vertex1
+                    idnum += 1
+                if (unique_vertices[old_vertex2] == 0):
+                    unique_vertices[old_vertex2] = idnum
+                    reverse_vertices[idnum - 1] = old_vertex2
+                    idnum += 1
+                degree[old_vertex1] += 1
+                degree[old_vertex2] += 1
 
-def assign_node_labels(graph, n_node_labels):
-    node_labels = {}
-    for node in nx.nodes(graph):
-        node_labels[node] = rnd(0, n_node_labels)
-    nx.set_node_attributes(graph, node_labels, "label")
+def assign_edge_labels(n_edge_labels, n_edges, edge_labels):
+    for i in range(n_edges):
+        edge_labels[i] = rnd(0, n_edge_labels)
+
+def assign_node_labels(n_node_labels, n_vertices, vertices_labels):
+    for i in range(n_vertices):
+        vertices_labels[i] = rnd(0, n_node_labels)
 
 def produce_edge_file_GF(graph, output_path):
     edges_file = open(output_path + "GF.csv", "w")
@@ -221,56 +270,54 @@ def produce_querygraph_file_DAF(graph, output_path, graphid):
     
     querygraph_file.close()
 
-def produce_datagraph_file_RM(graph, output_path):
-    datagraph_file = open(output_path + "RM.csv", "w")
+def produce_datagraph_file_RM(n_vertices, n_edges, vertices, reverse_vertices, edges, labels_vertices, degree, output_path):
+    datagraph_file = open(output_path + ".RM.csv", "w")
     print("t",
-            nx.number_of_nodes(graph), 
-            nx.number_of_edges(graph), 
+            n_vertices, 
+            n_edges, 
             sep = " ",
             file=datagraph_file)
     
-    for node in nx.nodes(graph):
+    for i, v in enumerate(reverse_vertices):
         print("v", 
-                graph.nodes[node]["id"], 
-                graph.nodes[node]["label"], 
-                nx.degree(graph, node),
+        i, 
+        labels_vertices[reverse_vertices[i]], 
+        degree[reverse_vertices[i]], 
+        sep=" ", 
+        file=datagraph_file)
+
+    for edge in edges:
+        print("e",
+            vertices[edge[0]], 
+                vertices[edge[1]], 
                 sep=" ", 
                 file=datagraph_file)
     
-    for edge in nx.edges(graph):
-        print("e",
-                graph.nodes[edge[0]]["id"], 
-                graph.nodes[edge[1]]["id"], 
-                #graph[edge[0]][edge[1]]["label"], 
-                sep=" ", 
-                file=datagraph_file)
-
     datagraph_file.close()
 
-def produce_querygraph_file_RM(graph, output_path):
-    querygraph_file = open(output_path + "RM.csv", "w")
+def produce_querygraph_file_RM(n_vertices, n_edges, vertices, edge, labels_vertices, degree, output_path):
+    querygraph_file = open(output_path + ".RM.csv", "w")
     print("t",
-            nx.number_of_nodes(graph), 
-            nx.number_of_edges(graph), 
+            n_vertices, 
+            n_edges, 
             sep = " ",
             file=querygraph_file)
     
-    for node in nx.nodes(graph):
+    for i, v in enumerate(vertices):
         print("v", 
-                graph.nodes[node]["id"], 
-                graph.nodes[node]["label"], 
-                nx.degree(graph, node),
+        vertices[i], 
+        labels_vertices[i], 
+        degree[i], 
+        sep=" ", 
+        file=querygraph_file)
+
+    for edge in edges:
+        print("e",
+            vertices[edge[0]], 
+                vertices[edge[1]], 
                 sep=" ", 
                 file=querygraph_file)
     
-    for edge in nx.edges(graph):
-        print("e",
-                graph.nodes[edge[0]]["id"], 
-                graph.nodes[edge[1]]["id"], 
-                #graph[edge[0]][edge[1]]["label"], 
-                sep=" ", 
-                file=querygraph_file)
-
     querygraph_file.close()
 
 def produce_datagraph_file_VF3(graph, output_path):
@@ -386,6 +433,20 @@ def produce_querygraph_file_CECI(graph, output_path):
                 file=querygraph_file)
 
     querygraph_file.close()
+
+def produce_datagraph_file_STMATCH(edges, vertices, reverse_vertices, vertices_labels, output_path):
+    edges_file = open(output_path + ".STMatch.csv", "w")
+    label_file = open(output_path + ".STMatch.label.csv", "w")
+    for i, v in enumerate(reverse_vertices):
+        print(vertices_labels[v], file=label_file)
+
+    for edge in edges:
+        print(vertices[edge[0]], 
+                vertices[edge[1]], 
+                sep=" ", 
+                file=edges_file)
+    edges_file.close()
+    label_file.close()
 
 if __name__ == "__main__":
        main()

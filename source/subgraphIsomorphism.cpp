@@ -40,7 +40,7 @@
 // #pragma GCC diagnostic ignored "-Wunused-variable"
 // #pragma GCC diagnostic ignored "-Wunused-but-set-variable"
 
-#define STOP_S      13    
+#define STOP_S      14    
 #define V_ID_W      VERTEX_WIDTH_BIT
 #define V_L_W       LABEL_WIDTH
 #define MAX_QV      MAX_QUERY_VERTICES
@@ -424,8 +424,9 @@ template<typename T_BLOOM, size_t BLOOM_LOG>
 unsigned short
 bloom_intersect(T_BLOOM &filter, T_BLOOM set_bloom)
 {
-#pragma HLS inline off
-#pragma HLS pipeline II=1
+// #pragma HLS inline off
+// #pragma HLS pipeline II=1
+#pragma HLS inline
     unsigned short bloom_s = bloom_bitset<T_BLOOM, BLOOM_LOG, 0>(set_bloom);
     filter = filter & set_bloom;
     return bloom_s;
@@ -448,11 +449,11 @@ mwj_findmin(bloom_t* bloom_p,
     bool stop;
 
 #pragma HLS array_partition variable = filter type = complete dim = 1
-#pragma HLS allocation function instances=bloom_intersect<T_BLOOM, BLOOM_LOG> limit=1
+//#pragma HLS allocation function instances=bloom_intersect<T_BLOOM, BLOOM_LOG> limit=1
 
 FINDMIN_TASK_LOOP:
     while (1) {
-#pragma HLS pipeline II = 8
+#pragma HLS pipeline II = (1UL << K_FUN_LOG)
 
         if (stream_tuple_in.read_nb(tuple_in)) {
             unsigned int address = tuple_in.address;
@@ -509,38 +510,51 @@ FINDMIN_TASK_LOOP:
     }
 }
 
-template<typename T_BLOOM,
-         size_t BLOOM_LOG,
-         size_t K_FUN_LOG,
-         size_t LKP3_HASH_W,
-         size_t MAX_HASH_W,
-         size_t FULL_HASH_W>
+template<typename T_BLOOM>
+void
+mwj_bypassfilter(
+  hls::stream<T_BLOOM>& stream_filter_in,
+  hls::stream<bool>& stream_stop,
+  hls::stream<T_BLOOM>& stream_filter_out)
+{
+    bool stop;
+    T_BLOOM filter;
+    while (true)
+    {
+        if (stream_filter_in.read_nb(filter)){
+            stream_filter_out.write(filter);
+        }
+#if DEBUG_INTERFACE
+        else {
+            offset_empty++;
+        }
+#endif
+        
+        if (stream_stop.read_nb(stop))
+            break;
+    }
+    
+}
+
+template<size_t LKP3_HASH_W, size_t MAX_HASH_W, size_t FULL_HASH_W>
 void
 mwj_readmin_counter(const unsigned char hash1_w,
                     const unsigned char hash2_w,
                     AdjHT* hTables,
                     row_t* m_axi,
                     hls::stream<readmin_counter_tuple_t>& stream_tuple_in,
-                    hls::stream<T_BLOOM>& stream_filter_in,
                     hls::stream<bool>& stream_stop,
 
-                    hls::stream<readmin_edge_tuple_t>& stream_tuple_out,
-                    hls::stream<T_BLOOM>& stream_filter_out)
+                    hls::stream<readmin_edge_tuple_t>& stream_tuple_out)
 {
-    constexpr size_t K_FUN = (1UL << K_FUN_LOG);
     readmin_counter_tuple_t tuple_in;
     readmin_edge_tuple_t tuple_out;
     bool stop;
 
 READMIN_COUNTER_TASK_LOOP:
     while (true) {
-#pragma HLS pipeline II = 8
+#pragma HLS pipeline II = 2
         if (stream_tuple_in.read_nb(tuple_in)) {
-
-            for (int g = 0; g < K_FUN; g++) {
-#pragma HLS unroll
-                stream_filter_out.write(stream_filter_in.read());
-            }
 
             ap_uint<LKP3_HASH_W> hash_out;
             ap_uint<MAX_HASH_W> hash_trimmed;
@@ -1937,7 +1951,7 @@ void multiwayJoin(
         ("Propose - partial solution");
     hls_thread_local hls::stream<bool, MAX_QV> p_stream_sol_end
         ("Propose - partial solution end flag");
-    hls_thread_local hls::stream<T_BLOOM, (1UL << K_FUN_LOG) * 4> p_stream_filter
+    hls_thread_local hls::stream<T_BLOOM, (1UL << K_FUNCTIONS) * 4> p_stream_filter
         ("Propose - filter");
     hls_thread_local hls::stream<readmin_counter_tuple_t, S_D> p_stream_tuple
         ("Propose - tuples");
@@ -1947,7 +1961,7 @@ void multiwayJoin(
         ("Readmin counter - partial solution");
     hls_thread_local hls::stream<bool, MAX_QV> rc_stream_sol_end
         ("Readmin counter - partial solution end flag");
-    hls_thread_local hls::stream<T_BLOOM, (1UL << K_FUN_LOG) * 4> rc_stream_filter
+    hls_thread_local hls::stream<T_BLOOM, (1UL << K_FUNCTIONS) * 4> rc_stream_filter
         ("Readmin counter - filter");
     hls_thread_local hls::stream<readmin_edge_tuple_t, S_D> rc_stream_tuple
         ("Readmin counter - tuples");
@@ -2203,16 +2217,16 @@ void multiwayJoin(
                                                p_stream_tuple,
                                                p_stream_filter);
 
-    mwj_readmin_counter<T_BLOOM, BLOOM_LOG, K_FUN_LOG, LKP3_HASH_W, MAX_HASH_W, FULL_HASH_W>(
-      hash1_w,
-      hash2_w,
-      hTables0,
-      htb_buf1,
-      p_stream_tuple,
-      p_stream_filter,
-      streams_stop[3],
-      rc_stream_tuple,
-      rc_stream_filter);
+    mwj_bypassfilter<T_BLOOM>(
+      p_stream_filter, streams_stop[11], rc_stream_filter);
+
+    mwj_readmin_counter<LKP3_HASH_W, MAX_HASH_W, FULL_HASH_W>(hash1_w,
+                                                              hash2_w,
+                                                              hTables0,
+                                                              htb_buf1,
+                                                              p_stream_tuple,
+                                                              streams_stop[3],
+                                                              rc_stream_tuple);
 
     mwj_readmin_edge<T_BLOOM, BLOOM_LOG, K_FUN_LOG, FULL_HASH_W>(
       htb_buf2,
@@ -2318,21 +2332,20 @@ void multiwayJoin(
                               std::ref(p_stream_tuple),
                               std::ref(p_stream_filter));
 
-    std::thread mwj_readmin_counter_t(mwj_readmin_counter<T_BLOOM,
-                                                          BLOOM_LOG,
-                                                          K_FUN_LOG,
-                                                          LKP3_HASH_W,
-                                                          MAX_HASH_W,
-                                                          FULL_HASH_W>,
-                                      hash1_w,
-                                      hash2_w,
-                                      hTables0,
-                                      htb_buf1,
-                                      std::ref(p_stream_tuple),
-                                      std::ref(p_stream_filter),
-                                      std::ref(streams_stop[3]),
-                                      std::ref(rc_stream_tuple),
-                                      std::ref(rc_stream_filter));
+    std::thread mwj_bypassfilter_t(mwj_bypassfilter<T_BLOOM>,
+                                   std::ref(p_stream_filter),
+                                   std::ref(streams_stop[11]),
+                                   std::ref(rc_stream_filter));
+
+    std::thread mwj_readmin_counter_t(
+      mwj_readmin_counter<LKP3_HASH_W, MAX_HASH_W, FULL_HASH_W>,
+      hash1_w,
+      hash2_w,
+      hTables0,
+      htb_buf1,
+      std::ref(p_stream_tuple),
+      std::ref(streams_stop[3]),
+      std::ref(rc_stream_tuple));
 
     std::thread mwj_readmin_edge_t(
       mwj_readmin_edge<T_BLOOM, BLOOM_LOG, K_FUN_LOG, FULL_HASH_W>,
@@ -2414,6 +2427,7 @@ void multiwayJoin(
     mwj_verify_t.join();
     mwj_compact_t.join();
     mwj_filter_t.join();
+    mwj_bypassfilter_t.join();
     mwj_assembly_t.join();
 
 

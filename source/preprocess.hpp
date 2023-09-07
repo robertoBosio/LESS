@@ -326,7 +326,7 @@ bloomWrite(T_BLOOM* bloom_p,
     bloom_write_tuple_t tuple_in;
 BLOOM_WRITE_TASK_LOOP:
     do {
-#pragma HLS pipeline II = 8
+#pragma HLS pipeline II = (1UL << K_FUN_LOG)
         tuple_in = stream_address.read();
         for (int g = 0; g < K_FUN; g++) {
 #pragma HLS unroll

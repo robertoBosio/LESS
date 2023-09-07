@@ -33,7 +33,7 @@
 
 /* Bloom filter parameters */
 #define BLOOM_FILTER_WIDTH  7
-#define K_FUNCTIONS         3
+#define K_FUNCTIONS         2
 
 /* bitwidth of the hash to index source vertices, 1st level. */
 // #define HASH_WIDTH_FIRST    11
