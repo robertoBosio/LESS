@@ -12,6 +12,7 @@ import os.path
 import subprocess
 import re
 from time import perf_counter
+from time import sleep
 
 def parse_args():
 
@@ -242,37 +243,44 @@ def subiso(test, path):
                   f" {dynfifo_space} lines available in fifo.", flush=True)
 
             if (hashtable_spaceused <= MEM.nbytes and bloom_spaceused <= BLOOM.nbytes):
+                power = []
                 start = perf_counter()
 
                 #Start the kernel
                 ol.subgraphIsomorphism_0.write(0x00, 1)
-                while (not(ol.subgraphIsomorphism_0.read(addr_preproc_ctrl))):
-                    pass
+#                while (not(ol.subgraphIsomorphism_0.read(addr_preproc_ctrl))):
+#                    pass
 
-                end_preprocess = perf_counter()
-                print(end_preprocess - start, flush=True)
-                checkpoint = end_preprocess
+#                end_preprocess = perf_counter()
+#                print(end_preprocess - start, flush=True)
+#                checkpoint = end_preprocess
 
-# while (not (ol.subgraphIsomorphism_0.read(0x00) & 0x2)):
-                while (not (ol.subgraphIsomorphism_0.read(addr_res_ctrl))):
-                    curr_time = perf_counter()
-                    if (curr_time - end_preprocess) > time_limit:
-                        print("Failed", flush=True)
-                        ol.subgraphIsomorphism_0.write(0x00, 0)
-                        break
-                    else:
-                        if (curr_time - checkpoint) > 10:
-                            output = subprocess.run(["xmutil", "platformstats"], 
-                                    stdout=subprocess.PIPE,
-                                    text=True)
-                            res = re.search("([0-9]+) mW", str(output))
-                            print(res.group(1))
-                            print(ol.subgraphIsomorphism_0.read(addr_dyn_fifo), ", ", curr_time - end_preprocess, "s", sep="", flush=True)
-                            checkpoint = curr_time
-                        else :
-                            pass
-
+                while (not (ol.subgraphIsomorphism_0.read(0x00) & 0x2)):
+                    with open("/sys/class/hwmon/hwmon2/power1_input") as f_input:
+                        power.append(int(f_input.read()))
+                    sleep(0.001)
+#                while (not (ol.subgraphIsomorphism_0.read(addr_res_ctrl))):
+#                    curr_time = perf_counter()
+#                    if (curr_time - end_preprocess) > time_limit:
+#                        print("Failed", flush=True)
+#                        ol.subgraphIsomorphism_0.write(0x00, 0)
+#                        break
+#                    else:
+#                        if (curr_time - checkpoint) > 10:
+#                            output = subprocess.run(["xmutil", "platformstats"], 
+#                                    stdout=subprocess.PIPE,
+#                                    text=True)
+#                            res = re.search("([0-9]+) mW", str(output))
+#                            print(res.group(1))
+#                            print(ol.subgraphIsomorphism_0.read(addr_dyn_fifo), ", ", curr_time - end_preprocess, "s", sep="", flush=True)
+#                            checkpoint = curr_time
+#                        else :
+#                            pass
+                end_preprocess = 0
                 end_subiso = perf_counter()
+#                print(end_preprocess - start, flush=True)
+                print(end_subiso - start, flush=True)
+                print(f"{np.mean(power)}nW")
                 c = ol.subgraphIsomorphism_0.read(addr_res)
                 tot_time = end_subiso - start
                 pre_time = end_preprocess - start
