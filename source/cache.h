@@ -103,13 +103,13 @@ class cache {
 		};
 		typedef ap_uint<1 + WR_ENABLED> op_type;
 
-#ifndef __SYNTHESIS__
+// #ifndef __SYNTHESIS__
 		typedef enum {
 			MISS,
 			HIT,
 			L1_HIT
 		} hit_status_type;
-#endif /* __SYNTHESIS__ */
+// #endif /* __SYNTHESIS__ */
 
 		template <bool WR_EN, size_t ADDR_SZ> struct op_struct {};
 		template <size_t ADDR_SZ>
@@ -156,10 +156,11 @@ class cache {
 		T * const m_main_mem;
 		int m_n_reqs[PORTS] = {0};
 		int m_n_hits[PORTS] = {0};
-		int m_n_l1_reqs[PORTS] = {0};
-		int m_n_l1_hits[PORTS] = {0};
 		std::mutex m_core_mutex;
 #endif /* __SYNTHESIS__ */
+		
+		long m_n_l1_reqs[PORTS] = {0};
+		long m_n_l1_hits[PORTS] = {0};
 
 	public:
 #ifdef __SYNTHESIS__
@@ -382,6 +383,8 @@ class cache {
 
 #ifndef __SYNTHESIS__
 			update_profiling(hit_status, port);
+#else
+			update_profiling_synth(l1_hit, port);
 #endif /* __SYNTHESIS__ */
 		}
 
@@ -479,6 +482,11 @@ class cache {
 							m_n_l1_reqs[port]));
 
 			return 0;
+		}
+#else
+		void get_l1_stats(const unsigned int port, unsigned long &hits, unsigned long &reqs) const {
+			hits = m_n_l1_hits[port];
+			reqs = m_n_l1_reqs[port];
 		}
 #endif /* __SYNTHESIS__ */
 
@@ -847,6 +855,14 @@ MEM_IF_LOOP:		for (size_t port = 0; ; port = ((port + 1) % MEM_IF_PORTS)) {
 				if (status == HIT)
 					m_n_hits[port]++;
 			}
+		}
+#else
+		void update_profiling_synth(bool status, const unsigned int port) {
+			m_n_l1_reqs[port]++;
+
+			if (status) {
+				m_n_l1_hits[port]++;
+			}		
 		}
 
 #endif /* __SYNTHESIS__ */

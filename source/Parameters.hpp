@@ -39,7 +39,7 @@
 // #define HASH_WIDTH_FIRST    11
 // #define HASH_WIDTH_SECOND   7
 
-#define MAX_COLLISIONS      (1UL << 5)
+#define MAX_COLLISIONS      (1UL << 6)
 
 /* Depth of streams connecting tasks */
 #define DEFAULT_STREAM_DEPTH 128
@@ -51,9 +51,9 @@
 #define DDR_BIT             7
 #define DDR_WORD            (1UL << DDR_BIT)
 
-#define HASHTABLES_SPACE    ((1UL << 27) / (DDR_WORD / 8))  //~ 67 MB
-#define BLOOM_SPACE         ((1UL << 27) / (DDR_WORD / 8))  //~ 67 MB
-#define RESULTS_SPACE		(DYN_FIFO_BURST * (1UL << 17))  //~ 67 MB
+#define HASHTABLES_SPACE    ((1UL << 28) / (DDR_WORD / 8))  //~ 256 MB
+#define BLOOM_SPACE         ((1UL << 27) / (DDR_WORD / 8))  //~ 128 MB
+#define RESULTS_SPACE		(DYN_FIFO_BURST * (1UL << 20))  //~ 1 << 29, 512 MB
 // #define HTB_SIZE            (1UL << (HASH_WIDTH_FIRST + HASH_WIDTH_SECOND - (DDR_BIT - COUNTER_WIDTH)))
 
 #define EDGE_ROW            (1UL << (DDR_BIT - EDGE_WIDTH))

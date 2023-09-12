@@ -6,6 +6,7 @@ import sys
 import os.path 
 import numpy as np
 import networkx as nx
+import time
 from random import randint as rnd
 
 def main(): 
@@ -15,6 +16,7 @@ def main():
     #data_graph = nx.read_edgelist(args.input_file, nodetype=int, create_using=nx.Graph)
     vertices_set = set()
     edges = []
+    max_id = 0
     with open(args.input_file, 'r') as input_file:
         for line in input_file:
             parts = line.strip().split()
@@ -22,22 +24,27 @@ def main():
                 vertex1, vertex2 = int(parts[0]), int(parts[1])
                 vertices_set.add(vertex1)
                 vertices_set.add(vertex2)
+                if (vertex1 > max_id):
+                    max_id = vertex1
+                if (vertex2 > max_id):
+                    max_id = vertex2
                 edges.append((vertex1, vertex2))
-                
+    
+    max_id += 1
     # Create a set to store all unique vertices
+    # edges = transform_to_undirected(edges)
     n_edges = len(edges)
     n_vertices = len(vertices_set)
-
     labels_edges = np.zeros(n_edges, dtype=np.int32)
-    labels_vertices = np.zeros(n_vertices, dtype=np.int32)
-    unique_vertices = np.zeros(n_vertices, dtype=np.int32)
+    labels_vertices = np.zeros(max_id, dtype=np.int32)
+    unique_vertices = np.zeros(max_id, dtype=np.int32)
     reverse_vertices = np.zeros(n_vertices, dtype=np.int32)
-    degree = np.zeros(n_vertices, dtype=np.int32)
+    degree = np.zeros(max_id, dtype=np.int32)
     
-    remap_vertices_orderedID(unique_vertices, reverse_vertices, degree, args.input_file)
+    remap_vertices_orderedID(edges, unique_vertices, reverse_vertices, degree, args.input_file)
 
     #Since before 0 is used as flag of not assigned vertex
-    for i in range(n_vertices):
+    for i in range(max_id):
         unique_vertices[i] -= 1
 
     assign_edge_labels(args.labels_edges, n_edges, labels_edges)
@@ -154,6 +161,14 @@ def parse_args():
 
     return args
 
+def transform_to_undirected(edges):
+    undirected_edges = set()
+    for edge in edges:
+        undirected_edge = tuple(sorted(edge))
+        undirected_edges.add(undirected_edge)
+                                
+    return list(undirected_edges)
+
 def remap_vertices(graph):
     node_ids = {}
     n_id = 0
@@ -162,25 +177,22 @@ def remap_vertices(graph):
         n_id = n_id + 1
     nx.set_node_attributes(graph, node_ids, "id")
 
-def remap_vertices_orderedID(unique_vertices, reverse_vertices, degree, input_filename):
+def remap_vertices_orderedID(edges, unique_vertices, reverse_vertices, degree, input_filename):
     idnum = 1
 
     #Assgning to each vertex an ID the first time they appear in an edge
-    with open(input_filename, 'r') as input_file:
-        for line in input_file:
-            parts = line.strip().split()
-            if len(parts) == 2:
-                old_vertex1, old_vertex2 = int(parts[0]), int(parts[1])
-                if (unique_vertices[old_vertex1] == 0):
-                    unique_vertices[old_vertex1] = idnum
-                    reverse_vertices[idnum - 1] = old_vertex1
-                    idnum += 1
-                if (unique_vertices[old_vertex2] == 0):
-                    unique_vertices[old_vertex2] = idnum
-                    reverse_vertices[idnum - 1] = old_vertex2
-                    idnum += 1
-                degree[old_vertex1] += 1
-                degree[old_vertex2] += 1
+    for edge in edges:
+        old_vertex1, old_vertex2 = edge[0], edge[1]
+        if (unique_vertices[old_vertex1] == 0):
+            unique_vertices[old_vertex1] = idnum
+            reverse_vertices[idnum - 1] = old_vertex1
+            idnum += 1
+        if (unique_vertices[old_vertex2] == 0):
+            unique_vertices[old_vertex2] = idnum
+            reverse_vertices[idnum - 1] = old_vertex2
+            idnum += 1
+        degree[old_vertex1] += 1
+        degree[old_vertex2] += 1
 
 def assign_edge_labels(n_edge_labels, n_edges, edge_labels):
     for i in range(n_edges):

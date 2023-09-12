@@ -69,6 +69,10 @@ unsigned long verify_empty = 0;
 unsigned long compact_empty = 0;
 unsigned long filter_empty = 0;
 unsigned long assembly_empty = 0;
+unsigned long hits0 = 0;
+unsigned long hits1 = 0;
+unsigned long reqs0 = 0;
+unsigned long reqs1 = 0;
 #endif
 
 #if CACHE_ENABLE
@@ -1851,41 +1855,39 @@ EXTRACT_BAGTOSET_SETCHECKER_LOOP:
 //         stream_tuple_out);
 // }
 
-template <size_t BATCH_SIZE_LOG>
-void intersectcache_wrapper(
-    AdjHT *hTables,
-    htb_cache_t &htb_buf,
-    hls::stream<intersect_tuple_t> stream_tuple_in[2],
-    hls::stream<bool> &stream_stop,
+template<size_t BATCH_SIZE_LOG>
+void
+intersectcache_wrapper(AdjHT* hTables,
+                       htb_cache_t& htb_buf,
+                       hls::stream<intersect_tuple_t> stream_tuple_in[2],
+                       hls::stream<bool>& stream_stop,
 
-    hls::stream<offset_tuple_t> &stream_tuple_out)
+                       hls::stream<offset_tuple_t>& stream_tuple_out)
 {
-    htb_buf.init(1);
-    mwj_intersect<BATCH_SIZE_LOG>(
-        hTables,
-        htb_buf,
-        stream_tuple_in,
-        stream_stop,
-        stream_tuple_out);
+  htb_buf.init(1);
+  mwj_intersect<BATCH_SIZE_LOG>(
+    hTables, htb_buf, stream_tuple_in, stream_stop, stream_tuple_out);
+#if DEBUG_INTERFACE && __SYNTHESIS__
+  htb_buf.get_l1_stats(1, hits1, reqs1);
+#endif
 }
 
-template <size_t BATCH_SIZE_LOG>
-void verifycache_wrapper(
-        AdjHT *hTables,
-        htb_cache_t                  &htb_buf,
-        hls::stream<verify_tuple_t>  &stream_tuple_in,
-        hls::stream<bool>            &stream_stop,
+template<size_t BATCH_SIZE_LOG>
+void
+verifycache_wrapper(AdjHT* hTables,
+                    htb_cache_t& htb_buf,
+                    hls::stream<verify_tuple_t>& stream_tuple_in,
+                    hls::stream<bool>& stream_stop,
 
-        hls::stream<compact_tuple_t> &stream_tuple_out)
+                    hls::stream<compact_tuple_t>& stream_tuple_out)
 {
-    htb_buf.init(0);
-    mwj_verify<BATCH_SIZE_LOG>(
-            hTables,
-            htb_buf,
-            stream_tuple_in,
-            stream_stop,                  
-            stream_tuple_out);       
-    htb_buf.stop();
+  htb_buf.init(0);
+  mwj_verify<BATCH_SIZE_LOG>(
+    hTables, htb_buf, stream_tuple_in, stream_stop, stream_tuple_out);
+#if DEBUG_INTERFACE && __SYNTHESIS__
+  htb_buf.get_l1_stats(0, hits0, reqs0);
+#endif
+  htb_buf.stop();
 }
 
 template <typename T_BLOOM,
@@ -2657,6 +2659,10 @@ subgraphIsomorphism(row_t htb_buf0[HASHTABLES_SPACE],
                     unsigned long& p_compact_empty,
                     unsigned long& p_filter_empty,
                     unsigned long& p_assembly_empty,
+                    unsigned long& p_hits0,
+                    unsigned long& p_hits1,
+                    unsigned long& p_reqs0,
+                    unsigned long& p_reqs1,
 #endif /* DEBUG_INTERFACE */
 
 #if COUNT_ONLY
@@ -2713,6 +2719,10 @@ subgraphIsomorphism(row_t htb_buf0[HASHTABLES_SPACE],
 #pragma HLS INTERFACE mode=s_axilite port=p_split_empty
 #pragma HLS INTERFACE mode=s_axilite port=p_compact_empty
 #pragma HLS INTERFACE mode=s_axilite port=p_filter_empty 
+#pragma HLS INTERFACE mode=s_axilite port=p_hits0
+#pragma HLS INTERFACE mode=s_axilite port=p_hits1
+#pragma HLS INTERFACE mode=s_axilite port=p_reqs0
+#pragma HLS INTERFACE mode=s_axilite port=p_reqs1
 #endif /* DEBUG_INTERFACE */
 
 #if COUNT_ONLY
@@ -2803,6 +2813,10 @@ subgraphIsomorphism(row_t htb_buf0[HASHTABLES_SPACE],
     p_compact_empty = compact_empty;
     p_filter_empty = filter_empty;
     p_assembly_empty = assembly_empty;
+    p_hits0 = hits0;
+    p_hits1 = hits1;
+    p_reqs0 = reqs0;
+    p_reqs1 = reqs1;
 
 #if DEBUG_STATS
     debug::print(hash1_w, hash2_w);

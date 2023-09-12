@@ -72,6 +72,10 @@ subgraphIsomorphism(row_t htb_buf0[HASHTABLES_SPACE],
                     unsigned long& p_compact_empty,
                     unsigned long& p_filter_empty,
                     unsigned long& p_assembly_empty,
+                    unsigned long& p_hits0,
+                    unsigned long& p_hits1,
+                    unsigned long& p_reqs0,
+                    unsigned long& p_reqs1,
 #endif /* DEBUG_INTERFACE */
 
 #if COUNT_ONLY

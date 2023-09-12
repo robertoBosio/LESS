@@ -107,9 +107,11 @@ void load_querygraphs(
     
     /* Query file */
     std::ifstream fQuery(queryfile);
-    
+
+    std::cout << queryfile << std::endl; 
     if (!fQuery.is_open()){
         std::cout << "Query file opening failed.\n";
+        exit(-1);
     }
 
     std::string fLine{};
@@ -213,7 +215,7 @@ int main()
     bool flag = true;
     std::map<std::string, std::vector<TestEntry>> test;
     std::string prev_datagraph;
-    unsigned long counters[15];
+    unsigned long counters[19];
 
     char cwd[100];
     if (getcwd(cwd, sizeof(cwd)) != NULL)
@@ -400,6 +402,10 @@ int main()
                 counters[12],
                 counters[13],
                 counters[14],
+                counters[15],
+                counters[16],
+                counters[17],
+                counters[18],
 #endif
                 result);
 #endif /* SOFTWARE_PREPROC */
