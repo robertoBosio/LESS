@@ -1,7 +1,7 @@
 #!/bin/bash
-DIR_ALGO="/home/roberto/Documents/algorithms"
-DIR_D="/home/roberto/Documents/dataset/benchmark/labelled/email-Enron"
-DIR_Q="/home/roberto/Documents/dataset/benchmark/queries/query5"
+DIR_ALGO="/home/user/Documents/algorithms"
+DIR_D="/home/user/Documents/dataset/benchmark/labelled/email-Enron"
+DIR_Q="/home/user/Documents/dataset/benchmark/queries/query5"
 
 START=$(date +%s.%N)
 

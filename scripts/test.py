@@ -11,7 +11,7 @@ from random import randint as rnd
 def main(): 
     args = parse_args()
     memory_avail = 2**27
-    dir_algo = "/home/roberto/Documents/algorithms"
+    dir_algo = "/home/user/Documents/algorithms"
     dir_data = (str(args.path_data) + str(args.input_file_data))
     dir_query = (str(args.path_query) + str(args.input_file_query))
 
@@ -90,11 +90,11 @@ def parse_args():
     parser.add_argument('-pq',
             '--path_query',
             help='directory path of the query',
-            default="/home/roberto/Documents/dataset/benchmark/queries/")
+            default="/home/user/Documents/dataset/benchmark/queries/")
     parser.add_argument('-pd',
             '--path_data',
             help='directory path of the data',
-            default="/home/roberto/Documents/dataset/benchmark/labelled/")
+            default="/home/user/Documents/dataset/benchmark/labelled/")
     parser.add_argument('-s',
             '--vertex_size',
             help='size of vertex id in bytes',

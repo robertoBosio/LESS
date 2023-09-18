@@ -55,8 +55,10 @@ done
 mkdir overlay
 cp ../subiso_bd/subiso_bd.runs/impl_1/design_1_wrapper.bit overlay/design_1.bit
 cp ../subiso_bd/subiso_bd.gen/sources_1/bd/design_1/hw_handoff/design_1.hwh overlay/design_1.hwh
-# cp bitstream/design_1.bit overlay/design_1.bit
-# cp bitstream/design_1.hwh overlay/design_1.hwh
+#cp bitstream/design_latest.bit overlay/design_1.bit
+#cp bitstream/design_latest.hwh overlay/design_1.hwh
+#cp bitstream/design_latency0.bit overlay/design_1.bit
+#cp bitstream/design_latency0.hwh overlay/design_1.hwh
 cp ./${input_file} overlay/test.txt
 cp ./host.py overlay/host.py
 
