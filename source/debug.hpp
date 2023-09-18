@@ -65,7 +65,7 @@ namespace debug {
         unsigned int cnt, k_fun;
         cnt = COUNTER_WIDTH;
         k_fun = (1UL << K_FUNCTIONS);
-        verify_filter -= intersect_filter;
+      //   verify_filter -= intersect_filter;
 
         debof << "DEBUG STATISTICS HW1: " << (int)hash1_w << " HW2: " << (int)hash2_w
             << " CNT: " << cnt << " K_FUN: " << k_fun << std::endl << std::endl;

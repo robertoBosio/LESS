@@ -1,4 +1,5 @@
 dataset/*
+dataset2/*
 sw_benchmark/*
 subgraphiso-kria*/*
 subiso_bd/*
@@ -11,4 +12,4 @@ scripts/bitstream/*
 *.log
 *.wcfg
 settings.tcl
-stats.txt
+*.txt

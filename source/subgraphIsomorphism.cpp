@@ -1380,6 +1380,8 @@ VERIFY_TASK_LOOP:
     }
 }
 
+/* Or reduce of bits coming from verify, compact edge blocks and output if a
+ * single edge is verified or not */
 void mwj_compact(
         hls::stream<compact_tuple_t>  &stream_tuple_in,
         hls::stream<bool>             &stream_stop,

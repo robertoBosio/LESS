@@ -4,9 +4,10 @@ set proj "subgraphiso-kria"
 set dir "source"
 
 open_project -reset $proj
+#open_project $proj
 
 add_files "$dir/subgraphIsomorphism.cpp"
-add_files -tb "$dir/subiso-test.cpp scripts dataset" -cflags "-Wno-attributes -Wno-unknown-pragmas" -csimflags "-Wno-unknown-pragmas"
+add_files -tb "$dir/subiso-test.cpp scripts dataset dataset2" -cflags "-Wno-attributes -Wno-unknown-pragmas" -csimflags "-Wno-unknown-pragmas"
 set_top subgraphIsomorphism
 
 open_solution "solution1" -flow_target vivado
