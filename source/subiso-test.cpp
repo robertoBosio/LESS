@@ -108,6 +108,14 @@ void load_querygraphs(
     /* Query file */
     std::ifstream fQuery(queryfile);
 
+    // Get the current path
+    char currentPath[FILENAME_MAX];
+    if (getcwd(currentPath, sizeof(currentPath)) != nullptr) {
+        std::cout << "Current Path: " << currentPath << std::endl;
+    } else {
+        std::cerr << "Error getting current path: " << strerror(errno) << std::endl;
+        exit(-1);
+    }
     std::cout << queryfile << std::endl; 
     if (!fQuery.is_open()){
         std::cout << "Query file opening failed.\n";

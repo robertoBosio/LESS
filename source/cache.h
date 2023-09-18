@@ -328,7 +328,7 @@ class cache {
 			}
 
 			// try to get line from L1 cache
-			const auto l1_hit = (L1_CACHE &&
+			const bool l1_hit = (L1_CACHE &&
 					m_l1_cache_get[port].get_line(addr_main, line));
 
 #ifndef __SYNTHESIS__

@@ -443,7 +443,7 @@ mwj_findmin(bloom_t* bloom_p,
             hls::stream<bool>& stream_stop,
 
             hls::stream<readmin_counter_tuple_t>& stream_tuple_out,
-            hls::stream<T_BLOOM>& stream_filter_out)
+            hls::stream<T_BLOOM> stream_filter_out[1<<K_FUN_LOG])
 {
     constexpr size_t K_FUN = (1UL << K_FUN_LOG);
     T_BLOOM filter[K_FUN];
@@ -499,7 +499,7 @@ FINDMIN_TASK_LOOP:
 
                 for (int g = 0; g < K_FUN; g++) {
 #pragma HLS unroll
-                  stream_filter_out.write(filter[g]);
+                  stream_filter_out[g].write(filter[g]);
                 }
             }
         }
@@ -514,19 +514,23 @@ FINDMIN_TASK_LOOP:
     }
 }
 
-template<typename T_BLOOM>
+template<typename T_BLOOM, size_t BLOOM_LOG, size_t K_FUN_LOG>
 void
 mwj_bypassfilter(
-  hls::stream<T_BLOOM>& stream_filter_in,
+  hls::stream<T_BLOOM> stream_filter_in[1UL << K_FUN_LOG],
   hls::stream<bool>& stream_stop,
-  hls::stream<T_BLOOM>& stream_filter_out)
+  hls::stream<T_BLOOM> stream_filter_out[1UL << K_FUN_LOG])
 {
     bool stop;
     T_BLOOM filter;
     while (true)
     {
-        if (stream_filter_in.read_nb(filter)){
-            stream_filter_out.write(filter);
+        if (stream_filter_in[0].read_nb(filter)){
+            stream_filter_out[0].write(filter);
+            for (int g = 0; g < ((1UL << K_FUN_LOG) - 1); g++){
+#pragma HLS unroll
+              stream_filter_out[g + 1].write(stream_filter_in[g + 1].read());
+            }
         }
 #if DEBUG_INTERFACE
         else {
@@ -679,7 +683,7 @@ void
 mwj_readmin_edge(
   row_t* m_axi,
   hls::stream<readmin_edge_tuple_t>& stream_tuple_in,
-  hls::stream<T_BLOOM>& stream_filter_in,
+  hls::stream<T_BLOOM> stream_filter_in[1UL << K_FUN_LOG],
   hls::stream<bool>& stream_stop,
 
   hls::stream<homomorphism_set_t<ap_uint<V_ID_W>>> stream_set_out[2],
@@ -709,7 +713,7 @@ READMIN_EDGE_TASK_LOOP:
 
             for (int g = 0; g < K_FUN; g++) {
 #pragma HLS unroll
-                filter[g] = stream_filter_in.read();
+                filter[g] = stream_filter_in[g].read();
             }
         
         unsigned int cycles = tuple_in.rowend - tuple_in.rowstart;
@@ -1953,8 +1957,8 @@ void multiwayJoin(
         ("Propose - partial solution");
     hls_thread_local hls::stream<bool, MAX_QV> p_stream_sol_end
         ("Propose - partial solution end flag");
-    hls_thread_local hls::stream<T_BLOOM, (1UL << K_FUNCTIONS) * 4> p_stream_filter
-        ("Propose - filter");
+    hls_thread_local hls::stream<T_BLOOM, 4>
+      p_stream_filter[1UL << K_FUNCTIONS];
     hls_thread_local hls::stream<readmin_counter_tuple_t, S_D> p_stream_tuple
         ("Propose - tuples");
 
@@ -1963,8 +1967,8 @@ void multiwayJoin(
         ("Readmin counter - partial solution");
     hls_thread_local hls::stream<bool, MAX_QV> rc_stream_sol_end
         ("Readmin counter - partial solution end flag");
-    hls_thread_local hls::stream<T_BLOOM, (1UL << K_FUNCTIONS) * 4> rc_stream_filter
-        ("Readmin counter - filter");
+    hls_thread_local hls::stream<T_BLOOM, 4>
+      rc_stream_filter[1UL << K_FUNCTIONS];
     hls_thread_local hls::stream<readmin_edge_tuple_t, S_D> rc_stream_tuple
         ("Readmin counter - tuples");
     
@@ -2219,7 +2223,7 @@ void multiwayJoin(
                                                p_stream_tuple,
                                                p_stream_filter);
 
-    mwj_bypassfilter<T_BLOOM>(
+    mwj_bypassfilter<T_BLOOM, BLOOM_LOG, K_FUN_LOG>(
       p_stream_filter, streams_stop[11], rc_stream_filter);
 
     mwj_readmin_counter<LKP3_HASH_W, MAX_HASH_W, FULL_HASH_W>(hash1_w,
@@ -2332,12 +2336,12 @@ void multiwayJoin(
                               std::ref(e_stream_tuple),
                               std::ref(streams_stop[2]),
                               std::ref(p_stream_tuple),
-                              std::ref(p_stream_filter));
+                              p_stream_filter);
 
-    std::thread mwj_bypassfilter_t(mwj_bypassfilter<T_BLOOM>,
-                                   std::ref(p_stream_filter),
+    std::thread mwj_bypassfilter_t(mwj_bypassfilter<T_BLOOM, BLOOM_LOG, K_FUN_LOG>,
+                                   p_stream_filter,
                                    std::ref(streams_stop[11]),
-                                   std::ref(rc_stream_filter));
+                                   rc_stream_filter);
 
     std::thread mwj_readmin_counter_t(
       mwj_readmin_counter<LKP3_HASH_W, MAX_HASH_W, FULL_HASH_W>,
@@ -2353,7 +2357,7 @@ void multiwayJoin(
       mwj_readmin_edge<T_BLOOM, BLOOM_LOG, K_FUN_LOG, FULL_HASH_W>,
       htb_buf2,
       std::ref(rc_stream_tuple),
-      std::ref(rc_stream_filter),
+      rc_stream_filter,
       std::ref(streams_stop[4]),
       re_stream_set,
       std::ref(re_stream_tuple));
@@ -2675,19 +2679,19 @@ subgraphIsomorphism(row_t htb_buf0[HASHTABLES_SPACE],
 {
 
 #pragma HLS INTERFACE mode=m_axi port=htb_buf0 bundle=prop_batch \
-    max_widen_bitwidth=128 latency=1
+    max_widen_bitwidth=128 latency=0
 #pragma HLS INTERFACE mode=m_axi port=htb_buf1 bundle=cache \
     max_widen_bitwidth=128 num_write_outstanding=1 max_write_burst_length=2 \
-    latency=1
+    latency=0
 #pragma HLS INTERFACE mode=m_axi port=htb_buf2 bundle=readmin_c \
     max_widen_bitwidth=128 num_write_outstanding=1 max_write_burst_length=2 \
-    latency=1
+    latency=0
 #pragma HLS INTERFACE mode=m_axi port=htb_buf3 bundle=readmin_e \
     max_widen_bitwidth=128 num_write_outstanding=1 max_write_burst_length=2 \
-    latency=1 max_read_burst_length=32
+    latency=0 max_read_burst_length=32
 #pragma HLS INTERFACE mode=m_axi port=res_buf bundle=fifo \
     max_widen_bitwidth=128 max_read_burst_length=32 max_write_burst_length=32 \
-    latency=1
+    latency=0
 #pragma HLS INTERFACE mode=m_axi port=bloom_p bundle=bloom \
     max_widen_bitwidth=128 latency=20
 

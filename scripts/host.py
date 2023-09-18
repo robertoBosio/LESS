@@ -239,6 +239,7 @@ def subiso(test, path):
                 order.append(following)
 
             # Streaming the query order
+            #order = [0,1,2,3,4,5]
             for x in range(querygraph_v):
                 FIFO[counter] = (order[x], 0, 0, 0)
                 counter = counter + 1
@@ -262,7 +263,7 @@ def subiso(test, path):
             #hash1_w = int(((datagraph_v * 4) / 3900000.0) + 12)
             hash1_w = int(0.4 * np.log(5*(10**7)*datagraph_e)) + 2
             hash2_w = int(min(max_degree + 1, 7))
-            #print(order)
+# print(order)
 
             hashtable_spaceused = len(tablelist) * (2**hash1_w) * (2**hash2_w) * byte_counter
             hashtable_spaceused += datagraph_e * byte_edge
@@ -307,8 +308,8 @@ def subiso(test, path):
 
                 #Start the kernel
                 ol.subgraphIsomorphism_0.write(0x00, 1)
-#                while (not(ol.subgraphIsomorphism_0.read(addr_preproc_ctrl))):
-#                    pass
+                # while (not(ol.subgraphIsomorphism_0.read(addr_preproc_ctrl))):
+                    # pass
 
 #                end_preprocess = perf_counter()
 #                print(end_preprocess - start, flush=True)
