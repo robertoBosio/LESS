@@ -368,7 +368,6 @@ int main()
                 h1,
                 h2,
                 dynfifo_space,
-                diagnostic,
                 qVertices0,
                 qVertices1,
                 hTables0,
@@ -392,7 +391,6 @@ int main()
                 h1,
                 h2,
                 dynfifo_space,
-                diagnostic,
 #if DEBUG_INTERFACE
                 debug_endpreprocess_s,
                 counters[0],

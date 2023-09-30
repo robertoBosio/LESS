@@ -38,7 +38,7 @@
 # ../dataset/benchmark/labelled/youtubeRM.csv               ../dataset/benchmark/queries/query3RM.csv 188408         13  5
 # ../dataset/benchmark/labelled/youtubeRM.csv               ../dataset/benchmark/queries/query4RM.csv 36921127       13  5
 # ../dataset/benchmark/labelled/youtubeRM.csv               ../dataset/benchmark/queries/query5RM.csv 597996         13  7  
-../dataset2/label_5/data/enron.RM.csv                     ../dataset2/label_5/queries2/query0.RM.csv 0     14  5 
+#../dataset2/label_5/data/enron.RM.csv                     ../dataset2/label_5/queries2/query0.RM.csv 0     14  5 
 #../dataset2/label_5/data/enron.RM.csv                     ../dataset2/label_5/queries2/query1.RM.csv 0     14  5 
 #../dataset2/label_5/data/enron.RM.csv                     ../dataset2/label_5/queries2/query2.RM.csv 0     14  5 
 #../dataset2/label_5/data/enron.RM.csv                     ../dataset2/label_5/queries2/query3.RM.csv 0     14  5 
@@ -146,7 +146,7 @@
 #../dataset2/label_5/data/dblp.RM.csv                     ../dataset2/label_5/queries2/query15.RM.csv 0     14  5 
 #../dataset2/label_5/data/dblp.RM.csv                     ../dataset2/label_5/queries2/query16.RM.csv 0     14  5 
 #../dataset2/label_5/data/dblp.RM.csv                     ../dataset2/label_5/queries2/query17.RM.csv 0     15  5 
-../dataset2/label_5/data/dblp.RM.csv                     ../dataset2/label_5/queries2/query18.RM.csv 0     14  5 
+#../dataset2/label_5/data/dblp.RM.csv                     ../dataset2/label_5/queries2/query18.RM.csv 0     14  5 
 #../dataset2/label_5/data/dblp.RM.csv                     ../dataset2/label_5/queries2/query19.RM.csv 0     14  5 
 #../dataset2/label_5/data/dblp.RM.csv                     ../dataset2/label_5/queries2/query20.RM.csv 0     14  5 
 #../dataset2/label_5/data/dblp.RM.csv                     ../dataset2/label_5/queries2/query21.RM.csv 0     14  5 

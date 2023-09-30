@@ -20,7 +20,6 @@ void subgraphIsomorphism(
     const unsigned char hash1_w,
     const unsigned char hash2_w,
     const unsigned long dynfifo_space,
-    unsigned long &dynfifo_diagnostic,
     QueryVertex qVertices0[MAX_QUERY_VERTICES],
     QueryVertex qVertices1[MAX_QUERY_VERTICES],
     AdjHT hTables0[MAX_TABLES],
@@ -53,7 +52,6 @@ subgraphIsomorphism(row_t htb_buf0[HASHTABLES_SPACE],
                     const unsigned char hash1_w,
                     const unsigned char hash2_w,
                     const unsigned long dynfifo_space,
-                    unsigned long& dynfifo_diagnostic,
 
 #if DEBUG_INTERFACE
                     volatile unsigned int& debif_endpreprocess,
