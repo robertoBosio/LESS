@@ -31,9 +31,10 @@ def parse_args():
 
 def subiso(test, path):
   
-    HASHTABLES_SPACE = 1 << 28  #~ 67 MB
-    BLOOM_SPACE  = 1 << 27  #~ 67 MB
-    RESULTS_SPACE = 1 << 29  #~ 134 MB
+    HASHTABLES_SPACE = 1 << 28  #~ 256 MB
+    BLOOM_SPACE  = 1 << 27  #~ 128 MB
+# RESULTS_SPACE = 1 << 29  #~ 512 MB
+    RESULTS_SPACE = 1 << 28  #~ 256 MB
     MAX_QDATA = 300
     BURST_SIZE = 32
     nfile = 0
@@ -63,24 +64,24 @@ def subiso(test, path):
     addr_de = 0x68
     addr_hash1_w = 0x74
     addr_hash2_w = 0x7c
-    addr_dyn_space = 0x84
-    
-    addr_dyn_fifo = 0x90
-    addr_dyn_fifo_ctrl = 0x98
-    addr_preproc = 0xa8
-    addr_preproc_ctrl = 0xac
-    addr_resl = 0x280
-    addr_resh = 0x284
-    addr_res_ctrl = 0x288
+    addr_dyn_spacel = 0x84
+    addr_dyn_spaceh = 0x88
+    addr_dyn_ovf = 0x90
+    addr_dyn_ovf_ctrl = 0x94
+    addr_preproc = 0xa0
+    addr_preproc_ctrl = 0xa4
+    addr_resl = 0x278
+    addr_resh = 0x27c
+    addr_res_ctrl = 0x280
 
-    addr_hit0l = 0x220
-    addr_hit0h = 0x224
-    addr_hit1l = 0x238
-    addr_hit1h = 0x23c
-    addr_req0l = 0x250
-    addr_req0h = 0x254
-    addr_req1l = 0x268
-    addr_req1h = 0x26c
+    addr_hit0l = 0x218
+    addr_hit0h = 0x21c
+    addr_hit1l = 0x230
+    addr_hit1h = 0x234
+    addr_req0l = 0x248
+    addr_req0h = 0x24c
+    addr_req1l = 0x260
+    addr_req1h = 0x264
 
     node_t = np.uint32
     label_t = np.uint8
@@ -288,7 +289,8 @@ def subiso(test, path):
             ol.subgraphIsomorphism_0.write(addr_qv, querygraph_v)
             ol.subgraphIsomorphism_0.write(addr_qe, querygraph_e)
             ol.subgraphIsomorphism_0.write(addr_de, datagraph_e)
-            ol.subgraphIsomorphism_0.write(addr_dyn_space, dynfifo_space)
+            ol.subgraphIsomorphism_0.write(addr_dyn_spacel, dynfifo_space)
+            ol.subgraphIsomorphism_0.write(addr_dyn_spaceh, dynfifo_space >> 32)
 
             mem_counter = 0;
             mem_counter += FIFO.nbytes
@@ -301,7 +303,7 @@ def subiso(test, path):
                   f" use {((hashtable_spaceused / MEM.nbytes) * 100):.2f}%,"
                   f" bloom use {((bloom_spaceused / BLOOM.nbytes) * 100):.2f}%."
                   f" {dynfifo_space} lines available in fifo.", flush=True)
-            
+
             if (hashtable_spaceused <= MEM.nbytes and bloom_spaceused <= BLOOM.nbytes):
                 power = []
                 start = perf_counter()
@@ -316,8 +318,9 @@ def subiso(test, path):
 #                checkpoint = end_preprocess
 
                 while (not (ol.subgraphIsomorphism_0.read(0x00) & 0x2)):
+# while (not (ol.subgraphIsomorphism_0.read(addr_res_ctrl))):
                     with open("/sys/class/hwmon/hwmon2/power1_input") as f_input:
-                        power.append(int(f_input.read()))
+                       power.append(int(f_input.read()))
                     curr_time = perf_counter()
                     if (curr_time - start) > time_limit:
                         print("Failed", flush=True)
@@ -345,7 +348,11 @@ def subiso(test, path):
                 end_subiso = perf_counter()
 #                print(end_preprocess - start, flush=True)
                 print(end_subiso - start, flush=True)
+# for i in range(0, 640, 4):
+# print(f"{hex(i)}: {ol.subgraphIsomorphism_0.read(i)}")
+
                 print(f"{np.mean(power)}nW")
+                print(f"overflow: {ol.subgraphIsomorphism_0.read(addr_dyn_ovf)}")
                 resl = ol.subgraphIsomorphism_0.read(addr_resl)
                 resh = ol.subgraphIsomorphism_0.read(addr_resh)
                 tot_time = end_subiso - start
@@ -459,7 +466,6 @@ def subiso(test, path):
                 #empty = empty * 2
                 #print(f"Assembly empty        {empty} cc, {(empty * 100 / cycles):.2f}%", file=fres)
                 #print(f"Cycles: {cycles}", file=fres)
-                print(ol.subgraphIsomorphism_0.read(addr_dyn_fifo))
 #
 #                if c == int(querytuple[1]):
 #                    print("OK, solutions: ", c, sep="", flush=True)

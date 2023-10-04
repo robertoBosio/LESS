@@ -1384,45 +1384,58 @@ mwj_filter(hls::stream<assembly_tuple_t>& stream_tuple_in,
 }
 
 void
-mwj_assembly(const unsigned short nQueryVer,
+mwj_assembly(row_t* m_axi,
+             const unsigned short nQueryVer,
+             const unsigned int n_candidate,
+             const unsigned int start_candidate,
              hls::stream<assembly_set_t>& stream_inter_in,
              hls::stream<sol_node_t<vertex_t>>& stream_sol_in,
-             hls::stream<ap_uint<V_ID_W>>& stream_batch,
-             hls::stream<bool>& stream_batch_end,
              hls::stream<bool> streams_stop[STOP_S],
              hls::stream<ap_uint<V_ID_W>>& stream_partial_out,
-#if COUNT_ONLY
-             long unsigned int& result
-#else
-             hls::stream<T_NODE>& result
-#endif
-)
+             long unsigned int& result)
 {
   const ap_uint<V_ID_W> MASK_NEW_SOLUTION = (1UL << (V_ID_W - 1));
   const ap_uint<V_ID_W> MASK_END_EXTENSION = (1UL << (V_ID_W - 2));
   const ap_uint<V_ID_W> STOP_NODE = ~0;
   ap_uint<V_ID_W> curQV;
   assembly_set_t tuple_in;
-  bool last_start;
   unsigned long partial_sol = 0;
   // bool token_new_start;
-  T_NODE node;
   sol_node_t<vertex_t> vertex;
+  unsigned long int counter = 0;
+  ap_uint<32> nodes_read = 0;
 
-#if COUNT_ONLY
-  unsigned long int counter{ 0 };
-#endif
-
-  last_start = stream_batch_end.read();
-  last_start = stream_batch_end.read();
-  // token_new_start = false;
-  stream_partial_out.write(stream_batch.read() | MASK_NEW_SOLUTION);
-  /* False extension for single node solutions */
-  stream_partial_out.write(0 | MASK_END_EXTENSION);
-  
-  partial_sol++;
 ASSEMBLY_TASK_LOOP:
-  while (true) {
+  do {
+    if (partial_sol == 0) {
+
+      // Test if there are some node from start batch
+      if (nodes_read < n_candidate) {
+        // token_new_start = true;
+        // row_t row = m_axi[nodes_read >> 2];
+        // for (int g = 0; g < 4; g++, nodes_read++) {
+        //   if (nodes_read < n_candidate) {
+        //     ap_uint<2> word_select = nodes_read.range(1, 0);
+        //     ap_uint<V_ID_W> node = row.range((V_ID_W << word_select) - 1, V_ID_W << word_select);
+        //     stream_partial_out.write(node | MASK_NEW_SOLUTION);
+
+        //     /* False extension for single node solutions */
+        //     stream_partial_out.write(0 | MASK_END_EXTENSION);
+        //     partial_sol++;
+        //   }
+          row_t row = m_axi[start_candidate + nodes_read];
+          ap_uint<V_ID_W> node = row.range(V_ID_W - 1, 0);
+          stream_partial_out.write(node | MASK_NEW_SOLUTION);
+
+          /* False extension for single node solutions */
+          stream_partial_out.write(0 | MASK_END_EXTENSION);
+          partial_sol++;
+          nodes_read++;
+      } else {
+        stream_partial_out.write(STOP_NODE);
+      }
+    }
+
     tuple_in = stream_inter_in.read();
     if (tuple_in.stop){
       break;
@@ -1446,7 +1459,6 @@ ASSEMBLY_TASK_LOOP:
 
       /* Write in the correct stream */
       if (curQV == nQueryVer - 1) {
-#if COUNT_ONLY
         // if (!last_start && token_new_start){
         //     last_start = stream_batch_end.read();
         //     token_new_start = false;
@@ -1459,18 +1471,7 @@ ASSEMBLY_TASK_LOOP:
         // }
         // f << vToVerify << std::endl;
         counter++;
-#else
-      ASSEMBLY_WRITE_FINAL_LOOP:
-        for (int g = 0; g < curQV; g++) {
-          node.data = curEmb[g];
-          node.last = false;
-          node.keep = ~0;
-          result.write(node);
-        }
-        node.data = vToVerify;
-        node.last = false;
-        node.keep = ~0;
-        result.write(node);
+#if STORE_MAPPINGS
 #endif
       } else {
         // token_new_start = true;
@@ -1488,236 +1489,14 @@ ASSEMBLY_TASK_LOOP:
     // Last batch of a set
     partial_sol--;
 
-    if (partial_sol == 0) {
-#if DEBUG_STATS
-      debug::miss_indexing++;
-#endif
+  } while (true);
 
-      // Test if there are some node from start batch
-      if (!last_start) {
-        last_start = stream_batch_end.read();
-        // token_new_start = true;
-        stream_partial_out.write(stream_batch.read() | MASK_NEW_SOLUTION);
-
-        /* False extension for single node solutions */
-        stream_partial_out.write(0 | MASK_END_EXTENSION);
-        partial_sol++;
-        // stream_req.write(true);
-      } else {
-        stream_partial_out.write(STOP_NODE);
-      }
-    }
-  }
-
-#if COUNT_ONLY
   /* Write in output number of results */
-  result += counter;
-#else
-  /* Write last node */
-  node.data = 0;
-  node.last = true;
-  node.keep = ~0;
-  result.write(node);
-#endif
+  result = counter;
   for (int g = 0; g < STOP_S; g++) {
 #pragma HLS unroll
     streams_stop[g].write(true);
   }
-}
-
-template<size_t LKP3_HASH_W, size_t MAX_HASH_W, size_t FULL_HASH_W>
-void
-mwj_batch(const unsigned char hash1_w,
-          AdjHT* hTables,
-          QueryVertex* qVertices,
-          ap_uint<DDR_W>* htb_buf,
-
-          hls::stream<bool>& stream_batch_end,
-          hls::stream<ap_uint<V_ID_W> >& stream_batch)
-{
-    ap_uint<8> tableIndex {0};
-    ap_uint<32> minSize = (1UL << 32) - 1;
-    ap_uint<32> minStart, minOff;
-    ap_uint<8 + 1 + V_ID_W> minData;
-    ap_uint<V_ID_W * 2> edge;
-    ap_uint<V_ID_W> vertex, vertexCheck;
-    ap_uint<V_ID_W> set[MAX_CL];
-    ap_uint<MAX_HASH_W> hash_buff, hash_new;
-    unsigned char set_counter = 0;
-    bool flag_buff = false;
-    bool flag_new = true;
-    hash_buff = hash_new = 0;
-    // unsigned int rm_start = 0;
-
-PROPOSE_TBINDEXING_LOOP:
-    for(int g = 0; g < qVertices[0].numTablesIndexing; g++){
-        tableIndex = qVertices[0].tables_indexing[g];
-
-        if (hTables[tableIndex].n_edges < minSize){
-            minSize = hTables[tableIndex].n_edges;
-            minOff = hTables[tableIndex].start_edges;
-            minStart = 0;
-            minData.range(7, 0) = tableIndex;
-            minData.clear(8);
-            minData.range(V_ID_W + 8, 9) = 0;
-        }
-    }
-    
-    unsigned int rowstart = minOff + (minStart >> (DDR_BIT - E_W));
-    unsigned int rowend = minOff + (minSize >> (DDR_BIT - E_W));
-    unsigned int window_right = minSize.range((DDR_BIT - E_W) - 1, 0) + 
-        (rowend - rowstart) * EDGE_ROW;
-    unsigned int cnt = 0;
-
-PROPOSE_READ_MIN_INDEXING_LOOP:
-    for (unsigned int g = 0; g <= rowend - rowstart; g++){
-        row_t row = htb_buf[rowstart + g];
-        for (unsigned int i = 0; i < EDGE_ROW; i++, cnt++){
-#pragma HLS unroll
-            if (cnt < window_right){
-                edge = row.range((1UL << E_W) - 1, 0);
-                vertex = edge.range(V_ID_W * 2 - 1, V_ID_W);
-                ap_uint<LKP3_HASH_W> hash_out;
-                xf::database::details::hashlookup3_core<V_ID_W>(
-                        vertex,
-                        hash_out);
-                hash_new = hash_out.range(MAX_HASH_W - 1, 0);
-                hash_new = hash_new.range(hash1_w - 1, 0);
-
-                if (flag_buff && hash_buff == hash_new){
-                    flag_new = true;
-EXTRACT_BAGTOSET_SETCHECKER_LOOP:
-                    for(int nSet = 0; nSet < set_counter; nSet++){
-                        if (vertex == set[nSet]){
-                            flag_new = false;
-                            break;
-                        }
-                    }
-                } else {
-                    flag_new = true;
-                    set_counter = 0;
-                }
-
-#ifndef __SYNTHESIS__
-                assert(set_counter < MAX_CL);
-#endif
-                if (flag_new) {
-                    set[set_counter++] = vertex;
-#if DEBUG_STATS
-                    debug::start_set++;
-#endif
-                    // unsigned int start_off = 0;
-                    // unsigned int end_off;
-                    // ap_uint<DDR_BIT - C_W> addr_inrow;
-                    // ap_uint<DDR_W> ram_row;
-                    // unsigned long addr_row;
-                    // ap_uint<64> addr_counter;
-                    // ap_uint<V_ID_W * 2> edge2;
-                    // ap_uint<V_ID_W> vertex2;
-                    // bool verified = true;
-
-                    // for (int t = 0; t < qVertices[0].numTablesIndexing; t++) {
-                    //     unsigned char tb_index = qVertices[0].tables_indexing[t];
-                    //     bool tb_verified = false;
-
-                    //     if (hash_buff != 0) {
-                    //         addr_counter = hash_new - 1;
-                    //         addr_counter <<= 5;
-                    //         addr_counter += (1UL << 5) - 1;
-
-                    //         /* Compute address of row storing the counter */
-                    //         addr_row = hTables[tb_index].start_offset +
-                    //                    (addr_counter >> (DDR_BIT - C_W));
-
-                    //         /* Compute address of data inside the row */
-                    //         addr_inrow =
-                    //           addr_counter.range((DDR_BIT - C_W) - 1, 0);
-
-                    //         /* Read the data */
-                    //         ram_row = htb_buf[addr_row];
-                    //         if (addr_inrow == 0) {
-                    //             start_off = ram_row.range((1UL << C_W) - 1, 0);
-                    //         } else if (addr_inrow == 1) {
-                    //             start_off =
-                    //               ram_row.range((2UL << C_W) - 1, 1UL << C_W);
-                    //         } else if (addr_inrow == 2) {
-                    //             start_off =
-                    //               ram_row.range((3UL << C_W) - 1, 2UL << C_W);
-                    //         } else {
-                    //             start_off =
-                    //               ram_row.range((4UL << C_W) - 1, 3UL << C_W);
-                    //         }
-                    //     }
-
-                    //     addr_counter = hash_new;
-                    //     addr_counter <<= 5;
-                    //     addr_counter += (1UL << 5) - 1;
-
-                    //     /* Compute address of row storing the counter */
-                    //     addr_row = hTables[tb_index].start_offset +
-                    //                (addr_counter >> (DDR_BIT - C_W));
-
-                    //     /* Compute address of data inside the row */
-                    //     addr_inrow = addr_counter.range((DDR_BIT - C_W) - 1, 0);
-
-                    //     /* Read the data */
-                    //     ram_row = htb_buf[addr_row];
-                    //     if (addr_inrow == 0) {
-                    //         end_off = ram_row.range((1UL << C_W) - 1, 0);
-                    //     } else if (addr_inrow == 1) {
-                    //         end_off =
-                    //           ram_row.range((2UL << C_W) - 1, 1UL << C_W);
-                    //     } else if (addr_inrow == 2) {
-                    //         end_off =
-                    //           ram_row.range((3UL << C_W) - 1, 2UL << C_W);
-                    //     } else {
-                    //         end_off =
-                    //           ram_row.range((4UL << C_W) - 1, 3UL << C_W);
-                    //     }
-
-                    //     unsigned int rowstart2 = hTables[tb_index].start_edges +
-                    //                              (start_off >> (DDR_BIT - E_W));
-                    //     unsigned int rowend2 = hTables[tb_index].start_edges +
-                    //                            (end_off >> (DDR_BIT - E_W));
-
-                    //     for (unsigned int s = 0; s <= rowend2 - rowstart2;
-                    //          s++) {
-                    //         row_t rowss = htb_buf[rowstart2 + s];
-                    //         for (unsigned int i2 = 0; i2 < E_W; i2++) {
-                    //             edge2 = rowss.range((1UL << E_W) - 1, 0);
-                    //             vertex2 = edge2.range(V_ID_W * 2 - 1, V_ID_W);
-                    //             if (vertex == vertex2) {
-                    //               tb_verified = true;
-                    //             }
-                    //             rowss >>= (1UL << E_W);
-                    //         }
-                    //     }
-                    //     verified = verified && tb_verified;
-
-                    // }
-
-                    // if (verified) {
-                    //     stream_batch_end.write(false);
-                    //     stream_batch.write(vertex);
-                    // } else {
-                    //     rm_start++;
-                    // }
-                    stream_batch_end.write(false);
-                    stream_batch.write(vertex);
-                }
-
-                hash_buff = hash_new;
-                flag_buff = true;
-            }
-            row >>= (1UL << E_W);
-        }
-    }
-
-#if DEBUG_STATS
-    debug::batch_reads += ceil((rowend - rowstart) / 16.0);
-    // std::cout << rm_start << " removed\n";
-#endif
-    stream_batch_end.write(true);
 }
 
 // template <typename T_BLOOM,
@@ -1780,46 +1559,39 @@ verifycache_wrapper(AdjHT* hTables,
   htb_buf.stop();
 }
 
-template <typename T_BLOOM,
-          size_t BLOOM_LOG,
-          size_t K_FUN_LOG,
-          size_t LKP3_HASH_W,
-          size_t MAX_HASH_W,
-          size_t FULL_HASH_W>
-void multiwayJoin(
-    ap_uint<DDR_W> *htb_buf0,
-    ap_uint<DDR_W> *htb_buf1,
-    ap_uint<DDR_W> *htb_buf2,
-    T_BLOOM *bloom_p,
-    row_t *res_buf,
-    AdjHT *hTables0,
-    AdjHT *hTables1,
-    QueryVertex *qVertices0,
-    const unsigned short nQueryVer,
-    const unsigned char hash1_w,
-    const unsigned char hash2_w,
-    const unsigned long dynfifo_space,
-    unsigned int &dynfifo_overflow,
-    hls::stream< ap_uint<V_ID_W> > &stream_batch,
-    hls::stream<bool> &stream_batch_end,
-
-#if COUNT_ONLY
-    long unsigned int &result
-#else
-    hls::stream<T_NODE> &result
-#endif
-)
+template<typename T_BLOOM,
+         size_t BLOOM_LOG,
+         size_t K_FUN_LOG,
+         size_t LKP3_HASH_W,
+         size_t MAX_HASH_W,
+         size_t FULL_HASH_W>
+void
+multiwayJoin(ap_uint<DDR_W>* htb_buf0,
+             ap_uint<DDR_W>* htb_buf1,
+             ap_uint<DDR_W>* htb_buf2,
+             ap_uint<DDR_W>* htb_buf3,
+             T_BLOOM* bloom_p,
+             row_t* res_buf,
+             AdjHT* hTables0,
+             AdjHT* hTables1,
+             QueryVertex* qVertices,
+             const unsigned int n_candidate,
+             const unsigned int start_candidate,
+             const unsigned short nQueryVer,
+             const unsigned char hash1_w,
+             const unsigned char hash2_w,
+             const unsigned long dynfifo_space,
+             unsigned int& dynfifo_overflow,
+             long unsigned int& result)
 {
 #pragma HLS STABLE variable=htb_buf0
 #pragma HLS STABLE variable=htb_buf1
 #pragma HLS STABLE variable=htb_buf2
+#pragma HLS STABLE variable=htb_buf3
 #pragma HLS STABLE variable=bloom_p
 #pragma HLS STABLE variable=hTables0
 #pragma HLS STABLE variable=hTables1
-#pragma HLS STABLE variable=qVertices0
-#pragma HLS STABLE variable=nQueryVer
-#pragma HLS STABLE variable=hash1_w
-#pragma HLS STABLE variable=hash2_w
+#pragma HLS STABLE variable=qVertices
 
 #pragma HLS DATAFLOW
 
@@ -1998,7 +1770,7 @@ void multiwayJoin(
                 p0_stream_sol);
 
     mwj_edgebuild<LKP3_HASH_W, MAX_HASH_W, FULL_HASH_W>(hash1_w,
-                                       qVertices0,
+                                       qVertices,
                                        p0_stream_sol,
                                        e_stream_tuple,
                                        e_stream_sol);
@@ -2028,7 +1800,7 @@ void multiwayJoin(
     mwj_tuplebuild<PROPOSE_BATCH_LOG, LKP3_HASH_W, MAX_HASH_W, FULL_HASH_W>(
       hash1_w,
       hash2_w,
-      qVertices0,
+      qVertices,
       sb_stream_set,
       t_stream_tuple,
       t_stream_sol);
@@ -2039,11 +1811,12 @@ void multiwayJoin(
     verifycache_wrapper<PROPOSE_BATCH_LOG>(
       hTables1, htb_cache, bb_merge_stream_tuple, v_stream_tuple);
 
-    mwj_assembly(nQueryVer,
+    mwj_assembly(htb_buf3,
+                 nQueryVer,
+                 n_candidate,
+                 start_candidate,
                  f_stream_set,
                  f_stream_sol,
-                 stream_batch,
-                 stream_batch_end,
                  streams_stop,
                  a_stream_sol,
                  result);
@@ -2073,7 +1846,7 @@ void multiwayJoin(
 
     std::thread mwj_edgebuild_t(mwj_edgebuild<LKP3_HASH_W, MAX_HASH_W, FULL_HASH_W>,
                                 hash1_w,
-                                qVertices0,
+                                qVertices,
                                 std::ref(p0_stream_sol),
                                 std::ref(e_stream_tuple),
                                 std::ref(e_stream_sol));
@@ -2112,7 +1885,7 @@ void multiwayJoin(
       mwj_tuplebuild<PROPOSE_BATCH_LOG, LKP3_HASH_W, MAX_HASH_W, FULL_HASH_W>,
       hash1_w,
       hash2_w,
-      qVertices0,
+      qVertices,
       std::ref(sb_stream_set),
       std::ref(t_stream_tuple),
       std::ref(t_stream_sol));
@@ -2131,16 +1904,16 @@ void multiwayJoin(
         std::ref(bb_merge_stream_tuple),
         std::ref(v_stream_tuple));
 
-    std::thread mwj_assembly_t(
-        mwj_assembly,
-        nQueryVer,
-        std::ref(f_stream_set),
-        std::ref(f_stream_sol),
-        std::ref(stream_batch),
-        std::ref(stream_batch_end),
-        std::ref(streams_stop),
-        std::ref(a_stream_sol),
-        std::ref(result));
+    std::thread mwj_assembly_t(mwj_assembly,
+                               htb_buf3,
+                               nQueryVer,
+                               n_candidate,
+                               start_candidate,
+                               std::ref(f_stream_set),
+                               std::ref(f_stream_sol),
+                               std::ref(streams_stop),
+                               std::ref(a_stream_sol),
+                               std::ref(result));
 
     mwj_propose_t.join();
     mwj_edgebuild_t.join();
@@ -2169,76 +1942,6 @@ void multiwayJoin(
 #endif /* __SYNTHESIS__ */
 }
 
-template <typename T_BLOOM,
-        size_t BLOOM_LOG, 
-        size_t K_FUN_LOG,
-        size_t LKP3_HASH_W,
-        size_t MAX_HASH_W,
-        size_t FULL_HASH_W>
-void multiwayJoinWrap(
-        ap_uint<DDR_W> *htb_buf0,
-        ap_uint<DDR_W> *htb_buf1,
-        ap_uint<DDR_W> *htb_buf2,
-        ap_uint<DDR_W> *htb_buf3,
-        T_BLOOM *bloom_p,
-        row_t *res_buf,
-        AdjHT *hTables0,
-        AdjHT *hTables1,
-        QueryVertex *qVertices0,
-        QueryVertex *qVertices1,
-        const unsigned short nQueryVer,
-        const unsigned char hash1_w,
-        const unsigned char hash2_w,
-        const unsigned long dynfifo_space,
-        unsigned int &dynfifo_overflow,
-
-#if COUNT_ONLY
-        long unsigned int &result
-#else
-        hls::stream<T_NODE> &result
-#endif
-        )
-{
-#pragma HLS STABLE variable=htb_buf0
-#pragma HLS STABLE variable=htb_buf1
-#pragma HLS STABLE variable=htb_buf2
-#pragma HLS STABLE variable=htb_buf3
-#pragma HLS STABLE variable=hTables0
-#pragma HLS STABLE variable=hTables1
-#pragma HLS STABLE variable=qVertices0
-#pragma HLS STABLE variable=qVertices1
-#pragma HLS STABLE variable=nQueryVer
-#pragma HLS STABLE variable=hash1_w
-#pragma HLS STABLE variable=hash2_w
-// #pragma HLS dataflow
-
-    // hls::stream<bool, S_D> stream_batch_end("Stream batch end");
-    // hls::stream<ap_uint<V_ID_W>, S_D> stream_batch("Stream batch");
-    hls::stream<bool, 4000> stream_batch_end("Stream batch end");
-    hls::stream<ap_uint<V_ID_W>, 4000> stream_batch("Stream batch");
-
-    mwj_batch<LKP3_HASH_W, MAX_HASH_W, FULL_HASH_W>(
-      hash1_w, hTables0, qVertices0, htb_buf0, stream_batch_end, stream_batch);
-
-    multiwayJoin<T_BLOOM, BLOOM_LOG, K_FUN_LOG, LKP3_HASH_W, MAX_HASH_W, FULL_HASH_W>(
-      htb_buf1,
-      htb_buf2,
-      htb_buf3,
-      bloom_p,
-      res_buf,
-      hTables0,
-      hTables1,
-      qVertices1,
-      nQueryVer,
-      hash1_w,
-      hash2_w,
-      dynfifo_space,
-      dynfifo_overflow,
-      stream_batch,
-      stream_batch_end,
-      result);
-}
-
 #if SOFTWARE_PREPROC
 void
 subgraphIsomorphism(row_t htb_buf0[HASHTABLES_SPACE],
@@ -2251,9 +1954,10 @@ subgraphIsomorphism(row_t htb_buf0[HASHTABLES_SPACE],
                     const unsigned char hash1_w,
                     const unsigned char hash2_w,
                     const unsigned long dynfifo_space,
-                    unsigned int &dynfifo_overflow,
-                    QueryVertex qVertices0[MAX_QV],
-                    QueryVertex qVertices1[MAX_QV],
+                    unsigned int& dynfifo_overflow,
+                    const unsigned int n_candidate,
+                    const unsigned int start_candidate,
+                    QueryVertex qVertices[MAX_QV],
                     AdjHT hTables0[MAX_TB],
                     AdjHT hTables1[MAX_TB],
 
@@ -2279,14 +1983,7 @@ subgraphIsomorphism(row_t htb_buf0[HASHTABLES_SPACE],
                     unsigned long& p_reqs0,
                     unsigned long& p_reqs1,
 #endif /* DEBUG_INTERFACE */
-
-#if COUNT_ONLY
-                    long unsigned int& result
-#else
-        hls::stream<T_NODE> &result
-#endif /* COUNT_ONLY */
-
-)
+                    long unsigned int& result)
 {
 
 #pragma HLS INTERFACE mode=m_axi port=htb_buf0 bundle=prop_batch \
@@ -2338,11 +2035,7 @@ subgraphIsomorphism(row_t htb_buf0[HASHTABLES_SPACE],
 #pragma HLS INTERFACE mode=s_axilite port=p_reqs1
 #endif /* DEBUG_INTERFACE */
 
-#if COUNT_ONLY
 #pragma HLS INTERFACE mode=s_axilite port=result
-#else
-#pragma HLS INTERFACE mode=axis port=result
-#endif /* COUNT_ONLY */
 
     unsigned long localResult = 0;
 #if DEBUG_STATS
@@ -2355,27 +2048,28 @@ subgraphIsomorphism(row_t htb_buf0[HASHTABLES_SPACE],
     ap_wait();
 #endif /* DEBUG_INTERFACE */
 
-    multiwayJoinWrap<bloom_t,
-                     BLOOM_FILTER_WIDTH,
-                     K_FUNCTIONS,
-                     HASH_LOOKUP3_BIT,
-                     MAX_HASH_TABLE_BIT,
-                     64>(htb_buf0,
-                         htb_buf1,
-                         htb_buf2,
-                         htb_buf3,
-                         bloom_p,
-                         res_buf,
-                         hTables0,
-                         hTables1,
-                         qVertices0,
-                         qVertices1,
-                         numQueryVert,
-                         hash1_w,
-                         hash2_w,
-                         dynfifo_space,
-                         dynfifo_overflow,
-                         localResult);
+    multiwayJoin<bloom_t,
+                 BLOOM_FILTER_WIDTH,
+                 K_FUNCTIONS,
+                 HASH_LOOKUP3_BIT,
+                 MAX_HASH_TABLE_BIT,
+                 64>(htb_buf0,
+                     htb_buf1,
+                     htb_buf2,
+                     htb_buf3,
+                     bloom_p,
+                     res_buf,
+                     hTables0,
+                     hTables1,
+                     qVertices,
+                     n_candidate,
+                     start_candidate,
+                     numQueryVert,
+                     hash1_w,
+                     hash2_w,
+                     dynfifo_space,
+                     dynfifo_overflow,
+                     localResult);
 
     ap_wait();
     result = localResult;
@@ -2420,7 +2114,7 @@ subgraphIsomorphism(row_t htb_buf0[HASHTABLES_SPACE],
                     const unsigned char hash1_w,
                     const unsigned char hash2_w,
                     const unsigned long dynfifo_space,
-                    unsigned int &dynfifo_overflow,
+                    unsigned int& dynfifo_overflow,
 
 #if DEBUG_INTERFACE
                     volatile unsigned int& debif_endpreprocess,
@@ -2444,14 +2138,7 @@ subgraphIsomorphism(row_t htb_buf0[HASHTABLES_SPACE],
                     unsigned long& p_reqs0,
                     unsigned long& p_reqs1,
 #endif /* DEBUG_INTERFACE */
-
-#if COUNT_ONLY
-                    long unsigned int& result
-#else
-                     hls::stream<T_NODE>& result
-#endif /* COUNT_ONLY */
-
-)
+                    long unsigned int& result)
 {
 
 #pragma HLS INTERFACE mode=m_axi port=htb_buf0 bundle=prop_batch \
@@ -2505,19 +2192,17 @@ subgraphIsomorphism(row_t htb_buf0[HASHTABLES_SPACE],
 #pragma HLS INTERFACE mode=s_axilite port=p_reqs1
 #endif /* DEBUG_INTERFACE */
 
-#if COUNT_ONLY
 #pragma HLS INTERFACE mode=s_axilite port=result
-#else
-#pragma HLS INTERFACE mode=axis port=result
-#endif /* COUNT_ONLY */
 
 #if DEBUG_STATS
     debug::init();
 #endif /* DEBUG_STATS */
 
-    QueryVertex qVertices0[MAX_QV], qVertices1[MAX_QV];
+    QueryVertex qVertices[MAX_QV];
     AdjHT hTables0[MAX_TB], hTables1[MAX_TB];
     unsigned long localResult = 0;
+    unsigned int n_candidate = 0;
+    unsigned int start_candidate = 0;
 
     preprocess<row_t,
                bloom_t,
@@ -2534,19 +2219,21 @@ subgraphIsomorphism(row_t htb_buf0[HASHTABLES_SPACE],
                DEFAULT_STREAM_DEPTH,
                HASHTABLES_SPACE,
                MAX_QUERY_VERTICES,
-               MAX_TABLES>(res_buf,
-                           htb_buf0,
-                           bloom_p,
-                           qVertices0,
-                           qVertices1,
-                           hTables0,
-                           hTables1,
-                           dynfifo_space,
-                           numQueryVert,
-                           numQueryEdges,
-                           numDataEdges,
-                           hash1_w,
-                           hash2_w);
+               MAX_TABLES,
+               MAX_COLLISIONS>(res_buf,
+                               htb_buf0,
+                               bloom_p,
+                               qVertices,
+                               hTables0,
+                               hTables1,
+                               dynfifo_space,
+                               n_candidate,
+                               start_candidate,
+                               numQueryVert,
+                               numQueryEdges,
+                               numDataEdges,
+                               hash1_w,
+                               hash2_w);
 
 #if DEBUG_INTERFACE
     ap_wait();
@@ -2555,27 +2242,28 @@ subgraphIsomorphism(row_t htb_buf0[HASHTABLES_SPACE],
     ap_wait();
 #endif /* DEBUG_INTERFACE */
 
-    multiwayJoinWrap<bloom_t,
-                     BLOOM_FILTER_WIDTH,
-                     K_FUNCTIONS,
-                     HASH_LOOKUP3_BIT,
-                     MAX_HASH_TABLE_BIT,
-                     64>(htb_buf0,
-                         htb_buf1,
-                         htb_buf2,
-                         htb_buf3,
-                         bloom_p,
-                         res_buf,
-                         hTables0,
-                         hTables1,
-                         qVertices0,
-                         qVertices1,
-                         numQueryVert,
-                         hash1_w,
-                         hash2_w,
-                         dynfifo_space,
-                         dynfifo_overflow,
-                         localResult);
+    multiwayJoin<bloom_t,
+                 BLOOM_FILTER_WIDTH,
+                 K_FUNCTIONS,
+                 HASH_LOOKUP3_BIT,
+                 MAX_HASH_TABLE_BIT,
+                 64>(htb_buf0,
+                     htb_buf1,
+                     htb_buf2,
+                     htb_buf3,
+                     bloom_p,
+                     res_buf,
+                     hTables0,
+                     hTables1,
+                     qVertices,
+                     n_candidate,
+                     start_candidate,
+                     numQueryVert,
+                     hash1_w,
+                     hash2_w,
+                     dynfifo_space,
+                     dynfifo_overflow,
+                     localResult);
 
     ap_wait();
     result = localResult;

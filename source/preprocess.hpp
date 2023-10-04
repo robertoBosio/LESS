@@ -65,8 +65,7 @@ template<size_t MAX_QV,
          size_t MAX_LABELS>
 void
 buildTableDescriptors(row_t* edge_buf,
-                      QueryVertex* qVertices0,
-                      QueryVertex* qVertices1,
+                      QueryVertex* qVertices,
                       ap_uint<8> labelToTable[MAX_LABELS][MAX_LABELS],
                       unsigned short& numTables,
                       unsigned short numQueryVert,
@@ -147,35 +146,25 @@ CREATE_TABDESC_LOOP:
 
       /* Linking vertices to tables */
       if (dirEdge) {
-        unsigned char idx = qVertices0[nodeSrcPos].numTablesIndexing;
-        qVertices0[nodeSrcPos].tables_indexing[idx] = index - 1;
-        qVertices1[nodeSrcPos].tables_indexing[idx] = index - 1;
-        qVertices0[nodeSrcPos].numTablesIndexing++;
-        qVertices1[nodeSrcPos].numTablesIndexing++;
+        unsigned char idx = qVertices[nodeSrcPos].numTablesIndexing;
+        qVertices[nodeSrcPos].tables_indexing[idx] = index - 1;
+        qVertices[nodeSrcPos].numTablesIndexing++;
 
-        idx = qVertices0[nodeDstPos].numTablesIndexed;
-        qVertices0[nodeDstPos].tables_indexed[idx] = index - 1;
-        qVertices0[nodeDstPos].vertex_indexing[idx] = nodeSrcPos;
-        qVertices1[nodeDstPos].tables_indexed[idx] = index - 1;
-        qVertices1[nodeDstPos].vertex_indexing[idx] = nodeSrcPos;
+        idx = qVertices[nodeDstPos].numTablesIndexed;
+        qVertices[nodeDstPos].tables_indexed[idx] = index - 1;
+        qVertices[nodeDstPos].vertex_indexing[idx] = nodeSrcPos;
 
-        qVertices0[nodeDstPos].numTablesIndexed++;
-        qVertices1[nodeDstPos].numTablesIndexed++;
+        qVertices[nodeDstPos].numTablesIndexed++;
       } else {
-        unsigned char idx = qVertices0[nodeDstPos].numTablesIndexing;
-        qVertices0[nodeDstPos].tables_indexing[idx] = index - 1;
-        qVertices1[nodeDstPos].tables_indexing[idx] = index - 1;
-        qVertices0[nodeDstPos].numTablesIndexing++;
-        qVertices1[nodeDstPos].numTablesIndexing++;
+        unsigned char idx = qVertices[nodeDstPos].numTablesIndexing;
+        qVertices[nodeDstPos].tables_indexing[idx] = index - 1;
+        qVertices[nodeDstPos].numTablesIndexing++;
 
-        idx = qVertices0[nodeSrcPos].numTablesIndexed;
-        qVertices0[nodeSrcPos].tables_indexed[idx] = index - 1;
-        qVertices0[nodeSrcPos].vertex_indexing[idx] = nodeDstPos;
-        qVertices1[nodeSrcPos].tables_indexed[idx] = index - 1;
-        qVertices1[nodeSrcPos].vertex_indexing[idx] = nodeDstPos;
+        idx = qVertices[nodeSrcPos].numTablesIndexed;
+        qVertices[nodeSrcPos].tables_indexed[idx] = index - 1;
+        qVertices[nodeSrcPos].vertex_indexing[idx] = nodeDstPos;
 
-        qVertices0[nodeSrcPos].numTablesIndexed++;
-        qVertices1[nodeSrcPos].numTablesIndexed++;
+        qVertices[nodeSrcPos].numTablesIndexed++;
       }
     }
 }
@@ -1108,6 +1097,103 @@ STORE_OFFSETS_BLOCK_LOOP:
     }
 }
 
+template<size_t LKP3_HASH_W,
+         size_t MAX_HASH_W,
+         size_t FULL_HASH_W,
+         size_t NODE_W,
+         size_t EDGE_LOG,
+         size_t ROW_LOG,
+         size_t MAX_CL>
+void
+mwj_batch(const unsigned char hash1_w,
+          unsigned int &n_candidate,
+          const unsigned int start_address,
+          AdjHT* hTables,
+          QueryVertex* qVertices,
+          row_t* htb_buf)
+{
+  ap_uint<8> tableIndex{ 0 };
+  ap_uint<32> minSize = (1UL << 32) - 1;
+  ap_uint<32> minOff;
+  ap_uint<NODE_W * 2> edge;
+  ap_uint<NODE_W> vertex, vertexCheck;
+  ap_uint<NODE_W> set[MAX_CL];
+  ap_uint<MAX_HASH_W> hash_buff, hash_new;
+  unsigned char set_counter = 0;
+  bool flag_buff = false;
+  bool flag_new = true;
+  hash_buff = hash_new = 0;
+  // unsigned int rm_start = 0;
+
+PROPOSE_TBINDEXING_LOOP:
+  for (int g = 0; g < qVertices[0].numTablesIndexing; g++) {
+    tableIndex = qVertices[0].tables_indexing[g];
+
+    if (hTables[tableIndex].n_edges < minSize) {
+      minSize = hTables[tableIndex].n_edges;
+      minOff = hTables[tableIndex].start_edges;
+    }
+  }
+
+  unsigned int rowstart = minOff;
+  unsigned int rowend = minOff + (minSize >> (ROW_LOG - EDGE_LOG));
+  unsigned int window_right =
+    minSize.range((ROW_LOG - EDGE_LOG) - 1, 0) + (rowend - rowstart) << (ROW_LOG - EDGE_LOG);
+  unsigned int cnt = 0;
+  unsigned int address = start_address;
+  n_candidate = 0;
+PROPOSE_READ_MIN_INDEXING_LOOP:
+  for (unsigned int g = 0; g <= rowend - rowstart; g++) {
+    row_t row = htb_buf[rowstart + g];
+    for (unsigned int i = 0; i < EDGE_ROW; i++, cnt++) {
+#pragma HLS unroll
+      if (cnt < window_right) {
+        edge = row.range((1UL << EDGE_LOG) - 1, 0);
+        vertex = edge.range(NODE_W * 2 - 1, NODE_W);
+        ap_uint<LKP3_HASH_W> hash_out;
+        xf::database::details::hashlookup3_core<NODE_W>(vertex, hash_out);
+        hash_new = hash_out.range(MAX_HASH_W - 1, 0);
+        hash_new = hash_new.range(hash1_w - 1, 0);
+
+        if (flag_buff && hash_buff == hash_new) {
+          flag_new = true;
+        EXTRACT_BAGTOSET_SETCHECKER_LOOP:
+          for (int nSet = 0; nSet < set_counter; nSet++) {
+            if (vertex == set[nSet]) {
+              flag_new = false;
+              break;
+            }
+          }
+        } else {
+          flag_new = true;
+          set_counter = 0;
+        }
+
+#ifndef __SYNTHESIS__
+        assert(set_counter < MAX_CL);
+#endif
+        if (flag_new) {
+          set[set_counter++] = vertex;
+#if DEBUG_STATS
+          debug::start_set++;
+#endif
+          htb_buf[address++] = vertex;
+          n_candidate++;
+        }
+
+        hash_buff = hash_new;
+        flag_buff = true;
+      }
+      row >>= (1UL << EDGE_LOG);
+    }
+  }
+
+#if DEBUG_STATS
+    debug::batch_reads += ceil((rowend - rowstart) / 16.0);
+    // std::cout << rm_start << " removed\n";
+#endif
+}
+
     /* Reads two times the data graph and fills the data stuctures */
 template<typename T_DDR,
          typename T_BLOOM,
@@ -1123,19 +1209,23 @@ template<typename T_DDR,
          size_t LAB_W,
          size_t STREAM_D,
          size_t HTB_SPACE,
-         size_t MAX_LABELS>
+         size_t MAX_LABELS,
+         size_t MAX_CL>
 void
 fillTablesURAM(row_t* edge_buf,
-            T_DDR* htb_buf,
-            T_DDR* bloom_p,
-            AdjHT* hTables0,
-            AdjHT* hTables1,
-            const ap_uint<8> labelToTable[MAX_LABELS][MAX_LABELS],
-            const unsigned long dynfifo_space,
-            const unsigned long numDataEdges,
-            const unsigned short numTables,
-            const unsigned char hash1_w,
-            const unsigned char hash2_w)
+               T_DDR* htb_buf,
+               T_DDR* bloom_p,
+               QueryVertex* qVertices,
+               AdjHT* hTables0,
+               AdjHT* hTables1,
+               const ap_uint<8> labelToTable[MAX_LABELS][MAX_LABELS],
+               const unsigned long dynfifo_space,
+               unsigned int &n_candidate,
+               unsigned int &start_candidate,
+               const unsigned long numDataEdges,
+               const unsigned short numTables,
+               const unsigned char hash1_w,
+               const unsigned char hash2_w)
 {
 
     /* Resetting portion of memory dedicated to counters
@@ -1235,11 +1325,23 @@ STORE_EDGES_POINTER_LOOP:
                K_FUN_LOG,
                STREAM_D>(bloom_p, htb_buf, hTables0, numTables, hash1_w);
 
+    mwj_batch<LKP3_HASH_W,
+              MAX_HASH_W,
+              FULL_HASH_W,
+              NODE_W,
+              EDGE_LOG,
+              ROW_LOG,
+              MAX_CL>(
+      hash1_w, n_candidate, start_addr, hTables0, qVertices, htb_buf);
+
+    start_candidate = start_addr;
 #ifndef __SYNTHESIS__
     end_addr = start_addr * (1UL << (ROW_LOG - 3)) + ((numTables * ((1 << hash1_w) + 1)) << (BLOOM_LOG - 3));
     std::cout << "Occupied " << end_addr << " bytes, " << 
         end_addr / (float)(1UL << 20) << " MB. " << std::endl;
 #endif
+
+    
 
 #if DEBUG_STATS
     constexpr size_t K_FUN = (1UL << K_FUN_LOG);
@@ -1278,16 +1380,18 @@ template<typename T_DDR,
          size_t STREAM_D,
          size_t HTB_SPACE,
          size_t MAX_QV,
-         size_t MAX_TB>
+         size_t MAX_TB,
+         size_t MAX_CL>
 void
 preprocess(row_t* edge_buf,
            T_DDR* htb_buf,
            T_DDR* bloom_p,
-           QueryVertex* qVertices0,
-           QueryVertex* qVertices1,
+           QueryVertex* qVertices,
            AdjHT* hTables0,
            AdjHT* hTables1,
            const unsigned long dynfifo_space,
+           unsigned int &n_candidate,
+           unsigned int &start_candidate,
            unsigned short numQueryVert,
            unsigned short numQueryEdges,
            unsigned long numDataEdges,
@@ -1308,8 +1412,7 @@ INITIALIZE_LABELTOTABLE_LOOP:
 
     buildTableDescriptors<MAX_QV, MAX_TB, NODE_W, LAB_W, MAX_LABELS>(
       &edge_buf[dynfifo_space + numDataEdges],
-      qVertices0,
-      qVertices1,
+      qVertices,
       labelToTable,
       numTables,
       numQueryVert,
@@ -1329,18 +1432,22 @@ INITIALIZE_LABELTOTABLE_LOOP:
                    LAB_W,
                    STREAM_D,
                    HTB_SPACE,
-                   MAX_LABELS>(edge_buf,
+                   MAX_LABELS,
+                   MAX_CL>(edge_buf,
                                htb_buf,
                                bloom_p,
+                               qVertices,
                                hTables0,
                                hTables1,
                                labelToTable,
                                dynfifo_space,
+                               n_candidate,
+                               start_candidate,
                                numDataEdges,
                                numTables,
                                hash1_w,
                                hash2_w);
-    
+
 }
 
 #pragma GCC diagnostic pop

@@ -327,10 +327,11 @@ int main()
             res_expected = stol(testEntry.golden);
 
 #if SOFTWARE_PREPROC
-            QueryVertex qVertices0[MAX_QUERY_VERTICES];
-            QueryVertex qVertices1[MAX_QUERY_VERTICES];
+            QueryVertex qVertices[MAX_QUERY_VERTICES];
             AdjHT hTables0[MAX_TABLES];
             AdjHT hTables1[MAX_TABLES];
+            unsigned int n_candidate = 0;
+            unsigned int start_candidate = 0;
 
             preprocess<row_t,
                        bloom_t,
@@ -347,19 +348,21 @@ int main()
                        DEFAULT_STREAM_DEPTH,
                        HASHTABLES_SPACE,
                        MAX_QUERY_VERTICES,
-                       MAX_TABLES>(res_buf,
-                                   htb_buf,
-                                   bloom_p,
-                                   qVertices0,
-                                   qVertices1,
-                                   hTables0,
-                                   hTables1,
-                                   dynfifo_space,
-                                   nQV,
-                                   nQE,
-                                   nDE,
-                                   h1,
-                                   h2);
+                       MAX_TABLES,
+                       MAX_COLLISIONS>(res_buf,
+                                       htb_buf,
+                                       bloom_p,
+                                       qVertices,
+                                       hTables0,
+                                       hTables1,
+                                       dynfifo_space,
+                                       n_candidate,
+                                       start_candidate,
+                                       nQV,
+                                       nQE,
+                                       nDE,
+                                       h1,
+                                       h2);
 
             subgraphIsomorphism(
                 htb_buf,
@@ -373,8 +376,9 @@ int main()
                 h2,
                 dynfifo_space,
                 dynfifo_overflow,
-                qVertices0,
-                qVertices1,
+                n_candidate,
+                start_candidate,
+                qVertices,
                 hTables0,
                 hTables1,
 #if DEBUG_INTERFACE
