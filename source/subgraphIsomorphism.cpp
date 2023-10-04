@@ -1799,6 +1799,7 @@ void multiwayJoin(
     const unsigned char hash1_w,
     const unsigned char hash2_w,
     const unsigned long dynfifo_space,
+    unsigned int &dynfifo_overflow,
     hls::stream< ap_uint<V_ID_W> > &stream_batch,
     hls::stream<bool> &stream_batch_end,
 
@@ -1827,22 +1828,18 @@ void multiwayJoin(
         ("Propose - partial solution");
     
     /* Edgebuild data out */
-    hls_thread_local hls::stream<sol_node_t<vertex_t>, MAX_QV> e_stream_sol
+    hls_thread_local hls::stream<sol_node_t<vertex_t>, MAX_QV * 3> e_stream_sol
         ("Edgebuild - partial solution");
     hls_thread_local hls::stream<findmin_tuple_t, S_D> e_stream_tuple
         ("Edgebuild - tuples");
     
     /* Findmin data out */
-    hls_thread_local hls::stream<sol_node_t<vertex_t>, MAX_QV> p_stream_sol
-        ("Findmin - partial solution");
     hls_thread_local hls::stream<bloom_t, 4>
       p_stream_filter[1UL << K_FUNCTIONS];
-    hls_thread_local hls::stream<readmin_counter_tuple_t, S_D> p_stream_tuple
-        ("Findmin - tuples");
+    hls_thread_local hls::stream<readmin_counter_tuple_t, S_D> p_stream_tuple(
+      "Findmin - tuples");
 
     /* Readmin counter data out */    
-    hls_thread_local hls::stream<sol_node_t<vertex_t>, MAX_QV> rc_stream_sol
-        ("Readmin counter - partial solution");
     hls_thread_local hls::stream<bloom_t, 4>
       rc_stream_filter[1UL << K_FUNCTIONS];
     hls_thread_local hls::stream<readmin_edge_tuple_t, S_D> rc_stream_tuple
@@ -1865,38 +1862,28 @@ void multiwayJoin(
       sb_stream_set("Sequencebuild - set nodes");
 
     /* Tuplebuild data out */    
-    hls_thread_local hls::stream<sol_node_t<vertex_t>, MAX_QV> t_stream_sol
+    hls_thread_local hls::stream<sol_node_t<vertex_t>, MAX_QV * 7> t_stream_sol
         ("Tuplebuild - partial solution");
     hls_thread_local hls::stream<intersect_tuple_t, S_D> t_stream_tuple[2];
     
     /* Intersect data out */    
-    hls_thread_local hls::stream<sol_node_t<vertex_t>, MAX_QV> i_stream_sol
-        ("Intersect - partial solution");
     hls_thread_local hls::stream<offset_tuple_t, S_D> i_stream_tuple
         ("Intersect - tuples");
     
     /* Offset data out */    
     hls_thread_local hls::stream<split_tuple_t, S_D> o_stream_tuple[BLOCKBUILD_NUM];
-    hls_thread_local hls::stream<sol_node_t<vertex_t>, MAX_QV> o_stream_sol
-        ("Offset - partial solution");
     
     /* Blockbuild data out */    
-    hls_thread_local hls::stream<sol_node_t<vertex_t>, MAX_QV> bb_stream_sol
-        ("Blockbuild - partial solution");
     hls_thread_local hls::stream<verify_tuple_t, S_D> bb_stream_tuple[BLOCKBUILD_NUM];
 
     /* Blockbuild merge data out */
     hls_thread_local hls::stream<verify_tuple_t, S_D> bb_merge_stream_tuple;
     
     /* Verify data out */
-    hls_thread_local hls::stream<sol_node_t<vertex_t>, MAX_QV> v_stream_sol
-        ("Verify - partial solution");
     hls_thread_local hls::stream<compact_tuple_t, S_D> v_stream_tuple
         ("Verify - tuples");
     
     /* Compact data out */
-    hls_thread_local hls::stream<sol_node_t<vertex_t>, MAX_QV> c_stream_sol
-        ("Compact - partial solution");
     hls_thread_local hls::stream<assembly_tuple_t, S_D> c_stream_tuple
         ("Compact - tuples");
 
@@ -1937,55 +1924,25 @@ void multiwayJoin(
                  RESULTS_SPACE>      /* memory words available */
       (res_buf,
        dynfifo_space,
+       dynfifo_overflow,
        a_stream_sol,
        dyn_stream_sol,
        streams_stop[STOP_S - 2],
        streams_stop[STOP_S - 1]);
-
-    hls_thread_local hls::task mwj_bypass_sol_findmin(mwj_bypass_sol,
-                                                      e_stream_sol,
-                                                      p_stream_sol);
-
-    hls_thread_local hls::task mwj_bypass_sol_readmin_counter(
-      mwj_bypass_sol,
-      p_stream_sol,
-      rc_stream_sol);
 
     hls_thread_local hls::task mwj_bypassfilter_t(
       mwj_bypassfilter,
       p_stream_filter,
       rc_stream_filter);
 
-    hls_thread_local hls::task mwj_bypass_sol_readmin_edge(mwj_bypass_sol,
-                                                           rc_stream_sol,
-                                                           re_stream_sol);
+    hls_thread_local hls::task mwj_bypass_sol0(
+      mwj_bypass_sol, e_stream_sol, re_stream_sol);
 
     hls_thread_local hls::task mwj_sequencebuild_t(
       mwj_sequencebuild<PROPOSE_BATCH_LOG>, h_stream_set, sb_stream_set);
 
-    hls_thread_local hls::task mwj_bypass_sol_intersect(mwj_bypass_sol,
-                                                        t_stream_sol,
-                                                        i_stream_sol);
-
-    hls_thread_local hls::task mwj_bypass_sol_offset(mwj_bypass_sol,
-                                                     i_stream_sol,
-                                                     o_stream_sol);
-
-    hls_thread_local hls::task mwj_bypass_sol_split(mwj_bypass_sol,
-                                                    o_stream_sol,
-                                                    bb_stream_sol);
-
-    hls_thread_local hls::task mwj_bypass_sol_verify(mwj_bypass_sol,
-                                                     bb_stream_sol,
-                                                     v_stream_sol);
-
-    hls_thread_local hls::task mwj_bypass_sol_compact(mwj_bypass_sol,
-                                                      v_stream_sol,
-                                                      c_stream_sol);
-
-    hls_thread_local hls::task mwj_bypass_sol_filter(mwj_bypass_sol,
-                                                     c_stream_sol,
-                                                     f_stream_sol);
+    hls_thread_local hls::task mwj_bypass_sol1(
+      mwj_bypass_sol, t_stream_sol, f_stream_sol);
 
     hls_thread_local hls::task mwj_offset_t(
       mwj_offset<BLOCKBUILD_NUM>, i_stream_tuple, o_stream_tuple);
@@ -2233,6 +2190,7 @@ void multiwayJoinWrap(
         const unsigned char hash1_w,
         const unsigned char hash2_w,
         const unsigned long dynfifo_space,
+        unsigned int &dynfifo_overflow,
 
 #if COUNT_ONLY
         long unsigned int &result
@@ -2252,10 +2210,12 @@ void multiwayJoinWrap(
 #pragma HLS STABLE variable=nQueryVer
 #pragma HLS STABLE variable=hash1_w
 #pragma HLS STABLE variable=hash2_w
-#pragma HLS dataflow
+// #pragma HLS dataflow
 
-    hls::stream<bool, S_D> stream_batch_end("Stream batch end");
-    hls::stream<ap_uint<V_ID_W>, S_D> stream_batch("Stream batch");
+    // hls::stream<bool, S_D> stream_batch_end("Stream batch end");
+    // hls::stream<ap_uint<V_ID_W>, S_D> stream_batch("Stream batch");
+    hls::stream<bool, 4000> stream_batch_end("Stream batch end");
+    hls::stream<ap_uint<V_ID_W>, 4000> stream_batch("Stream batch");
 
     mwj_batch<LKP3_HASH_W, MAX_HASH_W, FULL_HASH_W>(
       hash1_w, hTables0, qVertices0, htb_buf0, stream_batch_end, stream_batch);
@@ -2273,39 +2233,60 @@ void multiwayJoinWrap(
       hash1_w,
       hash2_w,
       dynfifo_space,
+      dynfifo_overflow,
       stream_batch,
       stream_batch_end,
       result);
 }
 
 #if SOFTWARE_PREPROC
-void subgraphIsomorphism(
-        row_t htb_buf0[HASHTABLES_SPACE],
-        row_t htb_buf1[HASHTABLES_SPACE],
-        row_t htb_buf2[HASHTABLES_SPACE],
-        row_t htb_buf3[HASHTABLES_SPACE],
-        row_t bloom_p[BLOOM_SPACE],
-        row_t res_buf[RESULTS_SPACE],
-        const unsigned short numQueryVert,
-        const unsigned char hash1_w,
-        const unsigned char hash2_w,
-        const unsigned long dynfifo_space,
-        QueryVertex qVertices0[MAX_QV], 
-        QueryVertex qVertices1[MAX_QV],
-        AdjHT hTables0[MAX_TB],
-        AdjHT hTables1[MAX_TB],
+void
+subgraphIsomorphism(row_t htb_buf0[HASHTABLES_SPACE],
+                    row_t htb_buf1[HASHTABLES_SPACE],
+                    row_t htb_buf2[HASHTABLES_SPACE],
+                    row_t htb_buf3[HASHTABLES_SPACE],
+                    row_t bloom_p[BLOOM_SPACE],
+                    row_t res_buf[RESULTS_SPACE],
+                    const unsigned short numQueryVert,
+                    const unsigned char hash1_w,
+                    const unsigned char hash2_w,
+                    const unsigned long dynfifo_space,
+                    unsigned int &dynfifo_overflow,
+                    QueryVertex qVertices0[MAX_QV],
+                    QueryVertex qVertices1[MAX_QV],
+                    AdjHT hTables0[MAX_TB],
+                    AdjHT hTables1[MAX_TB],
 
 #if DEBUG_INTERFACE
-        volatile unsigned int &debif_endpreprocess,
+                    volatile unsigned int& debif_endpreprocess,
+                    unsigned long& p_propose_empty,
+                    unsigned long& p_edgebuild_empty,
+                    unsigned long& p_findmin_empty,
+                    unsigned long& p_readmin_counter_empty,
+                    unsigned long& p_readmin_edge_empty,
+                    unsigned long& p_homomorphism_empty,
+                    unsigned long& p_batchbuild_empty,
+                    unsigned long& p_tuplebuild_empty,
+                    unsigned long& p_intersect_empty,
+                    unsigned long& p_offset_empty,
+                    unsigned long& p_split_empty,
+                    unsigned long& p_verify_empty,
+                    unsigned long& p_compact_empty,
+                    unsigned long& p_filter_empty,
+                    unsigned long& p_assembly_empty,
+                    unsigned long& p_hits0,
+                    unsigned long& p_hits1,
+                    unsigned long& p_reqs0,
+                    unsigned long& p_reqs1,
 #endif /* DEBUG_INTERFACE */
 
 #if COUNT_ONLY
-        long unsigned int &result
+                    long unsigned int& result
 #else
         hls::stream<T_NODE> &result
 #endif /* COUNT_ONLY */
 
-        )
+)
 {
 
 #pragma HLS INTERFACE mode=m_axi port=htb_buf0 bundle=prop_batch \
@@ -2321,7 +2302,7 @@ void subgraphIsomorphism(
     latency=1
 #pragma HLS INTERFACE mode=m_axi port=res_buf bundle=fifo \
     max_widen_bitwidth=128 max_read_burst_length=32 max_write_burst_length=32 \
-    latency=20
+    latency=1
 #pragma HLS INTERFACE mode=m_axi port=bloom_p bundle=bloom \
     max_widen_bitwidth=128 latency=20
 
@@ -2331,10 +2312,30 @@ void subgraphIsomorphism(
 #pragma HLS INTERFACE mode=s_axilite port=hash1_w
 #pragma HLS INTERFACE mode=s_axilite port=hash2_w
 #pragma HLS INTERFACE mode=s_axilite port=dynfifo_space
+#pragma HLS INTERFACE mode=s_axilite port=dynfifo_overflow
 #pragma HLS INTERFACE mode=s_axilite port=return
 
 #if DEBUG_INTERFACE
 #pragma HLS INTERFACE mode=s_axilite port=debif_endpreprocess
+#pragma HLS INTERFACE mode=s_axilite port=p_propose_empty
+#pragma HLS INTERFACE mode=s_axilite port=p_edgebuild_empty
+#pragma HLS INTERFACE mode=s_axilite port=p_findmin_empty
+#pragma HLS INTERFACE mode=s_axilite port=p_readmin_counter_empty
+#pragma HLS INTERFACE mode=s_axilite port=p_readmin_edge_empty
+#pragma HLS INTERFACE mode=s_axilite port=p_tuplebuild_empty
+#pragma HLS INTERFACE mode=s_axilite port=p_intersect_empty
+#pragma HLS INTERFACE mode=s_axilite port=p_verify_empty
+#pragma HLS INTERFACE mode=s_axilite port=p_assembly_empty
+#pragma HLS INTERFACE mode=s_axilite port=p_homomorphism_empty
+#pragma HLS INTERFACE mode=s_axilite port=p_batchbuild_empty
+#pragma HLS INTERFACE mode=s_axilite port=p_offset_empty 
+#pragma HLS INTERFACE mode=s_axilite port=p_split_empty
+#pragma HLS INTERFACE mode=s_axilite port=p_compact_empty
+#pragma HLS INTERFACE mode=s_axilite port=p_filter_empty 
+#pragma HLS INTERFACE mode=s_axilite port=p_hits0
+#pragma HLS INTERFACE mode=s_axilite port=p_hits1
+#pragma HLS INTERFACE mode=s_axilite port=p_reqs0
+#pragma HLS INTERFACE mode=s_axilite port=p_reqs1
 #endif /* DEBUG_INTERFACE */
 
 #if COUNT_ONLY
@@ -2373,9 +2374,30 @@ void subgraphIsomorphism(
                          hash1_w,
                          hash2_w,
                          dynfifo_space,
+                         dynfifo_overflow,
                          localResult);
 
+    ap_wait();
     result = localResult;
+    p_propose_empty = propose_empty;
+    p_edgebuild_empty = edgebuild_empty;
+    p_findmin_empty = findmin_empty;
+    p_readmin_counter_empty = readmin_counter_empty;
+    p_readmin_edge_empty = readmin_edge_empty;
+    p_homomorphism_empty = homomorphism_empty;
+    p_batchbuild_empty = batchbuild_empty;
+    p_tuplebuild_empty = tuplebuild_empty;
+    p_intersect_empty = intersect_empty;
+    p_offset_empty = offset_empty;
+    p_split_empty = split_empty;
+    p_verify_empty = verify_empty;
+    p_compact_empty = compact_empty;
+    p_filter_empty = filter_empty;
+    p_assembly_empty = assembly_empty;
+    p_hits0 = hits0;
+    p_hits1 = hits1;
+    p_reqs0 = reqs0;
+    p_reqs1 = reqs1;
 
 #if DEBUG_STATS
     debug::print(hash1_w, hash2_w);
@@ -2398,6 +2420,7 @@ subgraphIsomorphism(row_t htb_buf0[HASHTABLES_SPACE],
                     const unsigned char hash1_w,
                     const unsigned char hash2_w,
                     const unsigned long dynfifo_space,
+                    unsigned int &dynfifo_overflow,
 
 #if DEBUG_INTERFACE
                     volatile unsigned int& debif_endpreprocess,
@@ -2456,6 +2479,7 @@ subgraphIsomorphism(row_t htb_buf0[HASHTABLES_SPACE],
 #pragma HLS INTERFACE mode=s_axilite port=hash1_w
 #pragma HLS INTERFACE mode=s_axilite port=hash2_w
 #pragma HLS INTERFACE mode=s_axilite port=dynfifo_space
+#pragma HLS INTERFACE mode=s_axilite port=dynfifo_overflow
 #pragma HLS INTERFACE mode=s_axilite port=return
 
 #if DEBUG_INTERFACE
@@ -2526,6 +2550,7 @@ subgraphIsomorphism(row_t htb_buf0[HASHTABLES_SPACE],
 
 #if DEBUG_INTERFACE
     ap_wait();
+    dynfifo_overflow = 0;
     debif_endpreprocess = 1;
     ap_wait();
 #endif /* DEBUG_INTERFACE */
@@ -2549,6 +2574,7 @@ subgraphIsomorphism(row_t htb_buf0[HASHTABLES_SPACE],
                          hash1_w,
                          hash2_w,
                          dynfifo_space,
+                         dynfifo_overflow,
                          localResult);
 
     ap_wait();

@@ -14,7 +14,6 @@
 #include "QueryVertex.hpp"
 #include "Trie.hpp"
 #include "hash_lookup3.hpp"
-#include "cache.h"
 
 #if DEBUG_STATS
 #include "debug.hpp"

@@ -82,9 +82,10 @@ MMU_fast(hls::stream<DATA_T>& in_stream,
          hls::stream<DATA_T>& store_stream,
          hls::stream<DATA_T>& load_stream,
          const unsigned int ddr_space,
+         unsigned int &overflow_s,
          hls::stream<bool>& stop_req_stream)
 {
-  const DATA_T OVERFLOW_NODE = (~0) - 1;
+  const DATA_T STOP_NODE = ~0;
   enum State_slow
   {
     bypass = 0, /* Shifting data from in to out stream in local buffer */
@@ -94,7 +95,7 @@ MMU_fast(hls::stream<DATA_T>& in_stream,
     stall_ddr = 3, /* Same as stall, but with data in DDR */
     overflow = 4   /* Overflow */
   };
-  typedef ap_uint<2> state_type;
+  typedef ap_uint<3> state_type;
   state_type state = bypass;
 
   unsigned int p_counter{ DATA_PER_WORD };
@@ -196,7 +197,8 @@ MMU_fast(hls::stream<DATA_T>& in_stream,
         break;
 
       case overflow:
-        out_stream.write(OVERFLOW_NODE);
+        overflow_s = 1;
+        out_stream.write(STOP_NODE);
         if (p_counter == 0){
           state = stall_ddr;
         } else {
@@ -333,6 +335,7 @@ template<typename DATA_T,
 void dynfifo_init(
         DDR_WORD_T mem[DDR_WORDS],
         const unsigned long space,
+        unsigned int &overflow,
         hls::stream<DATA_T> &in_stream,
         hls::stream<DATA_T> &out_stream,
         hls::stream<bool> &stop_req_stream_fast,
@@ -365,6 +368,7 @@ void dynfifo_init(
       store_stream,
       load_stream,
       (unsigned int)(space << 2),
+      overflow,
       stop_req_stream_fast);
 
     MMU_slow<DDR_WORD_T, FIFO_SIZE_P, DDR_WORDS, BURST_SIZE>(
@@ -381,6 +385,7 @@ void dynfifo_init(
                            std::ref(store_stream),
                            std::ref(load_stream),
                            (unsigned int)(space << 2),
+                           std::ref(overflow),
                            std::ref(stop_req_stream_fast));
 
     std::thread mmu_slow_t(

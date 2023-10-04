@@ -70,7 +70,7 @@
 #define COUNT_ONLY          1
 #define UNDIRECTED          1
 #define DEBUG_INTERFACE     1
-#define SOFTWARE_PREPROC    0
+#define SOFTWARE_PREPROC    1
 #define CACHE_ENABLE        1
 
 #ifndef __SYNTHESIS__

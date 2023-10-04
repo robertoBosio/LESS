@@ -62,6 +62,8 @@ void load_datagraphs(
     dynfifo_space = numDataEdges + MAX_QDATA;
     dynfifo_space = dynfifo_space - (dynfifo_space % BURST_SIZE) + BURST_SIZE;
     dynfifo_space = RESULT_SPACE - dynfifo_space;
+
+    dynfifo_space = 0;
     edge_buf_p = dynfifo_space;
 
     /* Store data labels */
@@ -224,6 +226,7 @@ int main()
     std::map<std::string, std::vector<TestEntry>> test;
     std::string prev_datagraph;
     unsigned long counters[19];
+    unsigned int dynfifo_overflow;
 
     char cwd[100];
     if (getcwd(cwd, sizeof(cwd)) != NULL)
@@ -318,7 +321,7 @@ int main()
 
             std::cout << "  Querygraph: " << testEntry.querygraph << ", Golden: " << testEntry.golden
                       << ", H1: " << testEntry.h1 << ", H2: " << testEntry.h2 << std::endl;
-
+            std::cout << "Words for dynamic fifo: " << dynfifo_space << std::endl;
             unsigned char h1 = stoi(testEntry.h1);
             unsigned char h2 = stoi(testEntry.h2);
             res_expected = stol(testEntry.golden);
@@ -344,13 +347,14 @@ int main()
                        DEFAULT_STREAM_DEPTH,
                        HASHTABLES_SPACE,
                        MAX_QUERY_VERTICES,
-                       MAX_TABLES>(&res_buf[dynfifo_space],
+                       MAX_TABLES>(res_buf,
                                    htb_buf,
                                    bloom_p,
                                    qVertices0,
                                    qVertices1,
                                    hTables0,
                                    hTables1,
+                                   dynfifo_space,
                                    nQV,
                                    nQE,
                                    nDE,
@@ -368,12 +372,32 @@ int main()
                 h1,
                 h2,
                 dynfifo_space,
+                dynfifo_overflow,
                 qVertices0,
                 qVertices1,
                 hTables0,
                 hTables1,
 #if DEBUG_INTERFACE
                 debug_endpreprocess_s,
+                counters[0],
+                counters[1],
+                counters[2],
+                counters[3],
+                counters[4],
+                counters[5],
+                counters[6],
+                counters[7],
+                counters[8],
+                counters[9],
+                counters[10],
+                counters[11],
+                counters[12],
+                counters[13],
+                counters[14],
+                counters[15],
+                counters[16],
+                counters[17],
+                counters[18],
 #endif
                 result);
 
@@ -391,6 +415,7 @@ int main()
                 h1,
                 h2,
                 dynfifo_space,
+                dynfifo_overflow,
 #if DEBUG_INTERFACE
                 debug_endpreprocess_s,
                 counters[0],
