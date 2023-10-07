@@ -63,7 +63,7 @@ void load_datagraphs(
     dynfifo_space = dynfifo_space - (dynfifo_space % BURST_SIZE) + BURST_SIZE;
     dynfifo_space = RESULT_SPACE - dynfifo_space;
 
-    dynfifo_space = 0;
+    dynfifo_space = 10;
     edge_buf_p = dynfifo_space;
 
     /* Store data labels */

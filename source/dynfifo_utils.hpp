@@ -98,12 +98,13 @@ MMU_fast(hls::stream<DATA_T>& in_stream,
   typedef ap_uint<3> state_type;
   state_type state = bypass;
 
-  unsigned int p_counter{ DATA_PER_WORD };
-  unsigned int ddr_data{ 0 };
+  unsigned int p_counter = DATA_PER_WORD;
+  unsigned int ddr_data = 0;
   DATA_T buff_r;
   DATA_T buff_w;
-  bool flagbuff_r{ false };
-  bool flagbuff_w{ false };
+  bool flagbuff_r = false;
+  bool flagbuff_w = false;
+  bool overflowed = false;
 
   while (true) {
 #pragma HLS pipeline II = 1
@@ -146,10 +147,6 @@ MMU_fast(hls::stream<DATA_T>& in_stream,
           p_counter--;
           ddr_data++;
           flagbuff_r = false;
-          if (p_counter == 0) {
-            state = stall_ddr;
-          }
-
         }
 
         if (flagbuff_w) {
@@ -167,8 +164,10 @@ MMU_fast(hls::stream<DATA_T>& in_stream,
 
         /* Set as next node for the output stream the stop node, as an
          * overflow has occured */
-        if (ddr_data > ddr_space) {
+        if (ddr_data > ddr_space && !overflowed) {
           state = overflow;
+        } else if (p_counter == 0) {
+          state = stall_ddr;
         }
 
         break;
@@ -198,6 +197,7 @@ MMU_fast(hls::stream<DATA_T>& in_stream,
 
       case overflow:
         overflow_s = 1;
+        overflowed = true;
         out_stream.write(STOP_NODE);
         if (p_counter == 0){
           state = stall_ddr;

@@ -33,8 +33,7 @@ def subiso(test, path):
   
     HASHTABLES_SPACE = 1 << 28  #~ 256 MB
     BLOOM_SPACE  = 1 << 27  #~ 128 MB
-# RESULTS_SPACE = 1 << 29  #~ 512 MB
-    RESULTS_SPACE = 1 << 28  #~ 256 MB
+    RESULTS_SPACE = 1 << 29  #~ 512 MB
     MAX_QDATA = 300
     BURST_SIZE = 32
     nfile = 0
@@ -51,14 +50,12 @@ def subiso(test, path):
     byte_edge = 5
    
     ## AXILITE register addresses ##
-    # addr_graph = 0x10
     addr_mem0 = 0x10
     addr_mem1 = 0x1c
     addr_mem2 = 0x28
     addr_mem3 = 0x34
     addr_bloom = 0x40
     addr_fifo = 0x4c
-    
     addr_qv = 0x58
     addr_qe = 0x60
     addr_de = 0x68
@@ -73,7 +70,6 @@ def subiso(test, path):
     addr_resl = 0x278
     addr_resh = 0x27c
     addr_res_ctrl = 0x280
-
     addr_hit0l = 0x218
     addr_hit0h = 0x21c
     addr_hit1l = 0x230
@@ -91,9 +87,6 @@ def subiso(test, path):
                        ('ldst', node_t)]) 
 
     ol = Overlay(path + "design_1.bit", download=False)
-    
-    Clocks._instance.PL_CLK_CTRLS[0].DIVISOR0=10
-    
     FIFO = allocate(shape=(int(RESULTS_SPACE/np.dtype(edge_t).itemsize),), dtype=edge_t)
     BLOOM = allocate(shape=(BLOOM_SPACE,), dtype=np.uint8)
     MEM = allocate(shape=(int(HASHTABLES_SPACE/np.dtype(node_t).itemsize),), dtype=node_t)
@@ -123,20 +116,7 @@ def subiso(test, path):
             line = fd.readline()
             letter, node, label, degree = line.split()
             datagraph_la[int(node)] = int(label)
-    
-#        print("Loading", data, "in DDR...", sep=" ", end = "", flush=True)
-#        start = perf_counter()
-#        for e in range(datagraph_e):
-#            line = fd.readline()
-#            letter, nodesrc, nodedst = line.split()
-#            nodesrc = int(nodesrc)
-#            nodedst = int(nodedst)
-#            FIFO[counter] = (nodesrc, nodedst, datagraph_la[nodesrc], datagraph_la[nodedst])
-#            counter = counter + 1
-#        end = perf_counter()
-#        print(" Done in ", end - start, "s", sep="", flush=True)
-
-
+        
         print(f"Loading {data} in DDR...", end="", flush=True)
         start = time.perf_counter()
 
@@ -156,15 +136,12 @@ def subiso(test, path):
 
         end = time.perf_counter()
         print(f" Done in {end - start:.2f} s", flush=True)
-
-
         fd.close()
         del datagraph_la
         
         for querytuple in test[data]:
             ol.download()
             Clocks._instance.PL_CLK_CTRLS[0].DIVISOR0=10
-            print(Clocks.fclk0_mhz)
 
             query = querytuple[0]
             
@@ -197,9 +174,6 @@ def subiso(test, path):
             #Taking as a starting node the one with highest degree 
             order.append(start_node)
             query_vertices.remove(start_node)
-            #for x in range(querygraph_v):
-            #    FIFO[counter] = (int(x), 0, 0, 0)
-            #    counter = counter + 1
             
             tablelist = []
             edge_list = []
@@ -213,8 +187,6 @@ def subiso(test, path):
                 adjacency_list[nodesrc].append(nodedst)
                 adjacency_list[nodedst].append(nodesrc)
                 edge_list.append((nodesrc, nodedst, labelsrc, labeldst))
-                #FIFO[counter] = (nodesrc, nodedst, labelsrc, labeldst)
-                #counter = counter + 1
                 
                 ## Counting number of tables for memory overflow check
                 if (nodesrc < nodedst):
@@ -261,23 +233,27 @@ def subiso(test, path):
             
             #hash1_w = int(querytuple[2])
             #hash2_w = int(querytuple[3])
-            #hash1_w = int(((datagraph_v * 4) / 3900000.0) + 12)
+
+            #Heuristic to compute hash table parameters
             hash1_w = int(0.4 * np.log(5*(10**7)*datagraph_e)) + 2
             hash2_w = int(min(max_degree + 1, 7))
-# print(order)
 
-            hashtable_spaceused = len(tablelist) * (2**hash1_w) * (2**hash2_w) * byte_counter
-            hashtable_spaceused += datagraph_e * byte_edge
-            bloom_spaceused = len(tablelist) * (2**hash1_w) * byte_bloom
             blocks = len(tablelist) * 2**(hash1_w + hash2_w - 14)
-
             while(blocks > 2048):
                 hash2_w -= 1
                 blocks = len(tablelist) * 2**(hash1_w + hash2_w - 14)
             
+            hashtable_spaceused = len(tablelist) * (2**hash1_w) * (2**hash2_w) * byte_counter
+            hashtable_spaceused += datagraph_e * byte_edge
+            while (hashtable_spaceused > MEM.nbytes):
+                hash2_w -= 1
+                hashtable_spaceused = len(tablelist) * (2**hash1_w) * (2**hash2_w) * byte_counter
+                hashtable_spaceused += datagraph_e * byte_edge
+
+            bloom_spaceused = len(tablelist) * (2**hash1_w) * byte_bloom
+            
             print(f"h1 {hash1_w}, h2 {hash2_w}, blocks: {blocks} max 2048")
             
-            # ol.subgraphIsomorphism_0.write(addr_graph, GRAPH_SPACE.device_address)
             ol.subgraphIsomorphism_0.write(addr_mem0, MEM.device_address)
             ol.subgraphIsomorphism_0.write(addr_mem1, MEM.device_address)
             ol.subgraphIsomorphism_0.write(addr_mem2, MEM.device_address)
@@ -310,15 +286,14 @@ def subiso(test, path):
 
                 #Start the kernel
                 ol.subgraphIsomorphism_0.write(0x00, 1)
-                # while (not(ol.subgraphIsomorphism_0.read(addr_preproc_ctrl))):
-                    # pass
+                while (not(ol.subgraphIsomorphism_0.read(addr_preproc_ctrl))):
+                    pass
 
-#                end_preprocess = perf_counter()
-#                print(end_preprocess - start, flush=True)
-#                checkpoint = end_preprocess
+                end_preprocess = perf_counter()
+                print(f"Preprocessing used {(end_preprocess - start):.3f}s.", flush=True)
 
-                while (not (ol.subgraphIsomorphism_0.read(0x00) & 0x2)):
 # while (not (ol.subgraphIsomorphism_0.read(addr_res_ctrl))):
+                while (not (ol.subgraphIsomorphism_0.read(0x00) & 0x2)):
                     with open("/sys/class/hwmon/hwmon2/power1_input") as f_input:
                        power.append(int(f_input.read()))
                     curr_time = perf_counter()
@@ -327,37 +302,17 @@ def subiso(test, path):
                         ol.subgraphIsomorphism_0.write(0x00, 0)
                         break
                     sleep(0.001)
-#                while (not (ol.subgraphIsomorphism_0.read(addr_res_ctrl))):
-#                    curr_time = perf_counter()
-#                    if (curr_time - end_preprocess) > time_limit:
-#                        print("Failed", flush=True)
-#                        ol.subgraphIsomorphism_0.write(0x00, 0)
-#                        break
-#                    else:
-#                        if (curr_time - checkpoint) > 10:
-#                            output = subprocess.run(["xmutil", "platformstats"], 
-#                                    stdout=subprocess.PIPE,
-#                                    text=True)
-#                            res = re.search("([0-9]+) mW", str(output))
-#                            print(res.group(1))
-#                            print(ol.subgraphIsomorphism_0.read(addr_dyn_fifo), ", ", curr_time - end_preprocess, "s", sep="", flush=True)
-#                            checkpoint = curr_time
-#                        else :
-#                            pass
-                end_preprocess = 0
+                
                 end_subiso = perf_counter()
-#                print(end_preprocess - start, flush=True)
-                print(end_subiso - start, flush=True)
-# for i in range(0, 640, 4):
-# print(f"{hex(i)}: {ol.subgraphIsomorphism_0.read(i)}")
-
-                print(f"{np.mean(power)}nW")
-                print(f"overflow: {ol.subgraphIsomorphism_0.read(addr_dyn_ovf)}")
+                overflow = ol.subgraphIsomorphism_0.read(addr_dyn_ovf)
                 resl = ol.subgraphIsomorphism_0.read(addr_resl)
                 resh = ol.subgraphIsomorphism_0.read(addr_resh)
-                tot_time = end_subiso - start
-                pre_time = end_preprocess - start
-                tot_time_bench = tot_time_bench + tot_time
+                if (overflow == 1):
+                    print(f"Query not solved due to overflow in partial result fifo.", flush=True)
+                else:
+                    print(f"Query solved in {(end_subiso - start):.3f}s, using in avg {np.mean(power):.3f}nW. Found {(resh << 32) | resl} matches.", flush=True)
+                
+                tot_time_bench = tot_time_bench + end_subiso
 
                 hit0l = ol.subgraphIsomorphism_0.read(addr_hit0l)
                 hit0h = ol.subgraphIsomorphism_0.read(addr_hit0h)
@@ -371,7 +326,7 @@ def subiso(test, path):
                       f"{os.path.basename(datagraph)},"
                       f"{hash1_w},{hash2_w}", 
                       f",{(np.mean(power)):.3f}",
-                      f",{tot_time:.3f}",
+                      f",{(end_subiso - start):.3f}",
                       f",{(hit0h << 32) | hit0l}",
                       f",{(req0h << 32) | req0l}",
                       f",{(hit1h << 32) | hit1l}",
