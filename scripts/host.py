@@ -214,7 +214,8 @@ def subiso(test, path):
             # Streaming the query order
             #order = [0,1,2,3,4,5]
             for x in range(querygraph_v):
-                FIFO[counter] = (order[x], 0, 0, 0)
+                #FIFO[counter] = (order[x], 0, 0, 0)
+                FIFO[counter] = (int(x), 0, 0, 0)
                 counter = counter + 1
             
             for e in range(querygraph_e):
@@ -231,12 +232,12 @@ def subiso(test, path):
             BLOOM.flush()
             FIFO.flush()
             
-            #hash1_w = int(querytuple[2])
-            #hash2_w = int(querytuple[3])
+            hash1_w = int(querytuple[2])
+            hash2_w = int(querytuple[3])
 
             #Heuristic to compute hash table parameters
-            hash1_w = int(0.4 * np.log(5*(10**7)*datagraph_e)) + 2
-            hash2_w = int(min(max_degree + 1, 7))
+            #hash1_w = int(0.4 * np.log(5*(10**7)*datagraph_e)) + 2
+            #hash2_w = int(min(max_degree + 1, 7))
 
             blocks = len(tablelist) * 2**(hash1_w + hash2_w - 14)
             while(blocks > 2048):
@@ -322,119 +323,126 @@ def subiso(test, path):
                 req0h = ol.subgraphIsomorphism_0.read(addr_req0h)
                 req1l = ol.subgraphIsomorphism_0.read(addr_req1l)
                 req1h = ol.subgraphIsomorphism_0.read(addr_req1h)
-                print(f"{os.path.basename(querygraph)},"
-                      f"{os.path.basename(datagraph)},"
-                      f"{hash1_w},{hash2_w}", 
-                      f",{(np.mean(power)):.3f}",
-                      f",{(end_subiso - start):.3f}",
-                      f",{(hit0h << 32) | hit0l}",
-                      f",{(req0h << 32) | req0l}",
-                      f",{(hit1h << 32) | hit1l}",
-                      f",{(req1h << 32) | req1l}",
-                      f",{(resh << 32) | resl}",
+# print(f"{os.path.basename(querygraph)},"
+# f"{os.path.basename(datagraph)},"
+# f"{hash1_w},{hash2_w}",
+# f",{(np.mean(power)):.3f}",
+# f",{(end_subiso - start):.3f}",
+# f",{(hit0h << 32) | hit0l}",
+# f",{(req0h << 32) | req0l}",
+# f",{(hit1h << 32) | hit1l}",
+# f",{(req1h << 32) | req1l}",
+# f",{(resh << 32) | resl}",
+# sep="",
+# file=fres)
+                print(f"{os.path.basename(querygraph)} "
+                      f"{os.path.basename(datagraph)} "
+                      f"h1: {hash1_w} h2: {hash2_w}", 
                       sep="",
                       file=fres)
                 fres.flush()
-                #cycles = int((tot_time - pre_time) * 290000000);
-                #empty = 0
-                #empty0 = ol.subgraphIsomorphism_0.read(0xb8);
-                #empty1 = ol.subgraphIsomorphism_0.read(0xbc);
-                #empty = (empty1 << 32) | empty0;
-                #print(f"Propose empty         {empty} cc, {(empty * 100 / cycles):.2f}%", file=fres)
-                #empty = 0
-                #empty0 = ol.subgraphIsomorphism_0.read(0xd0);
-                #empty1 = ol.subgraphIsomorphism_0.read(0xb4);
-                #empty = (empty1 << 32) | empty0;
-                #empty = empty * 2
-                #print(f"Edgebuild empty       {empty} cc, {(empty * 100 / cycles):.2f}%", file=fres)
-                #empty = 0
-                #empty0 = ol.subgraphIsomorphism_0.read(0xe8);
-                #empty1 = ol.subgraphIsomorphism_0.read(0xec);
-                #empty = (empty1 << 32) | empty0;
-                #empty = empty * 4
-                #print(f"Findmin empty         {empty} cc, {(empty * 100 / cycles):.2f}%", file=fres)
-                #empty = 0
-                #empty0 = ol.subgraphIsomorphism_0.read(0x100);
-                #empty1 = ol.subgraphIsomorphism_0.read(0x104);
-                #empty = (empty1 << 32) | empty0;
-                #empty = empty * 2
-                #print(f"Readmin counter empty {empty} cc, {(empty * 100 / cycles):.2f}%", file=fres)
-                #empty = 0
-                #empty0 = ol.subgraphIsomorphism_0.read(0x118);
-                #empty1 = ol.subgraphIsomorphism_0.read(0x11c);
-                #empty = (empty1 << 32) | empty0;
-                #empty = empty * 2
-                #print(f"Readmin edge empty    {empty} cc, {(empty * 100 / cycles):.2f}%", file=fres)
-                #empty = 0
-                #empty0 = ol.subgraphIsomorphism_0.read(0x130);
-                #empty1 = ol.subgraphIsomorphism_0.read(0x134);
-                #empty = (empty1 << 32) | empty0;
-                #empty = empty * 2
-                #print(f"Homomorphism empty    {empty} cc, {(empty * 100 / cycles):.2f}%", file=fres)
-                #empty = 0
-                #empty0 = ol.subgraphIsomorphism_0.read(0x148);
-                #empty1 = ol.subgraphIsomorphism_0.read(0x14c);
-                #empty = (empty1 << 32) | empty0;
-                #empty = empty * 2
-                #print(f"Batch build empty     {empty} cc, {(empty * 100 / cycles):.2f}%", file=fres)
-                #empty = 0
-                #empty0 = ol.subgraphIsomorphism_0.read(0x160);
-                #empty1 = ol.subgraphIsomorphism_0.read(0x164);
-                #empty = (empty1 << 32) | empty0;
-                #print(f"Tuplebuild empty      {empty} cc, {(empty * 100 / cycles):.2f}%", file=fres)
-                #empty = 0
-                #empty0 = ol.subgraphIsomorphism_0.read(0x178);
-                #empty1 = ol.subgraphIsomorphism_0.read(0x17c);
-                #empty = (empty1 << 32) | empty0;
-                #print(f"Intersect empty       {empty} cc, {(empty * 100 / cycles):.2f}%", file=fres)
-                #empty = 0
-                #empty0 = ol.subgraphIsomorphism_0.read(0x190);
-                #empty1 = ol.subgraphIsomorphism_0.read(0x194);
-                #empty = (empty1 << 32) | empty0;
-                #empty = empty
-                #print(f"Bypass filter empty          {empty} cc, {(empty * 100 / cycles):.2f}%", file=fres)
-                #empty = 0
-                #empty0 = ol.subgraphIsomorphism_0.read(0x1a8);
-                #empty1 = ol.subgraphIsomorphism_0.read(0x1ac);
-                #empty = (empty1 << 32) | empty0;
-                #empty = empty * 2
-                #print(f"Split empty           {empty} cc, {(empty * 100 / cycles):.2f}%", file=fres)
-                #empty = 0
-                #empty0 = ol.subgraphIsomorphism_0.read(0x1c0);
-                #empty1 = ol.subgraphIsomorphism_0.read(0x1c4);
-                #empty = (empty1 << 32) | empty0;
-                #print(f"Verify empty          {empty} cc, {(empty * 100 / cycles):.2f}%", file=fres)
-                #empty = 0
-                #empty0 = ol.subgraphIsomorphism_0.read(0x1d8);
-                #empty1 = ol.subgraphIsomorphism_0.read(0x1dc);
-                #empty = (empty1 << 32) | empty0;
-                #print(f"Compact empty         {empty} cc, {(empty * 100 / cycles):.2f}%", file=fres)
-                #empty = 0
-                #empty0 = ol.subgraphIsomorphism_0.read(0x1f0);
-                #empty1 = ol.subgraphIsomorphism_0.read(0x1f4);
-                #empty = (empty1 << 32) | empty0;
-                #print(f"Filter empty          {empty} cc, {(empty * 100 / cycles):.2f}%", file=fres)
-                #empty = 0
-                #empty0 = ol.subgraphIsomorphism_0.read(0x208);
-                #empty1 = ol.subgraphIsomorphism_0.read(0x20c);
-                #empty = (empty1 << 32) | empty0;
-                #empty = empty * 2
-                #print(f"Assembly empty        {empty} cc, {(empty * 100 / cycles):.2f}%", file=fres)
-                #print(f"Cycles: {cycles}", file=fres)
-#
-#                if c == int(querytuple[1]):
-#                    print("OK, solutions: ", c, sep="", flush=True)
-#                    print(f"{pre_time:.4f}", 
-#                          f"{tot_time:.4f}   OK\n",
-#                          sep='\n',
-#                          file=fres)
-#                else:
-#                    print("***** NO *****, expected: ", 
-#                          querytuple[1], "\tactual: ", c, sep="",  flush=True)
-#                    print(f"{pre_time:.4f}", 
-#                          f"{tot_time:.4f} **NO**\n",
-#                          sep='\n',
-#                          file=fres)
+                cycles = int((end_subiso - end_preprocess) * 290000000);
+                empty = 0
+                empty0 = ol.subgraphIsomorphism_0.read(0xb8);
+                empty1 = ol.subgraphIsomorphism_0.read(0xbc);
+                empty = (empty1 << 32) | empty0;
+                print(f"Propose empty         {empty} cc, {(empty * 100 / cycles):.2f}%", file=fres)
+                empty = 0
+                empty0 = ol.subgraphIsomorphism_0.read(0xd0);
+                empty1 = ol.subgraphIsomorphism_0.read(0xb4);
+                empty = (empty1 << 32) | empty0;
+                empty = empty * 2
+                print(f"Edgebuild empty       {empty} cc, {(empty * 100 / cycles):.2f}%", file=fres)
+                empty = 0
+                empty0 = ol.subgraphIsomorphism_0.read(0xe8);
+                empty1 = ol.subgraphIsomorphism_0.read(0xec);
+                empty = (empty1 << 32) | empty0;
+                empty = empty * 4
+                print(f"Findmin empty         {empty} cc, {(empty * 100 / cycles):.2f}%", file=fres)
+                empty = 0
+                empty0 = ol.subgraphIsomorphism_0.read(0x100);
+                empty1 = ol.subgraphIsomorphism_0.read(0x104);
+                empty = (empty1 << 32) | empty0;
+                empty = empty * 2
+                print(f"Readmin counter empty {empty} cc, {(empty * 100 / cycles):.2f}%", file=fres)
+                empty = 0
+                empty0 = ol.subgraphIsomorphism_0.read(0x118);
+                empty1 = ol.subgraphIsomorphism_0.read(0x11c);
+                empty = (empty1 << 32) | empty0;
+                empty = empty * 2
+                print(f"Readmin edge empty    {empty} cc, {(empty * 100 / cycles):.2f}%", file=fres)
+                empty = 0
+                empty0 = ol.subgraphIsomorphism_0.read(0x130);
+                empty1 = ol.subgraphIsomorphism_0.read(0x134);
+                empty = (empty1 << 32) | empty0;
+                empty = empty * 2
+                print(f"Homomorphism empty    {empty} cc, {(empty * 100 / cycles):.2f}%", file=fres)
+                empty = 0
+                empty0 = ol.subgraphIsomorphism_0.read(0x148);
+                empty1 = ol.subgraphIsomorphism_0.read(0x14c);
+                empty = (empty1 << 32) | empty0;
+                empty = empty * 2
+                print(f"Batch build empty     {empty} cc, {(empty * 100 / cycles):.2f}%", file=fres)
+                empty = 0
+                empty0 = ol.subgraphIsomorphism_0.read(0x160);
+                empty1 = ol.subgraphIsomorphism_0.read(0x164);
+                empty = (empty1 << 32) | empty0;
+                print(f"Tuplebuild empty      {empty} cc, {(empty * 100 / cycles):.2f}%", file=fres)
+                empty = 0
+                empty0 = ol.subgraphIsomorphism_0.read(0x178);
+                empty1 = ol.subgraphIsomorphism_0.read(0x17c);
+                empty = (empty1 << 32) | empty0;
+                print(f"Intersect empty       {empty} cc, {(empty * 100 / cycles):.2f}%", file=fres)
+                empty = 0
+                empty0 = ol.subgraphIsomorphism_0.read(0x190);
+                empty1 = ol.subgraphIsomorphism_0.read(0x194);
+                empty = (empty1 << 32) | empty0;
+                empty = empty
+                print(f"Bypass filter empty          {empty} cc, {(empty * 100 / cycles):.2f}%", file=fres)
+                empty = 0
+                empty0 = ol.subgraphIsomorphism_0.read(0x1a8);
+                empty1 = ol.subgraphIsomorphism_0.read(0x1ac);
+                empty = (empty1 << 32) | empty0;
+                empty = empty * 2
+                print(f"Split empty           {empty} cc, {(empty * 100 / cycles):.2f}%", file=fres)
+                empty = 0
+                empty0 = ol.subgraphIsomorphism_0.read(0x1c0);
+                empty1 = ol.subgraphIsomorphism_0.read(0x1c4);
+                empty = (empty1 << 32) | empty0;
+                print(f"Verify empty          {empty} cc, {(empty * 100 / cycles):.2f}%", file=fres)
+                empty = 0
+                empty0 = ol.subgraphIsomorphism_0.read(0x1d8);
+                empty1 = ol.subgraphIsomorphism_0.read(0x1dc);
+                empty = (empty1 << 32) | empty0;
+                print(f"Compact empty         {empty} cc, {(empty * 100 / cycles):.2f}%", file=fres)
+                empty = 0
+                empty0 = ol.subgraphIsomorphism_0.read(0x1f0);
+                empty1 = ol.subgraphIsomorphism_0.read(0x1f4);
+                empty = (empty1 << 32) | empty0;
+                print(f"Filter empty          {empty} cc, {(empty * 100 / cycles):.2f}%", file=fres)
+                empty = 0
+                empty0 = ol.subgraphIsomorphism_0.read(0x208);
+                empty1 = ol.subgraphIsomorphism_0.read(0x20c);
+                empty = (empty1 << 32) | empty0;
+                empty = empty * 2
+                print(f"Assembly empty        {empty} cc, {(empty * 100 / cycles):.2f}%", file=fres)
+                print(f"Cycles: {cycles}", file=fres)
+
+                c = (resh << 32) | resl
+                if c == int(querytuple[1]):
+                    print("OK, solutions: ", c, sep="", flush=True)
+                    print(f"{(end_preprocess - start):.4f}", 
+                          f"{(end_subiso - start):.4f}   OK\n",
+                          sep='\n',
+                          file=fres)
+                else:
+                    print("***** NO *****, expected: ", 
+                          querytuple[1], "\tactual: ", c, sep="",  flush=True)
+                    print(f"{(end_preprocess - start):.4f}", 
+                          f"{(end_subiso - start):.4f} **NO**\n",
+                          sep='\n',
+                          file=fres)
+                fres.flush()
                 
             else :
                 print("Skipped due to memory overflow.", flush=True)
