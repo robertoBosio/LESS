@@ -1138,10 +1138,11 @@ PROPOSE_TBINDEXING_LOOP:
   unsigned int rowstart = minOff;
   unsigned int rowend = minOff + (minSize >> (ROW_LOG - EDGE_LOG));
   unsigned int window_right =
-    minSize.range((ROW_LOG - EDGE_LOG) - 1, 0) + (rowend - rowstart) << (ROW_LOG - EDGE_LOG);
+    minSize.range((ROW_LOG - EDGE_LOG) - 1, 0) + ((rowend - rowstart) << (ROW_LOG - EDGE_LOG));
   unsigned int cnt = 0;
   unsigned int address = start_address;
   n_candidate = 0;
+
 PROPOSE_READ_MIN_INDEXING_LOOP:
   for (unsigned int g = 0; g <= rowend - rowstart; g++) {
     row_t row = htb_buf[rowstart + g];
