@@ -19,12 +19,16 @@ namespace debug {
     static unsigned long max_collisions;
     static unsigned long cache_req_prop;
     static unsigned long cache_req_inter;
+    static unsigned long cache_req_inter2;
     static unsigned long cache_req_verify;
+    static unsigned long cache_req_verify2;
     static unsigned long hash_collisions;
     static float bloom_fullness;
     static float cache_hit_prop;
     static float cache_hit_inter;
+    static float cache_hit_inter2;
     static float cache_hit_verify;
+    static float cache_hit_verify2;
     
     static void init(){
       batch_reads = 0;
@@ -94,8 +98,11 @@ namespace debug {
 
 #if CACHE_ENABLE
         mem_accesses = mem_accesses - cache_hit_verify - cache_hit_inter - cache_hit_prop;
+        mem_reads = mem_reads - cache_hit_verify - cache_hit_verify2 - cache_hit_inter - cache_hit_inter2 - cache_hit_prop;
         intersect_reads -= cache_hit_inter;
+        intersect_reads -= cache_hit_inter2;
         verify_reads -= cache_hit_verify;
+        verify_reads -= cache_hit_verify2;
         findmin_reads -= cache_hit_prop;
 
         debof << "\tbatch accesses:              " << std::setw(15)
@@ -128,9 +135,15 @@ namespace debug {
         debof << "\tmean cache hit inter:   " << cache_hit_inter / cache_req_inter  
             << std::endl;
         debof << "\tcache reqs inter:       " << cache_req_inter  << std::endl;
+        debof << "\tmean cache hit inter2:   " << cache_hit_inter2 / cache_req_inter2  
+            << std::endl;
+        debof << "\tcache reqs inter2:       " << cache_req_inter2  << std::endl;
         debof << "\tmean cache hit verify:  " << cache_hit_verify / cache_req_verify  
             << std::endl;
         debof << "\tcache reqs verify:      " << cache_req_verify << std::endl; 
+        debof << "\tmean cache hit verify2:  " << cache_hit_verify2 / cache_req_verify2  
+            << std::endl;
+        debof << "\tcache reqs verify2:      " << cache_req_verify2 << std::endl; 
 #endif
 
         debof << "\tmax collisions:         " << max_collisions << std::endl;

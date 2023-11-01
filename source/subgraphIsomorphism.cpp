@@ -85,7 +85,6 @@ typedef cache< bloom_t, true, false, 1,
         false, 1, AUTO, BRAM> bloom_cache_t;
 #endif /* CACHE_ENABLE */
 
-// std::ofstream f("../../../../restot_stack.txt");
 /******** Tuple definition ********/
 enum edge_flag
 {
@@ -1566,6 +1565,12 @@ multiwayJoin(ap_uint<DDR_W>* htb_buf0,
              unsigned int& dynfifo_overflow,
              long unsigned int& result)
 {
+    constexpr size_t STOP_FINDMIN = 0;
+    constexpr size_t STOP_READMIN = 1;
+    constexpr size_t STOP_TUPLEBUILD = 2;
+    constexpr size_t STOP_INTERSECT = 3;
+    constexpr size_t STOP_VERIFY = 4;
+    constexpr size_t STOP_MERGE = STOP_TUPLEBUILD + ((1UL << PP_LOG) * 2) + 1;
 #pragma HLS STABLE variable=htb_buf0
 #pragma HLS STABLE variable=htb_buf1
 #pragma HLS STABLE variable=htb_buf2
@@ -1663,11 +1668,15 @@ multiwayJoin(ap_uint<DDR_W>* htb_buf0,
     hls_thread_local hls::stream<bool, 4> streams_stop[STOP_S];
 
 #ifndef __SYNTHESIS__
-    for (int g = 0; g < STOP_S; g++) {
+    for (int g = 0; g < STOP_MERGE + 3; g++) {
         char stream_name[10];
         sprintf(stream_name, "stop_%d", g);
         streams_stop[g].set_name(stream_name);
     } 
+    for (int g = 0; g < STOP_MERGE + 1; g++) 
+        hls::stream_globals::incr_task_counter();
+    
+    htb_cache.init();
 #endif /* __SYNTHESIS__ */
 
     htb_cache_t htb_cache(htb_buf0);
