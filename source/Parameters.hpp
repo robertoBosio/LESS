@@ -9,7 +9,7 @@
 
 /* Cannot be bigger than 255 since in the code it is
  * always contained in 8 bits */
-#define MAX_QUERY_VERTICES	(1UL << 4)
+#define MAX_QUERY_VERTICES	(1UL << 5)
 #define MAX_TABLES 		    32
 
 /* Max space given to query data in fifo for graph read*/
@@ -33,36 +33,37 @@
 
 /* Bloom filter parameters */
 #define BLOOM_FILTER_WIDTH  7
-#define K_FUNCTIONS         3
+#define K_FUNCTIONS         2
 
 /* bitwidth of the hash to index source vertices, 1st level. */
 // #define HASH_WIDTH_FIRST    11
 // #define HASH_WIDTH_SECOND   7
 
-#define MAX_COLLISIONS      (1UL << 5)
+#define MAX_COLLISIONS      (1UL << 6)
 
 /* Depth of streams connecting tasks */
-#define DEFAULT_STREAM_DEPTH 32
+#define DEFAULT_STREAM_DEPTH 128
 
 /* Dynamic fifo parameters */
-#define DYN_FIFO_DEPTH      128
+#define DYN_FIFO_DEPTH      64
 #define DYN_FIFO_BURST      32
 
 #define DDR_BIT             7
 #define DDR_WORD            (1UL << DDR_BIT)
 
-#define HASHTABLES_SPACE    ((1UL << 26) / (DDR_WORD / 8))  //~ 67 MB
-#define GRAPHS_SPACE        (1UL << 23)                     //~ 8 million edges
-#define BLOOM_SPACE         ((1UL << 26) / (DDR_WORD / 8))  //~ 67 MB
-#define RESULTS_SPACE		(DYN_FIFO_BURST * (1UL << 17))  //~ 67 MB
+#define HASHTABLES_SPACE    ((1UL << 28) / (DDR_WORD / 8))  //~ 256 MB
+#define BLOOM_SPACE         ((1UL << 27) / (DDR_WORD / 8))  //~ 128 MB
+#define RESULTS_SPACE		(DYN_FIFO_BURST * (1UL << 20))  //~ 1 << 29, 512 MB
 // #define HTB_SIZE            (1UL << (HASH_WIDTH_FIRST + HASH_WIDTH_SECOND - (DDR_BIT - COUNTER_WIDTH)))
 
 #define EDGE_ROW            (1UL << (DDR_BIT - EDGE_WIDTH))
 
 #define PROPOSE_BATCH_LOG   6
 #define MERGE_IN_STREAMS    2
-#define CACHE_WORDS_PER_LINE 2
-#define PIPELINES           1
+#define CACHE_WORDS_PER_LINE 3
+#define MAX_HASH_TABLE_BIT  20
+#define HASH_LOOKUP3_BIT    64
+
 #include <ap_axi_sdata.h>
 
 /* Functionality definition */
@@ -88,3 +89,7 @@ typedef ap_axiu<LABEL_WIDTH, 0, 0, 0> T_LABEL;
 typedef ap_uint<DDR_WORD> row_t;
 typedef ap_uint<(1UL << BLOOM_FILTER_WIDTH)> bloom_t;
 typedef ap_uint<(DDR_WORD << CACHE_WORDS_PER_LINE)> edge_block_t;
+typedef ap_uint<VERTEX_WIDTH_BIT> vertex_t;
+
+// Useful typename for streams
+typedef ap_uint<(1UL << BLOOM_FILTER_WIDTH) * (1UL << K_FUNCTIONS)> bloom_flat_t;

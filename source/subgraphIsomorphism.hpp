@@ -9,58 +9,99 @@
 #include "Trie.hpp"
 
 #if SOFTWARE_PREPROC
-void subgraphIsomorphism(
-    row_t htb_buf0[HASHTABLES_SPACE],
-    row_t htb_buf1[HASHTABLES_SPACE],
-    row_t htb_buf2[HASHTABLES_SPACE],
-    row_t bloom_p[BLOOM_SPACE],
-    row_t res_buf[RESULTS_SPACE],
-    const unsigned short numQueryVert,
-    const unsigned char hash1_w,
-    const unsigned char hash2_w,
-    const unsigned long dynfifo_space,
-    unsigned long &dynfifo_diagnostic,
-    QueryVertex qVertices0[MAX_QUERY_VERTICES],
-    QueryVertex qVertices1[MAX_QUERY_VERTICES],
-    AdjHT hTables0[MAX_TABLES],
-    AdjHT hTables1[MAX_TABLES],
+void
+subgraphIsomorphism(row_t htb_buf0[HASHTABLES_SPACE],
+                    row_t htb_buf1[HASHTABLES_SPACE],
+                    row_t htb_buf2[HASHTABLES_SPACE],
+                    row_t htb_buf3[HASHTABLES_SPACE],
+                    row_t bloom_p[BLOOM_SPACE],
+                    row_t res_buf[RESULTS_SPACE],
+                    const unsigned short numQueryVert,
+                    const unsigned char hash1_w,
+                    const unsigned char hash2_w,
+                    const unsigned long dynfifo_space,
+                    unsigned int& dynfifo_overflow,
+                    const unsigned int n_candidate,
+                    const unsigned int start_candidate,
+                    QueryVertex qVertices[MAX_QUERY_VERTICES],
+                    AdjHT hTables0[MAX_TABLES],
+                    AdjHT hTables1[MAX_TABLES],
 
 #if DEBUG_INTERFACE
-    volatile unsigned int &debif_endpreprocess,
+                    volatile unsigned int& debif_endpreprocess,
+                    unsigned long& p_propose_empty,
+                    unsigned long& p_edgebuild_empty,
+                    unsigned long& p_findmin_empty,
+                    unsigned long& p_readmin_counter_empty,
+                    unsigned long& p_readmin_edge_empty,
+                    unsigned long& p_homomorphism_empty,
+                    unsigned long& p_batchbuild_empty,
+                    unsigned long& p_tuplebuild_empty,
+                    unsigned long& p_intersect_empty,
+                    unsigned long& p_offset_empty,
+                    unsigned long& p_split_empty,
+                    unsigned long& p_verify_empty,
+                    unsigned long& p_compact_empty,
+                    unsigned long& p_filter_empty,
+                    unsigned long& p_assembly_empty,
+                    unsigned long& p_hits0,
+                    unsigned long& p_hits1,
+                    unsigned long& p_reqs0,
+                    unsigned long& p_reqs1,
 #endif /* DEBUG_INTERFACE */
 
 #if COUNT_ONLY
-    long unsigned int &result
+                    long unsigned int& result
 #else
-    hls::stream<T_NODE> &result
+                     hls::stream<T_NODE>& result
 #endif /* COUNT_ONLY */
 
 );
 
 #else
 
-void subgraphIsomorphism(
-    row_t htb_buf0[HASHTABLES_SPACE],
-    row_t htb_buf1[HASHTABLES_SPACE],
-    row_t htb_buf2[HASHTABLES_SPACE],
-    row_t bloom_p[BLOOM_SPACE],
-    row_t res_buf[RESULTS_SPACE],
-    const unsigned short numQueryVert,
-    const unsigned short numQueryEdges,
-    const unsigned long numDataEdges,
-    const unsigned char hash1_w,
-    const unsigned char hash2_w,
-    const unsigned long dynfifo_space,
-    unsigned long &dynfifo_diagnostic,
+void
+subgraphIsomorphism(row_t htb_buf0[HASHTABLES_SPACE],
+                    row_t htb_buf1[HASHTABLES_SPACE],
+                    row_t htb_buf2[HASHTABLES_SPACE],
+                    row_t htb_buf3[HASHTABLES_SPACE],
+                    row_t bloom_p[BLOOM_SPACE],
+                    row_t res_buf[RESULTS_SPACE],
+                    const unsigned short numQueryVert,
+                    const unsigned short numQueryEdges,
+                    const unsigned long numDataEdges,
+                    const unsigned char hash1_w,
+                    const unsigned char hash2_w,
+                    const unsigned long dynfifo_space,
+                    unsigned int& dynfifo_overflow,
 
 #if DEBUG_INTERFACE
-    volatile unsigned int &debif_endpreprocess,
+                    volatile unsigned int& debif_endpreprocess,
+                    unsigned long& p_propose_empty,
+                    unsigned long& p_edgebuild_empty,
+                    unsigned long& p_findmin_empty,
+                    unsigned long& p_readmin_counter_empty,
+                    unsigned long& p_readmin_edge_empty,
+                    unsigned long& p_homomorphism_empty,
+                    unsigned long& p_batchbuild_empty,
+                    unsigned long& p_tuplebuild_empty,
+                    unsigned long& p_intersect_empty,
+                    unsigned long& p_offset_empty,
+                    unsigned long& p_split_empty,
+                    unsigned long& p_verify_empty,
+                    unsigned long& p_compact_empty,
+                    unsigned long& p_filter_empty,
+                    unsigned long& p_assembly_empty,
+                    unsigned long& p_hits0,
+                    unsigned long& p_hits1,
+                    unsigned long& p_reqs0,
+                    unsigned long& p_reqs1,
 #endif /* DEBUG_INTERFACE */
 
 #if COUNT_ONLY
-    long unsigned int &result
+                    long unsigned int& result
 #else
-    hls::stream<T_NODE> &result
+                    hls::stream<T_NODE>& result
 #endif /* COUNT_ONLY */
 
 );

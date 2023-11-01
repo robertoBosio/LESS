@@ -16,7 +16,7 @@ if [ -d overlay ]; then
 fi
 
 # Input file path
-input_file="run_list.txt"
+input_file="run_list_fpga.txt"
 
 # Check if the input file exists
 if [ ! -f "$input_file" ]; then
@@ -57,7 +57,7 @@ cp ../subiso_bd/subiso_bd.runs/impl_1/design_1_wrapper.bit overlay/design_1.bit
 cp ../subiso_bd/subiso_bd.gen/sources_1/bd/design_1/hw_handoff/design_1.hwh overlay/design_1.hwh
 # cp bitstream/design_1.bit overlay/design_1.bit
 # cp bitstream/design_1.hwh overlay/design_1.hwh
-cp ./run_list.txt overlay/test.txt
+cp ./${input_file} overlay/test.txt
 cp ./host.py overlay/host.py
 
 mkdir overlay/data
