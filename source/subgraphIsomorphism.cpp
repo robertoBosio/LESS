@@ -1565,12 +1565,6 @@ multiwayJoin(ap_uint<DDR_W>* htb_buf0,
              unsigned int& dynfifo_overflow,
              long unsigned int& result)
 {
-    constexpr size_t STOP_FINDMIN = 0;
-    constexpr size_t STOP_READMIN = 1;
-    constexpr size_t STOP_TUPLEBUILD = 2;
-    constexpr size_t STOP_INTERSECT = 3;
-    constexpr size_t STOP_VERIFY = 4;
-    constexpr size_t STOP_MERGE = STOP_TUPLEBUILD + ((1UL << PP_LOG) * 2) + 1;
 #pragma HLS STABLE variable=htb_buf0
 #pragma HLS STABLE variable=htb_buf1
 #pragma HLS STABLE variable=htb_buf2

@@ -9,6 +9,8 @@ result*
 vivado*
 DaCH/*
 scripts/bitstream/*
+scripts/run_list*
+scripts/netlist4RM.py
 .Xil/*
 *.log
 *.wcfg
