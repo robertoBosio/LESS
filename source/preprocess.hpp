@@ -1116,7 +1116,7 @@ mwj_batch(const unsigned char hash1_w,
   ap_uint<32> minSize = (1UL << 32) - 1;
   ap_uint<32> minOff;
   ap_uint<NODE_W * 2> edge;
-  ap_uint<NODE_W> vertex, vertexCheck;
+  ap_uint<NODE_W> vertex;
   ap_uint<NODE_W> set[MAX_CL];
   ap_uint<MAX_HASH_W> hash_buff, hash_new;
   unsigned char set_counter = 0;

@@ -3,6 +3,7 @@ dataset2/*
 sw_benchmark/*
 subgraphiso-kria*/*
 subiso_bd/*
+subiso_bd2023/*
 .vscode/*
 result*
 vivado*

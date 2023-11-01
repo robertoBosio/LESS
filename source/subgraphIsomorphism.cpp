@@ -1023,7 +1023,6 @@ mwj_intersect(AdjHT* hTables,
               hls::stream<intersect_tuple_t> stream_tuple_in[2],
               hls::stream<offset_tuple_t>& stream_tuple_out)
 {
-  ap_uint<V_ID_W> indexing_v;
   intersect_tuple_t tuple_in;
   offset_tuple_t tuple_out;
   unsigned char tableIndex;
@@ -1401,8 +1400,6 @@ mwj_assembly(row_t* m_axi,
   const ap_uint<V_ID_W> MASK_NEW_SOLUTION = (1UL << (V_ID_W - 1));
   const ap_uint<V_ID_W> STOP_NODE = ~0;
   const ap_uint<V_ID_W> FAKE_NODE = ~0 - 1;
-  ap_uint<V_ID_W> curQV;
-  assembly_set_t tuple_in;
   unsigned long partial_sol = 0;
   // bool token_new_start;
   unsigned long int counter = 0;
