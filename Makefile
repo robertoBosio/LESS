@@ -114,7 +114,7 @@ HLS ?= vitis_hls
 runhls: setup | check_hls
 	$(HLS) -f run_hls.tcl;
 
-runimpl: setup runhls | check_vivado
+runimpl: setup | check_vivado
 	vivado -mode tcl -source script_vivado.tcl
 
 clean:

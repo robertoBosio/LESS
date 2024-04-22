@@ -1,6 +1,6 @@
 user="root"
 path="/home/ubuntu/"
-device="kriahlslab0"
+device="kriahlslab1"
 res_file=results_${1}_$(date +%m%d%H%M).csv
 
 if [ $# -lt 2 ]; then
