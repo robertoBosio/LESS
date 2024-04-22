@@ -459,7 +459,7 @@ int main()
                 ;
             for (int g = 0; g < BLOOM_SPACE; bloom_p[g++] = 0)
                 ;
-            for (int g = 0; g < 9; g++) {
+            for (int g = 0; g < 18; g++) {
                 std::cout << counters[g] << std::endl;
             }
         }

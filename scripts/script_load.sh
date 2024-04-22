@@ -1,7 +1,6 @@
 user="root"
 path="/home/ubuntu/"
-ip="192.168.99.170"
-device="kria170"
+device="kriahlslab0"
 res_file=results_${1}_$(date +%m%d%H%M).csv
 
 if [ $# -lt 2 ]; then
@@ -10,7 +9,7 @@ if [ $# -lt 2 ]; then
 fi
 
 # ssh_string="${user}@${ip}"
-ssh_string="$device"
+ssh_string="root@$device"
 if [ -d overlay ]; then
     rm overlay -r
 fi
@@ -55,8 +54,8 @@ done
 mkdir overlay
 cp ../subiso_bd/subiso_bd.runs/impl_1/design_1_wrapper.bit overlay/design_1.bit
 cp ../subiso_bd/subiso_bd.gen/sources_1/bd/design_1/hw_handoff/design_1.hwh overlay/design_1.hwh
-# cp bitstream/design_1.bit overlay/design_1.bit
-# cp bitstream/design_1.hwh overlay/design_1.hwh
+# cp bitstream/design_latest.bit overlay/design_1.bit
+# cp bitstream/design_latest.hwh overlay/design_1.hwh
 cp ./${input_file} overlay/test.txt
 cp ./host.py overlay/host.py
 

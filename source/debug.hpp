@@ -98,7 +98,6 @@ namespace debug {
 
 #if CACHE_ENABLE
         mem_accesses = mem_accesses - cache_hit_verify - cache_hit_inter - cache_hit_prop;
-        mem_reads = mem_reads - cache_hit_verify - cache_hit_verify2 - cache_hit_inter - cache_hit_inter2 - cache_hit_prop;
         intersect_reads -= cache_hit_inter;
         intersect_reads -= cache_hit_inter2;
         verify_reads -= cache_hit_verify;

@@ -309,7 +309,7 @@ mwj_propose(hls::stream<ap_uint<V_ID_W>>& stream_fifo_in,
    * is to not always resend all the new solution but instead send only the
    * changed vertex.
    * STOP_NODE stops the entire pipeline.
-   * FAKE_NODE used in case of radix without extension: single node soultions */
+   * FAKE_NODE used in case of radix without extension: single node solutions */
   vertex_read = stream_fifo_in.read();
   if (vertex_read == FAKE_NODE) {
     n_nodes = 0;
@@ -434,7 +434,7 @@ mwj_findmin(bloom_cache_t &bloom_p,
   T_BLOOM filter[K_FUN];
   readmin_counter_tuple_t tuple_out;
   findmin_tuple_t tuple_in;
-  unsigned int min_size;
+  unsigned int min_size = ~0;
 #pragma HLS array_partition variable = filter type = complete dim = 1
   
   tuple_out.stop = false;
@@ -1661,18 +1661,6 @@ multiwayJoin(ap_uint<DDR_W>* htb_buf0,
     /* Stop signals */
     hls_thread_local hls::stream<bool, 4> streams_stop[STOP_S];
 
-#ifndef __SYNTHESIS__
-    for (int g = 0; g < STOP_MERGE + 3; g++) {
-        char stream_name[10];
-        sprintf(stream_name, "stop_%d", g);
-        streams_stop[g].set_name(stream_name);
-    } 
-    for (int g = 0; g < STOP_MERGE + 1; g++) 
-        hls::stream_globals::incr_task_counter();
-    
-    htb_cache.init();
-#endif /* __SYNTHESIS__ */
-
     htb_cache_t htb_cache(htb_buf0);
     bloom_cache_t bloom_cache(bloom_p);
 
@@ -1732,17 +1720,6 @@ multiwayJoin(ap_uint<DDR_W>* htb_buf0,
       mwj_merge_solandset, f_stream_sol, f_stream_set, mss_stream_sol);
 
 #ifdef __SYNTHESIS__
-
-    // stack<
-    //     ap_uint<V_ID_W>,
-    //     V_ID_W,
-    //     MAX_QV,
-    //     DYN_FIFO_DEPTH,
-    //     8192>(
-    //     a_stream_sol,
-    //     dyn_stream_sol,
-    //     streams_stop[STOP_S - 1],
-    //     dyn_stream_ovf);
 
     mwj_edgebuild<LKP3_HASH_W, MAX_HASH_W, FULL_HASH_W>(hash1_w,
                                        qVertices,
@@ -1809,23 +1786,13 @@ multiwayJoin(ap_uint<DDR_W>* htb_buf0,
     htb_cache.init();
     bloom_cache.init();
 
-    // std::thread stack_t(
-    //     stack<ap_uint<V_ID_W>,
-    //           V_ID_W,
-    //           MAX_QV,
-    //           DYN_FIFO_DEPTH,
-    //           8192>,
-    //     std::ref(a_stream_sol),
-    //     std::ref(dyn_stream_sol),
-    //     std::ref(streams_stop[STOP_S - 1]),
-    //     std::ref(dyn_stream_ovf));
-
-    std::thread mwj_edgebuild_t(mwj_edgebuild<LKP3_HASH_W, MAX_HASH_W, FULL_HASH_W>,
-                                hash1_w,
-                                qVertices,
-                                std::ref(p0_stream_sol),
-                                std::ref(e_stream_tuple),
-                                std::ref(e_stream_sol));
+    std::thread mwj_edgebuild_t(
+      mwj_edgebuild<LKP3_HASH_W, MAX_HASH_W, FULL_HASH_W>,
+      hash1_w,
+      qVertices,
+      std::ref(p0_stream_sol),
+      std::ref(e_stream_tuple),
+      std::ref(e_stream_sol));
 
     std::thread mwj_findmin_t(mwj_findmin<T_BLOOM, BLOOM_LOG, K_FUN_LOG>,
                               // bloom_p,
