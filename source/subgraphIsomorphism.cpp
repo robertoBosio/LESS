@@ -80,9 +80,9 @@ typedef cache< ap_uint<DDR_W>, true, false, 2,
         HASHTABLES_SPACE, 0, 0, (1UL << CACHE_WORDS_PER_LINE), false, 512, 1,
         false, 1, AUTO, BRAM> htb_cache_t;
 
-typedef cache< bloom_t, true, false, 1,
-        BLOOM_SPACE, 0, 0, (1UL << K_FUNCTIONS), false, 128, 1,
-        false, 1, AUTO, BRAM> bloom_cache_t;
+// typedef cache< bloom_t, true, false, 1,
+//         BLOOM_SPACE, 1, 1, (1UL << K_FUNCTIONS), false, 128, 1,
+//         false, 1, AUTO, BRAM> bloom_cache_t;
 #endif /* CACHE_ENABLE */
 
 /******** Tuple definition ********/
@@ -425,7 +425,7 @@ bloom_intersect(T_BLOOM& filter, T_BLOOM set_bloom)
 
 template<typename T_BLOOM, size_t BLOOM_LOG, size_t K_FUN_LOG>
 void
-mwj_findmin(bloom_cache_t &bloom_p,
+mwj_findmin(bloom_t* bloom_p,
             hls::stream<findmin_tuple_t>& stream_tuple_in,
             hls::stream<readmin_counter_tuple_t>& stream_tuple_out,
             hls::stream<T_BLOOM> stream_filter_out[1 << K_FUN_LOG])
@@ -441,7 +441,7 @@ mwj_findmin(bloom_cache_t &bloom_p,
 
 FINDMIN_TASK_LOOP:
   while (true) {
-#pragma HLS pipeline II = 1
+#pragma HLS pipeline II = 4
 
     /* Non blocking read since Vitis 2022.2 does not want to apply flushable
      * pipeline */
@@ -458,11 +458,10 @@ FINDMIN_TASK_LOOP:
           filter[s] = ~0;
         }
       } else {
-        T_BLOOM new_filter[K_FUN];
-        bloom_p.get_line(address, 0, new_filter);
         for (int s = 0; s < K_FUN; s++) {
 #pragma HLS unroll
-          bloom_s += bloom_intersect<T_BLOOM, BLOOM_LOG>(filter[s], new_filter[s]);
+          T_BLOOM set_bloom = bloom_p[address + s];
+          bloom_s += bloom_intersect<T_BLOOM, BLOOM_LOG>(filter[s], set_bloom);
         }
 #if DEBUG_STATS
         debug::findmin_reads++;
@@ -1662,7 +1661,7 @@ multiwayJoin(ap_uint<DDR_W>* htb_buf0,
     hls_thread_local hls::stream<bool, 4> streams_stop[STOP_S];
 
     htb_cache_t htb_cache(htb_buf0);
-    bloom_cache_t bloom_cache(bloom_p);
+    // bloom_cache_t bloom_cache(bloom_p);
 
     dynfifo_init<ap_uint<V_ID_W>,    /* fifo data type */
                  row_t,              /* fifo data type */
@@ -1721,22 +1720,41 @@ multiwayJoin(ap_uint<DDR_W>* htb_buf0,
 
 #ifdef __SYNTHESIS__
 
+    // cache_wrapper(mwj_findmin<
+    //                   T_BLOOM,
+    //                   BLOOM_LOG,
+    //                   K_FUN_LOG>,
+    //               hash1_w,
+    //               qVertices0,
+    //               bloom_cache,
+    //               dyn_stream_sol,
+    //               streams_stop[0],
+    //               p_stream_tuple,
+    //               p_stream_filter,
+    //               p_stream_sol,
+    //               p_stream_sol_end);
+
+    // stack<
+    //     ap_uint<V_ID_W>,
+    //     V_ID_W,
+    //     MAX_QV,
+    //     DYN_FIFO_DEPTH,
+    //     8192>(
+    //     a_stream_sol,
+    //     dyn_stream_sol,
+    //     streams_stop[STOP_S - 1],
+    //     dyn_stream_ovf);
+
     mwj_edgebuild<LKP3_HASH_W, MAX_HASH_W, FULL_HASH_W>(hash1_w,
                                        qVertices,
                                        p0_stream_sol,
                                        e_stream_tuple,
                                        e_stream_sol);
 
-    cache_wrapper(mwj_findmin<T_BLOOM, BLOOM_LOG, K_FUN_LOG>,
-                  bloom_cache,
-                  e_stream_tuple,
-                  p_stream_tuple,
-                  p_stream_filter);
-
-    // mwj_findmin<T_BLOOM, BLOOM_LOG, K_FUN_LOG>(bloom_p,
-    //                                            e_stream_tuple,
-    //                                            p_stream_tuple,
-    //                                            p_stream_filter);
+    mwj_findmin<T_BLOOM, BLOOM_LOG, K_FUN_LOG>(bloom_p,
+                                               e_stream_tuple,
+                                               p_stream_tuple,
+                                               p_stream_filter);
 
     mwj_readmin_counter<LKP3_HASH_W, MAX_HASH_W, FULL_HASH_W>(hash1_w,
                                                               hash2_w,
@@ -1784,19 +1802,29 @@ multiwayJoin(ap_uint<DDR_W>* htb_buf0,
       hls::stream_globals::incr_task_counter();
 
     htb_cache.init();
-    bloom_cache.init();
+    // bloom_cache.init();
 
-    std::thread mwj_edgebuild_t(
-      mwj_edgebuild<LKP3_HASH_W, MAX_HASH_W, FULL_HASH_W>,
-      hash1_w,
-      qVertices,
-      std::ref(p0_stream_sol),
-      std::ref(e_stream_tuple),
-      std::ref(e_stream_sol));
+    // std::thread stack_t(
+    //     stack<ap_uint<V_ID_W>,
+    //           V_ID_W,
+    //           MAX_QV,
+    //           DYN_FIFO_DEPTH,
+    //           8192>,
+    //     std::ref(a_stream_sol),
+    //     std::ref(dyn_stream_sol),
+    //     std::ref(streams_stop[STOP_S - 1]),
+    //     std::ref(dyn_stream_ovf));
+
+    std::thread mwj_edgebuild_t(mwj_edgebuild<LKP3_HASH_W, MAX_HASH_W, FULL_HASH_W>,
+                                hash1_w,
+                                qVertices,
+                                std::ref(p0_stream_sol),
+                                std::ref(e_stream_tuple),
+                                std::ref(e_stream_sol));
 
     std::thread mwj_findmin_t(mwj_findmin<T_BLOOM, BLOOM_LOG, K_FUN_LOG>,
-                              // bloom_p,
-                              std::ref(bloom_cache),
+                              bloom_p,
+                              // std::ref(bloom_cache),
                               std::ref(e_stream_tuple),
                               std::ref(p_stream_tuple),
                               p_stream_filter);
@@ -1866,16 +1894,16 @@ multiwayJoin(ap_uint<DDR_W>* htb_buf0,
     mwj_assembly_t.join();
 
 #if DEBUG_STATS
-    debug::cache_hit_prop   = bloom_cache.get_n_l1_hits(0);
+    // debug::cache_hit_prop   = bloom_cache.get_n_hits(0);
     debug::cache_hit_inter  = htb_cache.get_n_l1_hits(1);
     debug::cache_hit_verify = htb_cache.get_n_l1_hits(0);
-    debug::cache_req_prop   = bloom_cache.get_n_l1_reqs(0);
+    // debug::cache_req_prop   = bloom_cache.get_n_reqs(0);
     debug::cache_req_inter  = htb_cache.get_n_l1_reqs(1);
     debug::cache_req_verify = htb_cache.get_n_l1_reqs(0);
 #endif /* DEBUG_STATS */
 
     htb_cache.stop();
-    bloom_cache.stop();
+    // bloom_cache.stop();
 
 #endif /* __SYNTHESIS__ */
 }

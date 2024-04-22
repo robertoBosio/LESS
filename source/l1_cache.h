@@ -15,7 +15,7 @@
 using namespace types;
 
 template <typename WORD_TYPE, size_t MAIN_SIZE, size_t N_SETS, size_t N_WAYS,
-	 size_t N_WORDS_PER_LINE, size_t PORTS, bool SWAP_TAG_SET, storage_impl_type STORAGE_IMPL>
+	 size_t N_WORDS_PER_LINE, bool SWAP_TAG_SET, storage_impl_type STORAGE_IMPL>
 class l1_cache {
 	private:
 		static const size_t ADDR_SIZE = utils::log2_ceil(MAIN_SIZE);
@@ -62,11 +62,7 @@ class l1_cache {
 	
 	public:
 		l1_cache() {
-			if (PORTS != 1){
 #pragma HLS array_partition variable=m_cache_mem type=complete dim=2
-			} else {
-#pragma HLS array_partition variable=m_cache_mem type=complete dim=3
-			}
 #pragma HLS array_partition variable=m_local_raw_cache type=complete dim=1
 // #pragma HLS array_partition variable=m_tag type=complete dim=0
 #pragma HLS bind_storage variable=m_tag type=RAM_2P impl=BRAM latency=1
