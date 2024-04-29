@@ -29,6 +29,51 @@ def parse_args():
     
     return args
 
+def query_order(querygraph_v, querygraph_e, adjacency_list):
+    """ Ordering query node based on degrees. The starting node is 
+    the one with highest degree. Then the node with highest number 
+    of neighbors in the already ordered set is selected.  """
+
+    # Selecting the node with the highest degree as starting node
+    max_degree = 0
+    order = []
+    query_vertices = list(range(querygraph_v))
+    for v in range(querygraph_v):
+        degree = len(adjacency_list[v])
+        if degree > max_degree:
+            max_degree = degree
+            start_node = v
+    
+    order.append(start_node)
+    query_vertices.remove(start_node)
+
+    for x in range(querygraph_v - 1):
+        max_neigh = 0
+        following = query_vertices[0]
+        for candidate in query_vertices:
+            neighbors_already_matched = 0
+            for neighbor in adjacency_list[candidate]:
+                if neighbor in order:
+                    neighbors_already_matched += 1
+
+            if (neighbors_already_matched > max_neigh):
+                max_neigh = neighbors_already_matched
+                following = candidate
+
+            # If two nodes have the same number of neighbors already matched, 
+            # the one with the highest degree is selected
+            elif (neighbors_already_matched == max_neigh):
+                if (len(adjacency_list[candidate]) > len(adjacency_list[following])):
+                    following = candidate
+        
+        if max_neigh == 0:
+            print("Error: query graph is not connected.")
+            return None
+
+        query_vertices.remove(following)
+        order.append(following)
+    return order
+
 def subiso(test, path):
   
     HASHTABLES_SPACE = 1 << 28  #~ 256 MB
@@ -170,10 +215,6 @@ def subiso(test, path):
                 if degree > max_degree:
                     max_degree = degree
                     start_node = int(node)
-
-            #Taking as a starting node the one with highest degree 
-            order.append(start_node)
-            query_vertices.remove(start_node)
             
             tablelist = []
             edge_list = []
@@ -197,6 +238,10 @@ def subiso(test, path):
                 if tablelist.count(tupleedge) == 0:
                     tablelist.append(tupleedge)
 
+            #Taking as a starting node the one with highest degree 
+            order.append(start_node)
+            query_vertices.remove(start_node)
+            
             for x in range(querygraph_v - 1):
                 max_neigh = 0
                 for candidate in query_vertices:
@@ -210,9 +255,16 @@ def subiso(test, path):
                         following = candidate
                 query_vertices.remove(following)
                 order.append(following)
+            print(f"Order selected before: {order}", flush=True)
+
+            # Reordering the query graph based on the heuristic
+            order = query_order(querygraph_v, querygraph_e, adjacency_list)
+            if order is None:
+                continue
+            
+            print(f"Order selected after: {order}", flush=True)
 
             # Streaming the query order
-            #order = [0,1,2,3,4,5]
             for x in range(querygraph_v):
                 FIFO[counter] = (order[x], 0, 0, 0)
                 counter = counter + 1
@@ -322,9 +374,9 @@ def subiso(test, path):
                 req0h = ol.subgraphIsomorphism_0.read(addr_req0h)
                 req1l = ol.subgraphIsomorphism_0.read(addr_req1l)
                 req1h = ol.subgraphIsomorphism_0.read(addr_req1h)
-                print(f"{os.path.basename(querygraph)},"
-                      f"{os.path.basename(datagraph)},"
-                      f"{hash1_w},{hash2_w}", 
+                print(f"{os.path.basename(querygraph)},",
+                      f"{os.path.basename(datagraph)},",
+                      f"{hash1_w},{hash2_w}",
                       f",{(np.mean(power)):.3f}",
                       f",{(end_subiso - start):.3f}",
                       f",{(hit0h << 32) | hit0l}",
@@ -332,6 +384,7 @@ def subiso(test, path):
                       f",{(hit1h << 32) | hit1l}",
                       f",{(req1h << 32) | req1l}",
                       f",{(resh << 32) | resl}",
+                    #   f",{order}",
                       sep="",
                       file=fres)
                 fres.flush()
@@ -438,6 +491,7 @@ def subiso(test, path):
                 
             else :
                 print("Skipped due to memory overflow.", flush=True)
+            print(" ", flush=True)
 
 # nfile += 1
 # np.save("/home/ubuntu/" + str(nfile) + ".csv", MEM)
