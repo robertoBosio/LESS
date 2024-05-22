@@ -212,9 +212,9 @@ int main()
 
     // const unsigned char hash1_w = HASH_WIDTH_FIRST;
     // const unsigned char hash2_w = HASH_WIDTH_SECOND;
-    const unsigned char hash1_w = 10;
-    const unsigned char hash2_w = 6;
-    const unsigned long htb_size = (1UL << (hash1_w + hash2_w - (DDR_BIT - COUNTER_WIDTH)));
+    // const unsigned char hash1_w = 10;
+    // const unsigned char hash2_w = 6;
+    // const unsigned long htb_size = (1UL << (hash1_w + hash2_w - (DDR_BIT - COUNTER_WIDTH)));
     unsigned short nQV = 0;
     unsigned short nQE = 0;
     unsigned long nDE = 0;
@@ -225,7 +225,7 @@ int main()
     bool flag = true;
     std::map<std::string, std::vector<TestEntry>> test;
     std::string prev_datagraph;
-    unsigned long counters[19];
+    unsigned long counters[25];
     unsigned int dynfifo_overflow;
 
     char cwd[100];
@@ -402,6 +402,12 @@ int main()
                 counters[16],
                 counters[17],
                 counters[18],
+                counters[19],
+                counters[20],
+                counters[21],
+                counters[22],
+                counters[23],
+                counters[24],
 #endif
                 result);
 
@@ -441,6 +447,12 @@ int main()
                 counters[16],
                 counters[17],
                 counters[18],
+                counters[19],
+                counters[20],
+                counters[21],
+                counters[22],
+                counters[23],
+                counters[24],
 #endif
                 result);
 #endif /* SOFTWARE_PREPROC */
@@ -459,7 +471,7 @@ int main()
                 ;
             for (int g = 0; g < BLOOM_SPACE; bloom_p[g++] = 0)
                 ;
-            for (int g = 0; g < 18; g++) {
+            for (int g = 0; g < 25; g++) {
                 std::cout << counters[g] << std::endl;
             }
         }

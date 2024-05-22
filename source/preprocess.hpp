@@ -304,24 +304,35 @@ bloomUpdate(hls::stream<bloom_update_tuple_t<FULL_HASH_W> >& stream_tuple_in,
     } while (!tuple_in.last);
 }
 
-template<typename T_BLOOM, size_t K_FUN_LOG>
-void
-bloomWrite(T_BLOOM* bloom_p,
-           hls::stream<bloom_write_tuple_t>& stream_address,
-           hls::stream<T_BLOOM> stream_filter[(1UL << K_FUN_LOG)])
+template <typename T_BLOOM, size_t K_FUN_LOG>
+void bloomWrite(T_BLOOM *bloom_p,
+                hls::stream<bloom_write_tuple_t> &stream_address,
+                hls::stream<T_BLOOM> stream_filter[(1UL << K_FUN_LOG)])
 {
-    constexpr size_t K_FUN = (1UL << K_FUN_LOG);
-    bloom_write_tuple_t tuple_in;
+  constexpr size_t K_FUN = (1UL << K_FUN_LOG);
+  bloom_write_tuple_t tuple_in;
 BLOOM_WRITE_TASK_LOOP:
-    do {
+  do
+  {
 #pragma HLS pipeline II = (1UL << K_FUN_LOG)
-        tuple_in = stream_address.read();
-        for (int g = 0; g < K_FUN; g++) {
+    tuple_in = stream_address.read();
+    for (int g = 0; g < K_FUN; g++)
+    {
 #pragma HLS unroll
-            bloom_p[(tuple_in.address << K_FUN_LOG) + g] =
-              stream_filter[g].read();
-        }
-    } while (!tuple_in.last);
+      bloom_p[(tuple_in.address << K_FUN_LOG) + g] =
+          stream_filter[g].read();
+
+#if DEBUG_STATS
+      /* Computing the number of ones in each filter*/
+      T_BLOOM row = bloom_p[(tuple_in.address << K_FUN_LOG) + g];
+      while (row > 0)
+      {
+        debug::bloom_fullness++;
+        row = row & (row - 1);
+      }
+#endif /* DEBUG_STATS */
+    }
+  } while (!tuple_in.last);
 }
 
 template <typename T_DDR,
@@ -1112,7 +1123,7 @@ mwj_batch(const unsigned char hash1_w,
           QueryVertex* qVertices,
           row_t* htb_buf)
 {
-  ap_uint<8> tableIndex{ 0 };
+  ap_uint<8> tableIndex = 0;
   ap_uint<32> minSize = (1UL << 32) - 1;
   ap_uint<32> minOff;
   ap_uint<NODE_W * 2> edge;
@@ -1342,27 +1353,8 @@ STORE_EDGES_POINTER_LOOP:
         end_addr / (float)(1UL << 20) << " MB. " << std::endl;
 #endif
 
-    
-
 #if DEBUG_STATS
-    constexpr size_t K_FUN = (1UL << K_FUN_LOG);
-    for (unsigned int tab = 0; tab < numTables; tab++) {
-        for (unsigned long addr = 0; addr < (1UL << hash1_w); addr++) {
-            T_BLOOM row = bloom_p[addr + tab * (1UL << hash1_w)];
-            for (int g = 0; g < K_FUN; g++) {
-                ap_uint<(1UL << (BLOOM_LOG - K_FUN_LOG))> bloom_f =
-                  row.range(((g + 1) << (BLOOM_LOG - K_FUN_LOG)) - 1,
-                            g << (BLOOM_LOG - K_FUN_LOG));
-                unsigned int count = 0;
-                while (bloom_f > 0) {
-                    count++;
-                    bloom_f = bloom_f & (bloom_f - 1);
-                }
-                debug::bloom_fullness +=
-                  (float)count / ((1UL << hash1_w) * numTables);
-            }
-        }
-    }
+    debug::bloom_fullness /= numTables * (1UL << hash1_w) * (1UL << BLOOM_LOG) * (1UL << K_FUN_LOG);
 #endif /* DEBUG_STATS */
 }
 

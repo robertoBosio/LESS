@@ -88,12 +88,13 @@ MMU_fast(hls::stream<DATA_T>& in_stream,
   const DATA_T STOP_NODE = ~0;
   enum State_slow
   {
-    bypass = 0, /* Shifting data from in to out stream in local buffer */
-    stall = 1, /* Stalling since out stream is full but in stream has not enough
-                  data for a packet */
-    shift = 2, /* Shifting data from local stream to memory and viceversa */
+    bypass = 0,    /* Shifting data from in to out stream in local buffer */
+    stall = 1,     /* Stalling since out stream is full but in stream has not enough
+                      data for a packet */
+    shift = 2,     /* Shifting data from local stream to memory and viceversa */
     stall_ddr = 3, /* Same as stall, but with data in DDR */
-    overflow = 4   /* Overflow */
+    overflow = 4,  /* Overflow */
+    trashing = 5   /* Trashing data */
   };
   typedef ap_uint<3> state_type;
   state_type state = bypass;
@@ -198,12 +199,14 @@ MMU_fast(hls::stream<DATA_T>& in_stream,
       case overflow:
         overflow_s = 1;
         overflowed = true;
-        out_stream.write(STOP_NODE);
-        if (p_counter == 0){
-          state = stall_ddr;
-        } else {
-          state = shift;
-        }
+        state = trashing;
+        break;
+
+      /* We need the pipeline to still move data to make the STOP_NODE reach all the functions. Thus we continue to read trashing the data.*/
+      case trashing:
+        out_stream.write_nb(STOP_NODE);
+        in_stream.read_nb(buff_r);
+        break;
     }
 
     bool req_s;

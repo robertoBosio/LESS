@@ -2,6 +2,7 @@ import pynq
 from pynq import Overlay
 from pynq import allocate
 from pynq import Clocks
+from pynq import PL
 from pprint import pprint
 from random import randint as rnd
 import numpy as np
@@ -72,6 +73,7 @@ def query_order(querygraph_v, querygraph_e, adjacency_list):
 
         query_vertices.remove(following)
         order.append(following)
+
     return order
 
 def subiso(test, path):
@@ -95,34 +97,48 @@ def subiso(test, path):
     byte_edge = 5
    
     ## AXILITE register addresses ##
-    addr_mem0 = 0x10
-    addr_mem1 = 0x1c
-    addr_mem2 = 0x28
-    addr_mem3 = 0x34
-    addr_bloom = 0x40
-    addr_fifo = 0x4c
-    addr_qv = 0x58
-    addr_qe = 0x60
-    addr_de = 0x68
-    addr_hash1_w = 0x74
-    addr_hash2_w = 0x7c
-    addr_dyn_spacel = 0x84
-    addr_dyn_spaceh = 0x88
-    addr_dyn_ovf = 0x90
-    addr_dyn_ovf_ctrl = 0x94
-    addr_preproc = 0xa0
-    addr_preproc_ctrl = 0xa4
-    addr_resl = 0x278
-    addr_resh = 0x27c
-    addr_res_ctrl = 0x280
-    addr_hit0l = 0x218
-    addr_hit0h = 0x21c
-    addr_hit1l = 0x230
-    addr_hit1h = 0x234
-    addr_req0l = 0x248
-    addr_req0h = 0x24c
-    addr_req1l = 0x260
-    addr_req1h = 0x264
+    axi_addresses = {
+        "addr_mem0" : 0x10,
+        "addr_mem1" : 0x1c,
+        "addr_mem2" : 0x28,
+        "addr_mem3" : 0x34,
+        "addr_bloom" : 0x40,
+        "addr_fifo" : 0x4c,
+        "addr_qv" : 0x58,
+        "addr_qe" : 0x60,
+        "addr_de" : 0x68,
+        "addr_hash1_w" : 0x74,
+        "addr_hash2_w" : 0x7c,
+        "addr_dyn_spacel" : 0x84,
+        "addr_dyn_spaceh" : 0x88,
+        "addr_dyn_ovf" : 0x90,
+        "addr_dyn_ovf_ctrl" : 0x94,
+        "addr_preproc" : 0xa0,
+        "addr_preproc_ctrl" : 0xa4,
+        "addr_hit_findminl" : 0x218,
+        "addr_hit_findminh" : 0x21c,
+        "addr_hit_readmin_counterl" : 0x230,
+        "addr_hit_readmin_counterh" : 0x234,
+        "addr_hit_readmin_edgel" : 0x248,
+        "addr_hit_readmin_edgeh" : 0x24c,
+        "addr_hit_intersectl" : 0x260,
+        "addr_hit_intersecth" : 0x264,
+        "addr_hit_verifyl" : 0x278,
+        "addr_hit_verifyh" : 0x27c,
+        "addr_req_findminl" : 0x290,
+        "addr_req_findminh" : 0x294,
+        "addr_req_readmin_counterl" : 0x2a8,
+        "addr_req_readmin_counterh" : 0x2ac,
+        "addr_req_readmin_edgel" : 0x2c0,
+        "addr_req_readmin_edgeh" : 0x2c4,
+        "addr_req_intersectl" : 0x2d8,
+        "addr_req_intersecth" : 0x2dc,
+        "addr_req_verifyl" : 0x2f0,
+        "addr_req_verifyh" : 0x2f4,
+        "addr_resl" : 0x308,
+        "addr_resh" : 0x30c,
+        "addr_res_ctrl" : 0x310,
+    }
 
     node_t = np.uint32
     label_t = np.uint8
@@ -131,6 +147,7 @@ def subiso(test, path):
                        ('lsrc', node_t),
                        ('ldst', node_t)]) 
 
+    PL.reset()
     ol = Overlay(path + "design_1.bit", download=False)
     FIFO = allocate(shape=(int(RESULTS_SPACE/np.dtype(edge_t).itemsize),), dtype=edge_t)
     BLOOM = allocate(shape=(BLOOM_SPACE,), dtype=np.uint8)
@@ -138,6 +155,7 @@ def subiso(test, path):
     dynfifo_space = 0
 
     fres = open(path + "results.txt", "a")
+    print("query,datagraph,h1,h2,power,time,preproc,hit_findmin,req_findmin,hit_readmin_counter,req_readmin_counter,hit_readmin_edge,req_readmin_edge,hit_intersect,req_intersect,hit_verify,req_verify,matches", file=fres)
 
     for data in test.keys():
         datagraph = path + "data/" + data
@@ -148,9 +166,12 @@ def subiso(test, path):
         datagraph_v = int(datagraph_v)
         datagraph_e = int(datagraph_e)
 
-        #Computing space for dynamic fifo
+        #Computing space for dynamic fifo, aligning it to burst size
         dynfifo_space = datagraph_e + MAX_QDATA;
         dynfifo_space = dynfifo_space - (dynfifo_space % BURST_SIZE) + BURST_SIZE;
+        if (dynfifo_space > int(RESULTS_SPACE / np.dtype(edge_t).itemsize)):
+            print(f"Error: not enough space for dynamic fifo in {data}.", flush=True)
+            continue
         dynfifo_space = int(RESULTS_SPACE / np.dtype(edge_t).itemsize) - dynfifo_space;
         counter = dynfifo_space;
 
@@ -259,6 +280,7 @@ def subiso(test, path):
 
             # Reordering the query graph based on the heuristic
             order = query_order(querygraph_v, querygraph_e, adjacency_list)
+            #order = [0, 1, 2, 3, 4, 5]
             if order is None:
                 continue
             
@@ -290,6 +312,10 @@ def subiso(test, path):
             hash1_w = int(0.4 * np.log(5*(10**7)*datagraph_e)) + 2
             hash2_w = int(min(max_degree + 1, 7))
 
+            # Assert that the sum of hash widths is bigger than 14
+            if (hash1_w + hash2_w <= 14):
+                hash2_w = 14 - hash1_w
+
             blocks = len(tablelist) * 2**(hash1_w + hash2_w - 14)
             while(blocks > 2048):
                 hash2_w -= 1
@@ -306,21 +332,21 @@ def subiso(test, path):
             
             print(f"h1 {hash1_w}, h2 {hash2_w}, blocks: {blocks} max 2048")
             
-            ol.subgraphIsomorphism_0.write(addr_mem0, MEM.device_address)
-            ol.subgraphIsomorphism_0.write(addr_mem1, MEM.device_address)
-            ol.subgraphIsomorphism_0.write(addr_mem2, MEM.device_address)
-            ol.subgraphIsomorphism_0.write(addr_mem3, MEM.device_address)
-            ol.subgraphIsomorphism_0.write(addr_bloom, BLOOM.device_address)
-            ol.subgraphIsomorphism_0.write(addr_fifo, FIFO.device_address)
-            ol.subgraphIsomorphism_0.write(addr_hash1_w, hash1_w)
-            ol.subgraphIsomorphism_0.write(addr_hash2_w, hash2_w)
-            ol.subgraphIsomorphism_0.write(addr_qv, querygraph_v)
-            ol.subgraphIsomorphism_0.write(addr_qe, querygraph_e)
-            ol.subgraphIsomorphism_0.write(addr_de, datagraph_e)
-            ol.subgraphIsomorphism_0.write(addr_dyn_spacel, dynfifo_space)
-            ol.subgraphIsomorphism_0.write(addr_dyn_spaceh, dynfifo_space >> 32)
+            ol.subgraphIsomorphism_0.write(axi_addresses["addr_mem0"], MEM.device_address)
+            ol.subgraphIsomorphism_0.write(axi_addresses["addr_mem1"], MEM.device_address)
+            ol.subgraphIsomorphism_0.write(axi_addresses["addr_mem2"], MEM.device_address)
+            ol.subgraphIsomorphism_0.write(axi_addresses["addr_mem3"], MEM.device_address)
+            ol.subgraphIsomorphism_0.write(axi_addresses["addr_bloom"], BLOOM.device_address)
+            ol.subgraphIsomorphism_0.write(axi_addresses["addr_fifo"], FIFO.device_address)
+            ol.subgraphIsomorphism_0.write(axi_addresses["addr_hash1_w"], hash1_w)
+            ol.subgraphIsomorphism_0.write(axi_addresses["addr_hash2_w"], hash2_w)
+            ol.subgraphIsomorphism_0.write(axi_addresses["addr_qv"], querygraph_v)
+            ol.subgraphIsomorphism_0.write(axi_addresses["addr_qe"], querygraph_e)
+            ol.subgraphIsomorphism_0.write(axi_addresses["addr_de"], datagraph_e)
+            ol.subgraphIsomorphism_0.write(axi_addresses["addr_dyn_spacel"], dynfifo_space)
+            ol.subgraphIsomorphism_0.write(axi_addresses["addr_dyn_spaceh"], dynfifo_space >> 32)
 
-            mem_counter = 0;
+            mem_counter = 0
             mem_counter += FIFO.nbytes
             mem_counter += MEM.nbytes
             mem_counter += BLOOM.nbytes
@@ -338,7 +364,7 @@ def subiso(test, path):
 
                 #Start the kernel
                 ol.subgraphIsomorphism_0.write(0x00, 1)
-                while (not(ol.subgraphIsomorphism_0.read(addr_preproc_ctrl))):
+                while (not(ol.subgraphIsomorphism_0.read(axi_addresses["addr_preproc_ctrl"]))):
                     pass
 
                 end_preprocess = perf_counter()
@@ -356,9 +382,9 @@ def subiso(test, path):
                     sleep(0.001)
                 
                 end_subiso = perf_counter()
-                overflow = ol.subgraphIsomorphism_0.read(addr_dyn_ovf)
-                resl = ol.subgraphIsomorphism_0.read(addr_resl)
-                resh = ol.subgraphIsomorphism_0.read(addr_resh)
+                overflow = ol.subgraphIsomorphism_0.read(axi_addresses["addr_dyn_ovf"])
+                resl = ol.subgraphIsomorphism_0.read(axi_addresses["addr_resl"])
+                resh = ol.subgraphIsomorphism_0.read(axi_addresses["addr_resh"])
                 if (overflow == 1):
                     print(f"Query not solved due to overflow in partial result fifo.", flush=True)
                 else:
@@ -366,25 +392,50 @@ def subiso(test, path):
                 
                 tot_time_bench = tot_time_bench + end_subiso
 
-                hit0l = ol.subgraphIsomorphism_0.read(addr_hit0l)
-                hit0h = ol.subgraphIsomorphism_0.read(addr_hit0h)
-                hit1l = ol.subgraphIsomorphism_0.read(addr_hit1l)
-                hit1h = ol.subgraphIsomorphism_0.read(addr_hit1h)
-                req0l = ol.subgraphIsomorphism_0.read(addr_req0l)
-                req0h = ol.subgraphIsomorphism_0.read(addr_req0h)
-                req1l = ol.subgraphIsomorphism_0.read(addr_req1l)
-                req1h = ol.subgraphIsomorphism_0.read(addr_req1h)
+                hit_findminl = ol.subgraphIsomorphism_0.read(axi_addresses["addr_hit_findminl"])
+                hit_findminh = ol.subgraphIsomorphism_0.read(axi_addresses["addr_hit_findminh"])
+                hit_readmin_counterl = ol.subgraphIsomorphism_0.read(axi_addresses["addr_hit_readmin_counterl"])
+                hit_readmin_counterh = ol.subgraphIsomorphism_0.read(axi_addresses["addr_hit_readmin_counterh"])
+                hit_readmin_edgel = ol.subgraphIsomorphism_0.read(axi_addresses["addr_hit_readmin_edgel"])
+                hit_readmin_edgeh = ol.subgraphIsomorphism_0.read(axi_addresses["addr_hit_readmin_edgeh"])
+                hit_intersectl = ol.subgraphIsomorphism_0.read(axi_addresses["addr_hit_intersectl"])
+                hit_intersecth = ol.subgraphIsomorphism_0.read(axi_addresses["addr_hit_intersecth"])
+                hit_verifyl = ol.subgraphIsomorphism_0.read(axi_addresses["addr_hit_verifyl"])
+                hit_verifyh = ol.subgraphIsomorphism_0.read(axi_addresses["addr_hit_verifyh"])
+                req_findminl = ol.subgraphIsomorphism_0.read(axi_addresses["addr_req_findminl"])
+                req_findminh = ol.subgraphIsomorphism_0.read(axi_addresses["addr_req_findminh"])
+                req_readmin_counterl = ol.subgraphIsomorphism_0.read(axi_addresses["addr_req_readmin_counterl"])
+                req_readmin_counterh = ol.subgraphIsomorphism_0.read(axi_addresses["addr_req_readmin_counterh"])
+                req_readmin_edgel = ol.subgraphIsomorphism_0.read(axi_addresses["addr_req_readmin_edgel"])
+                req_readmin_edgeh = ol.subgraphIsomorphism_0.read(axi_addresses["addr_req_readmin_edgeh"])
+                req_intersectl = ol.subgraphIsomorphism_0.read(axi_addresses["addr_req_intersectl"])
+                req_intersecth = ol.subgraphIsomorphism_0.read(axi_addresses["addr_req_intersecth"])
+                req_verifyl = ol.subgraphIsomorphism_0.read(axi_addresses["addr_req_verifyl"])
+                req_verifyh = ol.subgraphIsomorphism_0.read(axi_addresses["addr_req_verifyh"])
+
+                if (overflow == 1):
+                    resh = 0
+                    resl = 0
+                    end_subiso = start
+                    end_preprocess = start
+
                 print(f"{os.path.basename(querygraph)},",
                       f"{os.path.basename(datagraph)},",
                       f"{hash1_w},{hash2_w}",
                       f",{(np.mean(power)):.3f}",
                       f",{(end_subiso - start):.3f}",
-                      f",{(hit0h << 32) | hit0l}",
-                      f",{(req0h << 32) | req0l}",
-                      f",{(hit1h << 32) | hit1l}",
-                      f",{(req1h << 32) | req1l}",
+                      f",{(end_preprocess - start):.3f}",
+                      f",{(hit_findminh << 32) | hit_findminl}",
+                      f",{(req_findminh << 32) | req_findminl}",
+                      f",{(hit_readmin_counterh << 32) | hit_readmin_counterl}",
+                      f",{(req_readmin_counterh << 32) | req_readmin_counterl}",
+                      f",{(hit_readmin_edgeh << 32) | hit_readmin_edgel}",
+                      f",{(req_readmin_edgeh << 32) | req_readmin_edgel}",
+                      f",{(hit_intersecth << 32) | hit_intersectl}",
+                      f",{(req_intersecth << 32) | req_intersectl}",
+                      f",{(hit_verifyh << 32) | hit_verifyl}",
+                      f",{(req_verifyh << 32) | req_verifyl}",
                       f",{(resh << 32) | resl}",
-                    #   f",{order}",
                       sep="",
                       file=fres)
                 fres.flush()

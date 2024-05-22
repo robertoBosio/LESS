@@ -89,7 +89,7 @@ class cache {
 			address_type;
 		typedef T line_type[N_WORDS_PER_LINE];
 		typedef l1_cache<T, MAIN_SIZE, N_L1_SETS, N_L1_WAYS,
-			N_WORDS_PER_LINE, SWAP_TAG_SET, L1_STORAGE_IMPL> l1_cache_type;
+			N_WORDS_PER_LINE, PORTS, SWAP_TAG_SET, L1_STORAGE_IMPL> l1_cache_type;
 		typedef raw_cache<T, (N_LINES), N_WORDS_PER_LINE, 2>
 			raw_cache_type;
 		typedef replacer<LRU, address_type, N_SETS, N_WAYS,
