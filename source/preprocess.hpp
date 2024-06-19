@@ -42,6 +42,22 @@ struct bloom_update_tuple_t
   bool last;
 };
 
+template<size_t NODE_W>
+struct bagtoset_tuple_t
+{
+  ap_uint<NODE_W> indexing_v;
+  bool write;
+  bool last;
+  bool valid;
+};
+
+template<size_t NODE_W>
+struct batch_tuple_t
+{
+  ap_uint<NODE_W> indexing_v;
+  bool last;
+};
+
 struct counter_tuple_t
 {
   unsigned int address;
@@ -171,95 +187,219 @@ CREATE_TABDESC_LOOP:
 
 /* Reads edges from each table and divide the indexed vertices based
 on indexing hash to create bloom filters */
-template<typename T_DDR,
-         size_t CNT_LOG,
-         size_t ROW_LOG,
-         size_t NODE_W,
-         size_t EDGE_LOG,
-         size_t LKP3_HASH_W,
-         size_t MAX_HASH_W,
-         size_t FULL_HASH_W>
-void
-bloomRead(AdjHT* hTables,
-           T_DDR* htb_buf,
-           const unsigned short numTables,
-           const unsigned char hash1_w,
-           hls::stream<bloom_update_tuple_t<FULL_HASH_W> >& stream_tuple_out)
+template <typename T_DDR,
+          size_t CNT_LOG,
+          size_t ROW_LOG,
+          size_t NODE_W,
+          size_t EDGE_LOG,
+          size_t LKP3_HASH_W,
+          size_t MAX_HASH_W,
+          size_t FULL_HASH_W>
+void bloomRead(AdjHT *hTables,
+               QueryVertex *qVertices,
+               T_DDR *htb_buf,
+               const unsigned short numTables,
+               const unsigned char hash1_w,
+               hls::stream<bagtoset_tuple_t<NODE_W> > &stream_tuple_bagtoset_out,
+               hls::stream<bloom_update_tuple_t<FULL_HASH_W>> &stream_tuple_bloom_out)
 {
-    constexpr size_t EDGE_W = 1UL << EDGE_LOG;
-    hls::stream<ap_uint<NODE_W>, 4> hash_in0, hash_in1;
-    hls::stream<ap_uint<FULL_HASH_W>, 4> hash_out0;
-    hls::stream<ap_uint<LKP3_HASH_W>, 4> hash_out1;
-    ap_uint<EDGE_W> edge;
-    ap_uint<NODE_W> indexing_v, indexed_v;
-    ap_uint<FULL_HASH_W> indexed_h, prev_indexed_h;
-    ap_uint<MAX_HASH_W> indexing_h, prev_indexing_h;
-    bloom_update_tuple_t<FULL_HASH_W> tuple_out;
-    T_DDR row;
-    unsigned int counter;
-    prev_indexing_h = 0;
-    prev_indexed_h = 0;
+  constexpr size_t EDGE_W = 1UL << EDGE_LOG;
+  hls::stream<ap_uint<NODE_W>, 4> hash_in0, hash_in1;
+  hls::stream<ap_uint<FULL_HASH_W>, 4> hash_out0;
+  hls::stream<ap_uint<LKP3_HASH_W>, 4> hash_out1;
+  ap_uint<EDGE_W> edge;
+  ap_uint<NODE_W> indexing_v, indexed_v, prev_indexing_v;
+  ap_uint<FULL_HASH_W> indexed_h, prev_indexed_h;
+  ap_uint<MAX_HASH_W> indexing_h, prev_indexing_h;
+  bloom_update_tuple_t<FULL_HASH_W> tuple_out;
+  T_DDR row;
+  unsigned int counter;
+  prev_indexing_h = 0;
+  prev_indexed_h = 0;
+
+// Select the table with the minimum number of edges
+// to start the partial solutions.
+  unsigned int minSize = UINT32_MAX;
+  unsigned short minTableIndex;
+PROPOSE_TBINDEXING_LOOP:
+  for (int g = 0; g < qVertices[0].numTablesIndexing; g++) {
+    unsigned short tableIndex = qVertices[0].tables_indexing[g];
+
+    if (hTables[tableIndex].n_edges < minSize) {
+      minSize = hTables[tableIndex].n_edges;
+      minTableIndex = tableIndex;
+    }
+  }
 
 BLOOM_READ_TASK_LOOP:
-    for (unsigned int ntb = 0; ntb < numTables; ntb++) {
+  for (unsigned int ntb = 0; ntb < numTables; ntb++)
+  {
 
-        /* During first iteration do not consider the difference between
-        prev_indexing_h and indexing_h to be useful to write the bloom */
-        bool first_it = true;
-        counter = 0;
-        unsigned int cycles = (hTables[ntb].n_edges >> 1) + 1;
-        unsigned int offset = hTables[ntb].start_edges;
+    /* During first iteration do not consider the difference between
+    prev_indexing_h and indexing_h to be useful to write the bloom */
+    bool first_it = true;
+    counter = 0;
+    unsigned int cycles = (hTables[ntb].n_edges >> 1) + 1;
+    unsigned int offset = hTables[ntb].start_edges;
 
-        /* Read all the edges in a table and divide them by hash1 */
-    BLOOM_READ_EDGES_BLOCK:
-        for (unsigned int start = 0; start < cycles; start++) {
+    /* Read all the edges in a table and divide them by hash1 */
+  BLOOM_READ_EDGES_BLOCK:
+    for (unsigned int start = 0; start < cycles; start++)
+    {
 #pragma HLS pipeline II = 2
 
-            row = htb_buf[offset + start];
+      row = htb_buf[offset + start];
 
-            for (int i = 0; i < EDGE_ROW; i++) {
+      for (int i = 0; i < EDGE_ROW; i++)
+      {
 #pragma HLS unroll
-                edge = row.range(((i + 1) << EDGE_LOG) - 1, i << EDGE_LOG);
-                indexing_v = edge.range(NODE_W * 2 - 1, NODE_W);
-                indexed_v = edge.range(NODE_W - 1, 0);
+        edge = row.range(((i + 1) << EDGE_LOG) - 1, i << EDGE_LOG);
+        indexing_v = edge.range(NODE_W * 2 - 1, NODE_W);
+        indexed_v = edge.range(NODE_W - 1, 0);
 
-                hash_in0.write(indexed_v);
-                hash_in1.write(indexing_v);
-                xf::database::hashLookup3<NODE_W>(hash_in0, hash_out0);
-                xf::database::hashLookup3<NODE_W>(hash_in1, hash_out1);
-                indexed_h = hash_out0.read();
-                indexing_h = hash_out1.read();
-                indexing_h = indexing_h.range(hash1_w - 1, 0);
+        hash_in0.write(indexed_v);
+        hash_in1.write(indexing_v);
+        xf::database::hashLookup3<NODE_W>(hash_in0, hash_out0);
+        xf::database::hashLookup3<NODE_W>(hash_in1, hash_out1);
+        indexed_h = hash_out0.read();
+        indexing_h = hash_out1.read();
+        indexing_h = indexing_h.range(hash1_w - 1, 0);
 
-                bool valid = (counter < hTables[ntb].n_edges);
-                bool write = (indexing_h != prev_indexing_h);
-                /* Writing edge of previous iteration */
-                if (valid && !first_it) {
-                  tuple_out.address = ntb * (1UL << hash1_w) + prev_indexing_h;
-                  tuple_out.last = false;
-                  tuple_out.write = write;
-                  tuple_out.indexed_h = prev_indexed_h;
-                  stream_tuple_out.write(tuple_out);
-                }
+        bool valid = (counter < hTables[ntb].n_edges);
+        bool write = (indexing_h != prev_indexing_h);
+        /* Writing edge of previous iteration */
+        if (valid && !first_it)
+        {
+          tuple_out.address = ntb * (1UL << hash1_w) + prev_indexing_h;
+          tuple_out.last = false;
+          tuple_out.write = write;
+          tuple_out.indexed_h = prev_indexed_h;
+          stream_tuple_bloom_out.write(tuple_out);
 
-                if (valid) {
-                  prev_indexing_h = indexing_h;
-                  prev_indexed_h = indexed_h;
-                }
-                counter++;
-                first_it = false;
-            }
+          if (ntb == minTableIndex)
+          {
+            bagtoset_tuple_t<NODE_W> tuple_bagtoset_out;
+            tuple_bagtoset_out.indexing_v = prev_indexing_v;
+            tuple_bagtoset_out.write = write;
+            tuple_bagtoset_out.last = false;
+            tuple_bagtoset_out.valid = true;
+            stream_tuple_bagtoset_out.write(tuple_bagtoset_out);
+          }
         }
 
-        /* Write explicitly the last bloom filter since
-        the difference between prev_indexing_h and indexing_h
-        does not work at the end of the table */
-        tuple_out.address = ntb * (1UL << hash1_w) + prev_indexing_h;
-        tuple_out.indexed_h = prev_indexed_h;
-        tuple_out.write = true;
-        tuple_out.last = (ntb == (numTables - 1));
-        stream_tuple_out.write(tuple_out);
+        if (valid)
+        {
+          prev_indexing_h = indexing_h;
+          prev_indexing_v = indexing_v;
+          prev_indexed_h = indexed_h;
+        }
+        counter++;
+        first_it = false;
+      }
     }
+
+    /* Write explicitly the last bloom filter since
+    the difference between prev_indexing_h and indexing_h
+    does not work at the end of the table */
+    tuple_out.address = ntb * (1UL << hash1_w) + prev_indexing_h;
+    tuple_out.indexed_h = prev_indexed_h;
+    tuple_out.write = true;
+    tuple_out.last = (ntb == (numTables - 1));
+    stream_tuple_bloom_out.write(tuple_out);
+
+    bagtoset_tuple_t<NODE_W> tuple_bagtoset_out;
+    tuple_bagtoset_out.indexing_v = prev_indexing_v;
+    tuple_bagtoset_out.write = true;
+    tuple_bagtoset_out.valid = ntb == minTableIndex;
+    tuple_bagtoset_out.last = (ntb == (numTables - 1));
+    stream_tuple_bagtoset_out.write(tuple_bagtoset_out);
+  }
+}
+
+template <size_t NODE_W,
+          size_t MAX_CL>
+void bagtoset(hls::stream<bagtoset_tuple_t<NODE_W> > &stream_tuple_in,
+              hls::stream<batch_tuple_t<NODE_W> > &stream_tuple_out)
+{
+  bagtoset_tuple_t<NODE_W> tuple_in;
+  ap_uint<NODE_W> set[MAX_CL];
+  unsigned char pointer = 0;
+  ap_uint<MAX_CL> valid_bits = 0; // 1 if the element is present
+  ap_uint<MAX_CL> equal_bits = 0; // 1 if the element is equal to the one in the bag
+
+BAGTOSET_TASK_LOOP:
+  do
+  {
+#pragma HLS pipeline II = 2
+    tuple_in = stream_tuple_in.read();
+
+    if (tuple_in.valid)
+    {
+      // Check if the element is present in the set
+      for (int i = 0; i < MAX_CL; i++)
+      {
+#pragma HLS unroll
+        equal_bits[i] = (set[i] == tuple_in.indexing_v);
+      }
+
+      // If the element is not present in the set, add it
+      // and write it to the output stream
+      if ((equal_bits & valid_bits) == 0)
+      {
+        set[pointer] = tuple_in.indexing_v;
+        valid_bits = valid_bits | (1 << pointer);
+        pointer++;
+        batch_tuple_t<NODE_W> tuple_out;
+        tuple_out.indexing_v = tuple_in.indexing_v;
+        tuple_out.last = false;
+        stream_tuple_out.write(tuple_out);
+      }
+
+      // Last element of the hash set
+      if (tuple_in.write)
+      {
+        pointer = 0;
+        valid_bits = 0;
+      }
+    }
+
+  } while (!tuple_in.last);
+
+  batch_tuple_t<NODE_W> tuple_out;
+  tuple_out.indexing_v = tuple_in.indexing_v;
+  tuple_out.last = true;
+  stream_tuple_out.write(tuple_out);
+}
+
+template <size_t NODE_LOG,
+          size_t NODE_W,
+          size_t ROW_LOG>
+void batch(unsigned int &n_candidate,
+               const unsigned int start_address,
+               row_t *htb_buf,
+               hls::stream<batch_tuple_t<NODE_W>> &stream_tuple_in)
+{
+  constexpr size_t NODE_PER_WORD_LOG = ROW_LOG - NODE_LOG;
+  row_t word;
+  ap_uint<32> pointer = 0;
+  unsigned int offset = 0;
+
+  batch_tuple_t<NODE_W> tuple_in = stream_tuple_in.read();
+  while (!tuple_in.last)
+  {
+#pragma HLS pipeline II = 1
+    ap_uint<NODE_PER_WORD_LOG> in_word_pointer = pointer.range(NODE_PER_WORD_LOG - 1, 0);
+    word.range(NODE_W * (in_word_pointer + 1) - 1, NODE_W * in_word_pointer) = tuple_in.indexing_v;
+    if (in_word_pointer == (1UL << NODE_PER_WORD_LOG) - 1)
+    {
+      htb_buf[start_address + offset] = word;
+      offset++;
+    }
+    pointer++;
+    tuple_in = stream_tuple_in.read();
+  };
+  htb_buf[start_address + offset] = word;
+  n_candidate = pointer;
 }
 
 template<typename T_BLOOM,
@@ -340,7 +480,9 @@ template <typename T_DDR,
           size_t CNT_LOG,
           size_t ROW_LOG,
           size_t NODE_W,
+          size_t NODE_LOG,
           size_t EDGE_LOG,
+          size_t MAX_CL,
           size_t LKP3_HASH_W,
           size_t MAX_HASH_W,
           size_t FULL_HASH_W,
@@ -349,8 +491,12 @@ template <typename T_DDR,
           size_t STREAM_D>
 void writeBloom(
     T_BLOOM *bloom_p,
-    T_DDR *htb_p,
+    T_DDR *htb_p0,
+    T_DDR *htb_p1,
     AdjHT *hTables,
+    QueryVertex *qVertices,
+    unsigned int &n_candidate,
+    const unsigned int start_address,
     const unsigned char numTables,
     const unsigned char hash1_w)
 {
@@ -361,6 +507,10 @@ void writeBloom(
     hls::stream<bloom_write_tuple_t, 8> stream_address(
       "Bloom address");
     hls::stream<T_BLOOM, 8> stream_filter[(1UL << K_FUN_LOG)];
+    hls::stream<bagtoset_tuple_t<NODE_W>, 8> stream_tuple_bagtoset(
+      "Bagtoset tuple");
+    hls::stream<batch_tuple_t<NODE_W>, 8> stream_tuple_batch(
+      "Batch tuple");
 
     /* Read edges in each table */
     bloomRead<T_DDR,
@@ -370,12 +520,22 @@ void writeBloom(
               EDGE_LOG,
               LKP3_HASH_W,
               MAX_HASH_W,
-              FULL_HASH_W>(hTables, htb_p, numTables, hash1_w, stream_tuple);
+              FULL_HASH_W>(hTables,
+                           qVertices,
+                           htb_p0,
+                           numTables,
+                           hash1_w,
+                           stream_tuple_bagtoset,
+                           stream_tuple);
 
     bloomUpdate<T_BLOOM, BLOOM_LOG, K_FUN_LOG, FULL_HASH_W>(
       stream_tuple, stream_address, stream_filter);
 
+    bagtoset<NODE_W, MAX_CL>(stream_tuple_bagtoset, stream_tuple_batch);
+
     bloomWrite<T_BLOOM, K_FUN_LOG>(bloom_p, stream_address, stream_filter);
+
+    batch<NODE_LOG, NODE_W, ROW_LOG>(n_candidate, start_address, htb_p1, stream_tuple_batch);
 }
 
 template<size_t NODE_W,
@@ -1108,6 +1268,9 @@ STORE_OFFSETS_BLOCK_LOOP:
     }
 }
 
+/* Function in charge of reading the starting vertices of partial solutions. 
+ * While reading an indexing set, it is critical to transform it from a bag 
+ * in which nodes are repeated in a set. */
 template<size_t LKP3_HASH_W,
          size_t MAX_HASH_W,
          size_t FULL_HASH_W,
@@ -1206,7 +1369,8 @@ PROPOSE_READ_MIN_INDEXING_LOOP:
 #endif
 }
 
-    /* Reads two times the data graph and fills the data stuctures */
+
+/* Reads two times the data graph and fills the data stuctures */
 template<typename T_DDR,
          typename T_BLOOM,
          size_t EDGE_LOG,
@@ -1215,6 +1379,7 @@ template<typename T_DDR,
          size_t K_FUN_LOG,
          size_t ROW_LOG,
          size_t NODE_W,
+         size_t NODE_LOG,
          size_t LKP3_HASH_W,
          size_t MAX_HASH_W,
          size_t FULL_HASH_W,
@@ -1226,6 +1391,7 @@ template<typename T_DDR,
 void
 fillTablesURAM(row_t* edge_buf,
                T_DDR* htb_buf,
+               T_DDR* htb_buf1,
                T_DDR* bloom_p,
                QueryVertex* qVertices,
                AdjHT* hTables0,
@@ -1329,22 +1495,24 @@ STORE_EDGES_POINTER_LOOP:
                CNT_LOG,
                ROW_LOG,
                NODE_W,
+               NODE_LOG,
                EDGE_LOG,
+               MAX_CL,
                LKP3_HASH_W,
                MAX_HASH_W,
                FULL_HASH_W,
                BLOOM_LOG,
                K_FUN_LOG,
-               STREAM_D>(bloom_p, htb_buf, hTables0, numTables, hash1_w);
+               STREAM_D>(bloom_p, htb_buf, htb_buf1, hTables0, qVertices, n_candidate, start_addr, numTables, hash1_w);
 
-    mwj_batch<LKP3_HASH_W,
-              MAX_HASH_W,
-              FULL_HASH_W,
-              NODE_W,
-              EDGE_LOG,
-              ROW_LOG,
-              MAX_CL>(
-      hash1_w, n_candidate, start_addr, hTables0, qVertices, htb_buf);
+    // mwj_batch<LKP3_HASH_W,
+    //           MAX_HASH_W,
+    //           FULL_HASH_W,
+    //           NODE_W,
+    //           EDGE_LOG,
+    //           ROW_LOG,
+    //           MAX_CL>(
+    //   hash1_w, n_candidate, start_addr, hTables0, qVertices, htb_buf);
 
     start_candidate = start_addr;
 #ifndef __SYNTHESIS__
@@ -1366,6 +1534,7 @@ template<typename T_DDR,
          size_t K_FUN_LOG,
          size_t ROW_LOG,
          size_t NODE_W,
+         size_t NODE_LOG,
          size_t LKP3_HASH_W,
          size_t MAX_HASH_W,
          size_t FULL_HASH_W,
@@ -1377,7 +1546,8 @@ template<typename T_DDR,
          size_t MAX_CL>
 void
 preprocess(row_t* edge_buf,
-           T_DDR* htb_buf,
+           T_DDR* htb_buf0,
+           T_DDR* htb_buf1,
            T_DDR* bloom_p,
            QueryVertex* qVertices,
            AdjHT* hTables0,
@@ -1396,8 +1566,8 @@ preprocess(row_t* edge_buf,
     ap_uint<8> labelToTable[MAX_LABELS][MAX_LABELS];
 
 INITIALIZE_LABELTOTABLE_LOOP:
-    for (int g = 0; g < MAX_TABLES; g++) {
-        for (int s = 0; s < MAX_TABLES; s++) {
+    for (int g = 0; g < MAX_LABELS; g++) {
+        for (int s = 0; s < MAX_LABELS; s++) {
 #pragma HLS pipeline II = 2
             labelToTable[g][s] = 0;
         }
@@ -1419,6 +1589,7 @@ INITIALIZE_LABELTOTABLE_LOOP:
                    K_FUN_LOG,
                    ROW_LOG,
                    NODE_W,
+                   NODE_LOG,
                    LKP3_HASH_W,
                    MAX_HASH_W,
                    FULL_HASH_W,
@@ -1427,7 +1598,8 @@ INITIALIZE_LABELTOTABLE_LOOP:
                    HTB_SPACE,
                    MAX_LABELS,
                    MAX_CL>(edge_buf,
-                               htb_buf,
+                               htb_buf0,
+                               htb_buf1,
                                bloom_p,
                                qVertices,
                                hTables0,

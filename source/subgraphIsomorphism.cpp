@@ -1490,8 +1490,11 @@ ASSEMBLY_TASK_LOOP:
       //     stream_partial_out.write(0 | MASK_END_EXTENSION);
       //     partial_sol++;
       //   }
-      row_t row = m_axi[start_candidate + nodes_read];
-      ap_uint<V_ID_W> node = row.range(V_ID_W - 1, 0);
+      ap_uint<2> word_select = nodes_read.range(1, 0);
+      ap_uint<32> row_select = nodes_read >> 2;
+      row_t row = m_axi[start_candidate + row_select];
+      ap_uint<V_ID_W> node = row.range((V_ID_W * (word_select + 1)) - 1,
+                                       V_ID_W * word_select);
       
       /* False extension for single node solutions */
       stream_partial_out.write(FAKE_NODE);
@@ -2248,6 +2251,7 @@ void subgraphIsomorphism(row_t htb_buf0[HASHTABLES_SPACE],
                K_FUNCTIONS,
                DDR_BIT,
                VERTEX_WIDTH_BIT,
+               VERTEX_WIDTH,
                HASH_LOOKUP3_BIT,
                MAX_HASH_TABLE_BIT,
                64,
@@ -2258,6 +2262,7 @@ void subgraphIsomorphism(row_t htb_buf0[HASHTABLES_SPACE],
                MAX_TABLES,
                MAX_COLLISIONS>(res_buf,
                                htb_buf0,
+                               htb_buf1,
                                bloom_p,
                                qVertices,
                                hTables0,
