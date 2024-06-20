@@ -135,9 +135,21 @@ def subiso(test, path):
         "addr_req_intersecth" : 0x2dc,
         "addr_req_verifyl" : 0x2f0,
         "addr_req_verifyh" : 0x2f4,
-        "addr_resl" : 0x308,
-        "addr_resh" : 0x30c,
-        "addr_res_ctrl" : 0x310,
+        "addr_hmsb0_1" : 0x308,
+        "addr_hmsb0_2" : 0x30c,
+        "addr_hmsb0_ctrl" : 0x310,
+        "addr_hmsb1_1" : 0x320,
+        "addr_hmsb1_2" : 0x324,
+        "addr_hmsb1_ctrl" : 0x328,
+        "addr_hmsb2_1" : 0x338,
+        "addr_hmsb2_2" : 0x33c,
+        "addr_hmsb2_ctrl" : 0x340,
+        "addr_hmsb3_1" : 0x350,
+        "addr_hmsb3_2" : 0x354,
+        "addr_hmsb3_ctrl" : 0x358,
+        "addr_resl" : 0x368,
+        "addr_resh" : 0x36c,
+        "addr_res_ctrl" : 0x370,
     }
 
     node_t = np.uint32
@@ -155,7 +167,7 @@ def subiso(test, path):
     dynfifo_space = 0
 
     fres = open(path + "results.txt", "a")
-    print("query,datagraph,h1,h2,power,time,preproc,hit_findmin,req_findmin,hit_readmin_counter,req_readmin_counter,hit_readmin_edge,req_readmin_edge,hit_intersect,req_intersect,hit_verify,req_verify,matches", file=fres)
+    print("query,datagraph,h1,h2,power,time,preproc,hit_findmin,req_findmin,hit_readmin_counter,req_readmin_counter,hit_readmin_edge,req_readmin_edge,hit_intersect,req_intersect,hit_verify,req_verify,hmsb0,hmsb1,hmsb2,hmsb3,matches", file=fres)
 
     for data in test.keys():
         datagraph = path + "data/" + data
@@ -412,6 +424,14 @@ def subiso(test, path):
                 req_intersecth = ol.subgraphIsomorphism_0.read(axi_addresses["addr_req_intersecth"])
                 req_verifyl = ol.subgraphIsomorphism_0.read(axi_addresses["addr_req_verifyl"])
                 req_verifyh = ol.subgraphIsomorphism_0.read(axi_addresses["addr_req_verifyh"])
+                hmsb0_L = ol.subgraphIsomorphism_0.read(axi_addresses["addr_hmsb0_1"])
+                hmsb0_H = ol.subgraphIsomorphism_0.read(axi_addresses["addr_hmsb0_2"])
+                hmsb1_L = ol.subgraphIsomorphism_0.read(axi_addresses["addr_hmsb1_1"])
+                hmsb1_H = ol.subgraphIsomorphism_0.read(axi_addresses["addr_hmsb1_2"])
+                hmsb2_L = ol.subgraphIsomorphism_0.read(axi_addresses["addr_hmsb2_1"])
+                hmsb2_H = ol.subgraphIsomorphism_0.read(axi_addresses["addr_hmsb2_2"])
+                hmsb3_L = ol.subgraphIsomorphism_0.read(axi_addresses["addr_hmsb3_1"])
+                hmsb3_H = ol.subgraphIsomorphism_0.read(axi_addresses["addr_hmsb3_2"])
 
                 if (overflow == 1):
                     resh = 0
@@ -435,6 +455,10 @@ def subiso(test, path):
                       f",{(req_intersecth << 32) | req_intersectl}",
                       f",{(hit_verifyh << 32) | hit_verifyl}",
                       f",{(req_verifyh << 32) | req_verifyl}",
+                      f",{(hmsb0_H << 32) | hmsb0_L}",
+                      f",{(hmsb1_H << 32) | hmsb1_L}",
+                      f",{(hmsb2_H << 32) | hmsb2_L}",
+                      f",{(hmsb3_H << 32) | hmsb3_L}",
                       f",{(resh << 32) | resl}",
                       sep="",
                       file=fres)

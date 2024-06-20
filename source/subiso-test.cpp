@@ -43,7 +43,7 @@ void load_datagraphs(
     edge_t edge;
     
     /* Remove "../" to make paths correct */
-    datafile = datafile.substr(3);
+    //datafile = datafile.substr(3);
     
     std::ifstream fData(datafile);
     
@@ -105,7 +105,7 @@ void load_querygraphs(
     edge_t edge;
     
     /* Remove "../" to make paths correct */
-    queryfile = queryfile.substr(3);
+    //queryfile = queryfile.substr(3);
     
     /* Query file */
     std::ifstream fQuery(queryfile);
@@ -226,6 +226,7 @@ int main()
     std::map<std::string, std::vector<TestEntry>> test;
     std::string prev_datagraph;
     unsigned long counters[25];
+    unsigned long hmsb[4];
     unsigned int dynfifo_overflow;
 
     char cwd[100];
@@ -408,6 +409,10 @@ int main()
                 counters[22],
                 counters[23],
                 counters[24],
+                hmsb[0],
+                hmsb[1],
+                hmsb[2],
+                hmsb[3],
 #endif
                 result);
 
@@ -453,6 +458,10 @@ int main()
                 counters[22],
                 counters[23],
                 counters[24],
+                hmsb[0],
+                hmsb[1],
+                hmsb[2],
+                hmsb[3],
 #endif
                 result);
 #endif /* SOFTWARE_PREPROC */
@@ -471,8 +480,13 @@ int main()
                 ;
             for (int g = 0; g < BLOOM_SPACE; bloom_p[g++] = 0)
                 ;
+            std::cout << "\nCounters" << std::endl;
             for (int g = 0; g < 25; g++) {
                 std::cout << counters[g] << std::endl;
+            }
+            std::cout << "\nh1 dividers" << std::endl;
+            for (int g = 0; g < 4; g++) {
+                std::cout << hmsb[g] << std::endl;
             }
         }
     }

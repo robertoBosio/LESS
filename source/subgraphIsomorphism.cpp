@@ -79,6 +79,11 @@ unsigned long hits_readmin_counter = 0;
 unsigned long hits_readmin_edge = 0;
 unsigned long hits_intersect = 0;
 unsigned long hits_verify = 0;
+unsigned long hmsb0 = 0;
+unsigned long hmsb1 = 0;
+unsigned long hmsb2 = 0;
+unsigned long hmsb3 = 0;
+
 #endif
 
 #if CACHE_ENABLE
@@ -551,6 +556,26 @@ READMIN_COUNTER_TASK_LOOP:
       ap_uint<64> addr_counter;
       hash_trimmed = hash_out;
       hash_trimmed = hash_trimmed.range(hash1_w - 1, 0);
+      
+      // assuming hash1 (trimmed) MSBs
+      #if DEBUG_INTERFACE
+      ap_uint<2> hmsbs;
+      hmsbs = hash_trimmed.range(hash1_w - 1, hash1_w -2);
+      switch(hmsbs) {
+      	case 0:
+      		hmsb0++;
+      		break;
+      	case 1:
+      		hmsb1++;
+      		break;
+      	case 2:
+      		hmsb2++;
+      		break;
+      	default:
+      		hmsb3++;
+      		break;
+      }
+      #endif
 
       if (hash_trimmed != 0) {
         addr_counter = hash_trimmed - 1;
@@ -1987,6 +2012,11 @@ void subgraphIsomorphism(row_t htb_buf0[HASHTABLES_SPACE],
                          unsigned long &p_reqs_readmin_edge,
                          unsigned long &p_reqs_intersect,
                          unsigned long &p_reqs_verify,
+                         unsigned long &p_hmsb0,
+                         unsigned long &p_hmsb1,
+                         unsigned long &p_hmsb2,
+                         unsigned long &p_hmsb3,
+                         
 #endif /* DEBUG_INTERFACE */
                          long unsigned int &result)
 {
@@ -2044,6 +2074,10 @@ void subgraphIsomorphism(row_t htb_buf0[HASHTABLES_SPACE],
 #pragma HLS INTERFACE mode = s_axilite port = p_hits_readmin_edge
 #pragma HLS INTERFACE mode = s_axilite port = p_hits_intersect
 #pragma HLS INTERFACE mode = s_axilite port = p_hits_verify
+#pragma HLS INTERFACE mode=s_axilite port=p_hmsb0
+#pragma HLS INTERFACE mode=s_axilite port=p_hmsb1
+#pragma HLS INTERFACE mode=s_axilite port=p_hmsb2
+#pragma HLS INTERFACE mode=s_axilite port=p_hmsb3
 #endif /* DEBUG_INTERFACE */
 
 #pragma HLS INTERFACE mode = s_axilite port = result
@@ -2109,6 +2143,10 @@ void subgraphIsomorphism(row_t htb_buf0[HASHTABLES_SPACE],
   p_reqs_readmin_edge = reqs_readmin_edge;
   p_reqs_verify = reqs_verify;
   p_reqs_intersect = reqs_intersect;
+  p_hmsb0 = hmsb0;
+  p_hmsb1 = hmsb1;
+  p_hmsb2 = hmsb2;
+  p_hmsb3 = hmsb3;
 
 #if DEBUG_STATS
   debug::print(hash1_w, hash2_w);
@@ -2159,6 +2197,10 @@ void subgraphIsomorphism(row_t htb_buf0[HASHTABLES_SPACE],
                          unsigned long &p_reqs_readmin_edge,
                          unsigned long &p_reqs_intersect,
                          unsigned long &p_reqs_verify,
+                         unsigned long &p_hmsb0,
+                         unsigned long &p_hmsb1,
+                         unsigned long &p_hmsb2,
+                         unsigned long &p_hmsb3,
 #endif /* DEBUG_INTERFACE */
                          long unsigned int &result)
 {
@@ -2218,6 +2260,10 @@ void subgraphIsomorphism(row_t htb_buf0[HASHTABLES_SPACE],
 #pragma HLS INTERFACE mode=s_axilite port=p_hits_readmin_edge
 #pragma HLS INTERFACE mode=s_axilite port=p_hits_intersect
 #pragma HLS INTERFACE mode=s_axilite port=p_hits_verify
+#pragma HLS INTERFACE mode=s_axilite port=p_hmsb0
+#pragma HLS INTERFACE mode=s_axilite port=p_hmsb1
+#pragma HLS INTERFACE mode=s_axilite port=p_hmsb2
+#pragma HLS INTERFACE mode=s_axilite port=p_hmsb3
 #endif /* DEBUG_INTERFACE */
 
 #pragma HLS INTERFACE mode=s_axilite port=result
@@ -2321,6 +2367,10 @@ void subgraphIsomorphism(row_t htb_buf0[HASHTABLES_SPACE],
     p_hits_readmin_edge = hits_readmin_edge;
     p_hits_verify = hits_verify;
     p_hits_intersect = hits_intersect;
+    p_hmsb0 = hmsb0;
+    p_hmsb1 = hmsb1;
+    p_hmsb2 = hmsb2;
+    p_hmsb3 = hmsb3;
 
 #if DEBUG_STATS
     debug::print(hash1_w, hash2_w);

@@ -106,6 +106,10 @@ void subgraphIsomorphism(row_t htb_buf0[HASHTABLES_SPACE],
                          unsigned long &p_reqs_readmin_edge,
                          unsigned long &p_reqs_intersect,
                          unsigned long &p_reqs_verify,
+                         unsigned long &p_hmsb0,
+                         unsigned long &p_hmsb1,
+                         unsigned long &p_hmsb2,
+                         unsigned long &p_hmsb3,
 #endif /* DEBUG_INTERFACE */
 
 #if COUNT_ONLY
