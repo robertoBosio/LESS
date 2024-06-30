@@ -370,6 +370,10 @@ int main()
                 htb_buf,
                 htb_buf,
                 htb_buf,
+                htb_buf,
+                htb_buf,
+                htb_buf,
+                htb_buf,
                 bloom_p,
                 res_buf,
                 nQV,
@@ -418,6 +422,10 @@ int main()
 
 #else
             subgraphIsomorphism(
+                htb_buf,
+                htb_buf,
+                htb_buf,
+                htb_buf,
                 htb_buf,
                 htb_buf,
                 htb_buf,

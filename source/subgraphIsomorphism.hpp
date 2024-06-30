@@ -9,10 +9,14 @@
 #include "Trie.hpp"
 
 #if SOFTWARE_PREPROC
-void subgraphIsomorphism(row_t htb_buf0[HASHTABLES_SPACE],
-                         row_t htb_buf1[HASHTABLES_SPACE],
-                         row_t htb_buf2[HASHTABLES_SPACE],
-                         row_t htb_buf3[HASHTABLES_SPACE],
+void subgraphIsomorphism(row_t htb_buf0_0[HASHTABLES_SPACE],
+                         row_t htb_buf0_1[HASHTABLES_SPACE],
+                         row_t htb_buf1_0[HASHTABLES_SPACE],
+                         row_t htb_buf1_1[HASHTABLES_SPACE],                         
+                         row_t htb_buf2_0[HASHTABLES_SPACE],
+                         row_t htb_buf2_1[HASHTABLES_SPACE],                        
+                         row_t htb_buf3_0[HASHTABLES_SPACE],
+                         row_t htb_buf3_1[HASHTABLES_SPACE],
                          row_t bloom_p[BLOOM_SPACE],
                          row_t res_buf[RESULTS_SPACE],
                          const unsigned short numQueryVert,
@@ -65,10 +69,14 @@ void subgraphIsomorphism(row_t htb_buf0[HASHTABLES_SPACE],
 
 #else
 
-void subgraphIsomorphism(row_t htb_buf0[HASHTABLES_SPACE],
-                         row_t htb_buf1[HASHTABLES_SPACE],
-                         row_t htb_buf2[HASHTABLES_SPACE],
-                         row_t htb_buf3[HASHTABLES_SPACE],
+void subgraphIsomorphism(row_t htb_buf0_0[HASHTABLES_SPACE],
+                         row_t htb_buf0_1[HASHTABLES_SPACE],
+                         row_t htb_buf1_0[HASHTABLES_SPACE],
+                         row_t htb_buf1_1[HASHTABLES_SPACE],                         
+                         row_t htb_buf2_0[HASHTABLES_SPACE],
+                         row_t htb_buf2_1[HASHTABLES_SPACE],                        
+                         row_t htb_buf3_0[HASHTABLES_SPACE],
+                         row_t htb_buf3_1[HASHTABLES_SPACE],
                          row_t bloom_p[BLOOM_SPACE],
                          row_t res_buf[RESULTS_SPACE],
                          const unsigned short numQueryVert,
