@@ -329,8 +329,10 @@ int main()
 
 #if SOFTWARE_PREPROC
             QueryVertex qVertices[MAX_QUERY_VERTICES];
-            AdjHT hTables0[MAX_TABLES];
-            AdjHT hTables1[MAX_TABLES];
+            AdjHT hTables0_0[MAX_TABLES];
+            AdjHT hTables0_1[MAX_TABLES];
+            AdjHT hTables1_0[MAX_TABLES];
+            AdjHT hTables1_1[MAX_TABLES];
             unsigned int n_candidate = 0;
             unsigned int start_candidate = 0;
 
@@ -354,8 +356,10 @@ int main()
                                        htb_buf,
                                        bloom_p,
                                        qVertices,
-                                       hTables0,
-                                       hTables1,
+                                       hTables0_0,
+                                       hTables0_1,
+                                       hTables1_0,
+                                       hTables1_1,
                                        dynfifo_space,
                                        n_candidate,
                                        start_candidate,
@@ -384,8 +388,10 @@ int main()
                 n_candidate,
                 start_candidate,
                 qVertices,
-                hTables0,
-                hTables1,
+                hTables0_0,
+                hTables0_1,
+                hTables1_0,
+                hTables1_1,
 #if DEBUG_INTERFACE
                 debug_endpreprocess_s,
                 counters[0],

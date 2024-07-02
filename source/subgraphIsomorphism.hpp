@@ -27,8 +27,12 @@ void subgraphIsomorphism(row_t htb_buf0_0[HASHTABLES_SPACE],
                          const unsigned int n_candidate,
                          const unsigned int start_candidate,
                          QueryVertex qVertices[MAX_QUERY_VERTICES],
-                         AdjHT hTables0[MAX_TABLES],
-                         AdjHT hTables1[MAX_TABLES],
+                         AdjHT hTables0_0[MAX_TABLES],
+                         AdjHT hTables0_1[MAX_TABLES],
+                         AdjHT hTables1_0[MAX_TABLES],
+                         AdjHT hTables1_1[MAX_TABLES],
+
+                         
 
 #if DEBUG_INTERFACE
                          volatile unsigned int &debif_endpreprocess,

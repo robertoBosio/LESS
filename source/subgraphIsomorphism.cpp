@@ -1624,7 +1624,7 @@ ASSEMBLY_TASK_LOOP:
       } else if (!vertex.sol && !vertex.last) {
         counter++;
         ///WARN!!!
-	std::cout << "counter: " << counter << std::endl;
+	      //std::cout << "counter: " << counter << std::endl;
       }
 
       if (!vertex.sol){
@@ -1696,8 +1696,10 @@ multiwayJoin(ap_uint<DDR_W>* htb_buf0_0,
              ap_uint<DDR_W>* htb_buf3_1,
              T_BLOOM* bloom_p,
              row_t* res_buf,
-             AdjHT* hTables0,
-             AdjHT* hTables1,
+             AdjHT* hTables0_0,
+             AdjHT* hTables0_1,
+             AdjHT* hTables1_0,
+             AdjHT* hTables1_1,
              QueryVertex* qVertices,
              const unsigned int n_candidate,
              const unsigned int start_candidate,
@@ -1713,12 +1715,14 @@ multiwayJoin(ap_uint<DDR_W>* htb_buf0_0,
 #pragma HLS STABLE variable=htb_buf1_0
 #pragma HLS STABLE variable=htb_buf1_1
 #pragma HLS STABLE variable=htb_buf2_0
-#pragma HLS STABLE variable=htb_buf2-1
+#pragma HLS STABLE variable=htb_buf2_1
 #pragma HLS STABLE variable=htb_buf3_0
 #pragma HLS STABLE variable=htb_buf3_1
 #pragma HLS STABLE variable=bloom_p
-#pragma HLS STABLE variable=hTables0
-#pragma HLS STABLE variable=hTables1
+#pragma HLS STABLE variable=hTables0_0
+#pragma HLS STABLE variable=hTables0_1
+#pragma HLS STABLE variable=hTables1_0
+#pragma HLS STABLE variable=hTables1_1
 #pragma HLS STABLE variable=qVertices
 
 #pragma HLS DATAFLOW
@@ -1858,9 +1862,9 @@ multiwayJoin(ap_uint<DDR_W>* htb_buf0_0,
     hls_thread_local hls::stream<bool, 4> streams_stop[STOP_S];
 
     htb_cache_t htb_cache_0(htb_buf0_0);
-    htb_cache_t htb_cache_1(htb_buf0_1);
+    //htb_cache_t htb_cache_1(htb_buf0_1);
     htb_cache2_t htb_cache2_0(htb_buf2_0);
-    htb_cache2_t htb_cache2_1(htb_buf2_1);
+    //htb_cache2_t htb_cache2_1(htb_buf2_1);
     dynfifo_init<ap_uint<V_ID_W>,    /* fifo data type */
                  row_t,              /* fifo data type */
                  DYN_FIFO_DEPTH,     /* in/out stream size */
@@ -1976,13 +1980,13 @@ multiwayJoin(ap_uint<DDR_W>* htb_buf0_0,
     /*
     mwj_readmin_counter<LKP3_HASH_W, MAX_HASH_W, FULL_HASH_W>(hash1_w,
                                                               hash2_w,
-                                                              hTables0,
+                                                              hTables0_0,
                                                               htb_buf1,
                                                               p_stream_tuple0,
                                                               rc_stream_tuple0);
     mwj_readmin_counter<LKP3_HASH_W, MAX_HASH_W, FULL_HASH_W>(hash1_w,
                                                               hash2_w,
-                                                              hTables0,
+                                                              hTables0_1,
                                                               htb_buf1,
                                                               p_stream_tuple1,
                                                               rc_stream_tuple1);
@@ -1990,7 +1994,7 @@ multiwayJoin(ap_uint<DDR_W>* htb_buf0_0,
     
     mwj_readmin_counter<LKP3_HASH_W, MAX_HASH_W, FULL_HASH_W>(hash1_w,
                                                               hash2_w,
-                                                              hTables0,
+                                                              hTables0_0,
                                                               htb_buf1_0,
                                                               fch_stream_tuple,
                                                               rc_stream_tuple0);
@@ -2018,7 +2022,7 @@ multiwayJoin(ap_uint<DDR_W>* htb_buf0_0,
                   re_stream_set1,
                   re_stream_tuple1);
     */
-    cache_wrapper(mwj_readmin_edge<mwj_homomorphism
+    cache_wrapper(mwj_readmin_edge<
                       T_BLOOM,
                       BLOOM_LOG,
                       K_FUN_LOG,
@@ -2055,19 +2059,19 @@ multiwayJoin(ap_uint<DDR_W>* htb_buf0_0,
     */
     
     intersectcache_wrapper<PROPOSE_BATCH_LOG>(
-      hTables1, htb_cache_0, t_stream_tuple0, i_stream_tuple0);
+      hTables1_0, htb_cache_0, t_stream_tuple0, i_stream_tuple0);
     
     /*
     intersectcache_wrapper<PROPOSE_BATCH_LOG>(
-      hTables1, htb_cache, t_stream_tuple1, i_stream_tuple1);
+      hTables1_1, htb_cache, t_stream_tuple1, i_stream_tuple1);
     */
     
     verifycache_wrapper<PROPOSE_BATCH_LOG>(
-      hTables1, htb_cache_0, bb_merge_stream_tuple0, v_stream_tuple0);
+      hTables1_0, htb_cache_0, bb_merge_stream_tuple0, v_stream_tuple0);
     
     /*
     verifycache_wrapper<PROPOSE_BATCH_LOG>(
-      hTables1, htb_cache, bb_merge_stream_tuple1, v_stream_tuple1);
+      hTables1_1, htb_cache, bb_merge_stream_tuple1, v_stream_tuple1);
     */
 
     mwj_assembly(htb_buf3_0,
@@ -2080,7 +2084,7 @@ multiwayJoin(ap_uint<DDR_W>* htb_buf0_0,
                  result);
 
     htb_cache2_0.get_l1_stats(0, hits_readmin_edge, reqs_readmin_edge);
-    htb_cache2_1.get_l1_stats(0, hits_readmin_edge, reqs_readmin_edge);
+    //htb_cache2_1.get_l1_stats(0, hits_readmin_edge, reqs_readmin_edge);
 #else
 
     // EDIT : from STOP_S to STOP_S+1
@@ -2088,9 +2092,9 @@ multiwayJoin(ap_uint<DDR_W>* htb_buf0_0,
       hls::stream_globals::incr_task_counter();
 
     htb_cache_0.init();
-    htb_cache_1.init();
+    //htb_cache_1.init();
     htb_cache2_0.init();
-    htb_cache2_1.init();
+    //htb_cache2_1.init();
 
     std::thread mwj_edgebuild_t(mwj_edgebuild<LKP3_HASH_W, MAX_HASH_W, FULL_HASH_W>,
                                 hash1_w,
@@ -2127,7 +2131,7 @@ multiwayJoin(ap_uint<DDR_W>* htb_buf0_0,
       mwj_readmin_counter<LKP3_HASH_W, MAX_HASH_W, FULL_HASH_W>,
       hash1_w,
       hash2_w,
-      hTables0,
+      hTables0_0,
       htb_buf1,
       std::ref(p_stream_tuple0),
       std::ref(rc_stream_tuple0));
@@ -2135,7 +2139,7 @@ multiwayJoin(ap_uint<DDR_W>* htb_buf0_0,
       mwj_readmin_counter<LKP3_HASH_W, MAX_HASH_W, FULL_HASH_W>,
       hash1_w,
       hash2_w,
-      hTables0,
+      hTables0_1,
       htb_buf1,
       std::ref(p_stream_tuple1),
       std::ref(rc_stream_tuple1));
@@ -2144,7 +2148,7 @@ multiwayJoin(ap_uint<DDR_W>* htb_buf0_0,
       mwj_readmin_counter<LKP3_HASH_W, MAX_HASH_W, FULL_HASH_W>,
       hash1_w,
       hash2_w,
-      hTables0,
+      hTables0_0,
       htb_buf1_0,
       std::ref(fch_stream_tuple),
       std::ref(rc_stream_tuple0));
@@ -2211,25 +2215,25 @@ multiwayJoin(ap_uint<DDR_W>* htb_buf0_0,
     */
     
     std::thread mwj_intersect0_t(mwj_intersect<PROPOSE_BATCH_LOG>,
-                                hTables1,
+                                hTables1_0,
                                 std::ref(htb_cache_0),
                                 std::ref(t_stream_tuple0),
                                 std::ref(i_stream_tuple0));
     /*
     std::thread mwj_intersect1_t(mwj_intersect<PROPOSE_BATCH_LOG>,
-                                hTables1,
+                                hTables1_1,
                                 std::ref(htb_cache),
                                 std::ref(t_stream_tuple1),
                                 std::ref(i_stream_tuple1));
     */
     std::thread mwj_verify0_t(mwj_verify<PROPOSE_BATCH_LOG>,
-                             hTables1,
+                             hTables1_0,
                              std::ref(htb_cache_0),
                              std::ref(bb_merge_stream_tuple0),
                              std::ref(v_stream_tuple0));
     /*
     std::thread mwj_verify1_t(mwj_verify<PROPOSE_BATCH_LOG>,
-                             hTables1,
+                             hTables1_1,
                              std::ref(htb_cache),
                              std::ref(bb_merge_stream_tuple1),
                              std::ref(v_stream_tuple1));
@@ -2270,9 +2274,9 @@ multiwayJoin(ap_uint<DDR_W>* htb_buf0_0,
 #endif /* DEBUG_STATS */
 
     htb_cache_0.stop();
-    htb_cache_1.stop();
+    //htb_cache_1.stop();
     htb_cache2_0.stop();
-    htb_cache2_1.stop();
+    //htb_cache2_1.stop();
 
 #endif /* __SYNTHESIS__ */
 }
@@ -2296,8 +2300,11 @@ void subgraphIsomorphism(row_t htb_buf0_0[HASHTABLES_SPACE],
                          const unsigned int n_candidate,
                          const unsigned int start_candidate,
                          QueryVertex qVertices[MAX_QV],
-                         AdjHT hTables0[MAX_TB],
-                         AdjHT hTables1[MAX_TB],
+                         AdjHT hTables0_0[MAX_TB],
+                         AdjHT hTables0_1[MAX_TB],
+                         AdjHT hTables1_0[MAX_TB],
+                         AdjHT hTables1_1[MAX_TB],
+
 
 #if DEBUG_INTERFACE
                          volatile unsigned int &debif_endpreprocess,
@@ -2336,26 +2343,26 @@ void subgraphIsomorphism(row_t htb_buf0_0[HASHTABLES_SPACE],
 {
 
 
-#pragma HLS INTERFACE mode=m_axi port=htb_buf0_0 bundle=prop_batch \
+#pragma HLS INTERFACE mode=m_axi port=htb_buf0_0 bundle=prop_batch_0 \
     max_widen_bitwidth=128 latency=1
-#pragma HLS INTERFACE mode=m_axi port=htb_buf0_1 bundle=prop_batch \
+#pragma HLS INTERFACE mode=m_axi port=htb_buf0_1 bundle=prop_batch_1 \
     max_widen_bitwidth=128 latency=1
-#pragma HLS INTERFACE mode=m_axi port=htb_buf1_0 bundle=cache \
+#pragma HLS INTERFACE mode=m_axi port=htb_buf1_0 bundle=cache_0 \
     max_widen_bitwidth=128 num_write_outstanding=1 max_write_burst_length=2 \
     latency=1
-#pragma HLS INTERFACE mode=m_axi port=htb_buf1_1 bundle=cache \
+#pragma HLS INTERFACE mode=m_axi port=htb_buf1_1 bundle=cache_1 \
     max_widen_bitwidth=128 num_write_outstanding=1 max_write_burst_length=2 \
     latency=1
-#pragma HLS INTERFACE mode=m_axi port=htb_buf2_0 bundle=readmin_c \
+#pragma HLS INTERFACE mode=m_axi port=htb_buf2_0 bundle=readmin_c_0 \
     max_widen_bitwidth=128 num_write_outstanding=1 max_write_burst_length=2 \
     latency=1
-#pragma HLS INTERFACE mode=m_axi port=htb_buf2_1 bundle=readmin_c \
+#pragma HLS INTERFACE mode=m_axi port=htb_buf2_1 bundle=readmin_c_1 \
     max_widen_bitwidth=128 num_write_outstanding=1 max_write_burst_length=2 \
     latency=1
-#pragma HLS INTERFACE mode=m_axi port=htb_buf3_0 bundle=readmin_e \
+#pragma HLS INTERFACE mode=m_axi port=htb_buf3_0 bundle=readmin_e_0 \
     max_widen_bitwidth=128 num_write_outstanding=1 max_write_burst_length=2 \
     latency=1
-#pragma HLS INTERFACE mode=m_axi port=htb_buf3_1 bundle=readmin_e \
+#pragma HLS INTERFACE mode=m_axi port=htb_buf3_1 bundle=readmin_e_1 \
     max_widen_bitwidth=128 num_write_outstanding=1 max_write_burst_length=2 \
     latency=1
 #pragma HLS INTERFACE mode=m_axi port=res_buf bundle=fifo \
@@ -2436,8 +2443,10 @@ void subgraphIsomorphism(row_t htb_buf0_0[HASHTABLES_SPACE],
                    htb_buf3_1,
                    bloom_p,
                    res_buf,
-                   hTables0,
-                   hTables1,
+                   hTables0_0,
+                   hTables0_1,
+                   hTables1_0,
+                   hTables1_1,
                    qVertices,
                    n_candidate,
                    start_candidate,
@@ -2539,27 +2548,27 @@ void subgraphIsomorphism(row_t htb_buf0_0[HASHTABLES_SPACE],
                          long unsigned int &result)
 {
 
-#pragma HLS INTERFACE mode=m_axi port=htb_buf0_0 bundle=cache \
+#pragma HLS INTERFACE mode=m_axi port=htb_buf0_0 bundle=cache_0 \
     max_widen_bitwidth=128 num_write_outstanding=1 max_write_burst_length=2 \
     latency=0
-#pragma HLS INTERFACE mode=m_axi port=htb_buf0_1 bundle=cache \
+#pragma HLS INTERFACE mode=m_axi port=htb_buf0_1 bundle=cache_1 \
     max_widen_bitwidth=128 num_write_outstanding=1 max_write_burst_length=2 \
     latency=0
-#pragma HLS INTERFACE mode=m_axi port=htb_buf1_0 bundle=readmin_c \
+#pragma HLS INTERFACE mode=m_axi port=htb_buf1_0 bundle=readmin_c_0 \
     max_widen_bitwidth=128 num_write_outstanding=1 max_write_burst_length=2 \
     latency=0
-#pragma HLS INTERFACE mode=m_axi port=htb_buf1_1 bundle=readmin_c \
+#pragma HLS INTERFACE mode=m_axi port=htb_buf1_1 bundle=readmin_c_1 \
     max_widen_bitwidth=128 num_write_outstanding=1 max_write_burst_length=2 \
     latency=0
-#pragma HLS INTERFACE mode=m_axi port=htb_buf2_0 bundle=readmin_e \
+#pragma HLS INTERFACE mode=m_axi port=htb_buf2_0 bundle=readmin_e_0 \
     max_widen_bitwidth=128 num_write_outstanding=1 max_write_burst_length=2 \
     latency=0 max_read_burst_length=16
-#pragma HLS INTERFACE mode=m_axi port=htb_buf2_1 bundle=readmin_e \
+#pragma HLS INTERFACE mode=m_axi port=htb_buf2_1 bundle=readmin_e_1 \
     max_widen_bitwidth=128 num_write_outstanding=1 max_write_burst_length=2 \
     latency=0 max_read_burst_length=16
-#pragma HLS INTERFACE mode=m_axi port=htb_buf3_0 bundle=prop_batch \
+#pragma HLS INTERFACE mode=m_axi port=htb_buf3_0 bundle=prop_batch_0 \
     max_widen_bitwidth=128 latency=0
-#pragma HLS INTERFACE mode=m_axi port=htb_buf3_1 bundle=prop_batch \
+#pragma HLS INTERFACE mode=m_axi port=htb_buf3_1 bundle=prop_batch_1 \
     max_widen_bitwidth=128 latency=0  
 #pragma HLS INTERFACE mode=m_axi port=res_buf bundle=fifo \
     max_widen_bitwidth=128 max_read_burst_length=32 max_write_burst_length=32 \
@@ -2618,7 +2627,10 @@ void subgraphIsomorphism(row_t htb_buf0_0[HASHTABLES_SPACE],
 #endif /* DEBUG_STATS */
 
     QueryVertex qVertices[MAX_QV];
-    AdjHT hTables0[MAX_TB], hTables1[MAX_TB];
+    AdjHT hTables0_0[MAX_TB],
+          hTables0_1[MAX_TB],
+          hTables1_0[MAX_TB],
+          hTables1_1[MAX_TB];
     unsigned long localResult = 0;
     unsigned int local_dynfifo_overflow = 0;
     unsigned int n_candidate = 0;
@@ -2644,8 +2656,10 @@ void subgraphIsomorphism(row_t htb_buf0_0[HASHTABLES_SPACE],
                                htb_buf0_0,
                                bloom_p,
                                qVertices,
-                               hTables0,
-                               hTables1,
+                               hTables0_0,
+                               hTables0_1,
+                               hTables1_0,
+                               hTables1_0,
                                dynfifo_space,
                                n_candidate,
                                start_candidate,
@@ -2676,8 +2690,10 @@ void subgraphIsomorphism(row_t htb_buf0_0[HASHTABLES_SPACE],
                      htb_buf3_1,
                      bloom_p,
                      res_buf,
-                     hTables0,
-                     hTables1,
+                     hTables0_0,
+                     hTables0_1,
+                     hTables1_0,
+                     hTables1_1,
                      qVertices,
                      n_candidate,
                      start_candidate,

@@ -1229,7 +1229,9 @@ fillTablesURAM(row_t* edge_buf,
                T_DDR* bloom_p,
                QueryVertex* qVertices,
                AdjHT* hTables0,
+               AdjHT* hTables0_1,
                AdjHT* hTables1,
+               AdjHT* hTables1_1,
                const ap_uint<8> labelToTable[MAX_LABELS][MAX_LABELS],
                const unsigned long dynfifo_space,
                unsigned int &n_candidate,
@@ -1314,6 +1316,15 @@ STORE_EDGES_POINTER_LOOP:
         hTables1[ntb].start_edges = hTables0[ntb].start_edges;
         hTables1[ntb].n_edges = hTables0[ntb].n_edges;
     }
+STORE_EDGES_POINTER_LOOP_P2:
+    for (unsigned short ntb = 0; ntb < numTables; ntb++) {
+        hTables0_1[ntb].start_offset = hTables0[ntb].start_offset;
+        hTables1_1[ntb].start_offset = hTables1[ntb].start_offset;
+        hTables0_1[ntb].start_edges = hTables0[ntb].start_edges;
+        hTables1_1[ntb].start_edges = hTables1[ntb].start_edges;
+        hTables0_1[ntb].n_edges = hTables0[ntb].n_edges;
+        hTables1_1[ntb].n_edges = hTables1[ntb].n_edges;
+    }
 
     blockToHTB<NODE_W,
                ROW_LOG,
@@ -1381,7 +1392,9 @@ preprocess(row_t* edge_buf,
            T_DDR* bloom_p,
            QueryVertex* qVertices,
            AdjHT* hTables0,
+           AdjHT* hTables0_1,
            AdjHT* hTables1,
+           AdjHT* hTables1_1,
            const unsigned long dynfifo_space,
            unsigned int &n_candidate,
            unsigned int &start_candidate,
@@ -1431,7 +1444,9 @@ INITIALIZE_LABELTOTABLE_LOOP:
                                bloom_p,
                                qVertices,
                                hTables0,
+                               hTables0_1,
                                hTables1,
+                               hTables1_1,
                                labelToTable,
                                dynfifo_space,
                                n_candidate,
