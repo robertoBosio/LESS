@@ -857,7 +857,12 @@ mwj_homomorphism(
   sequencebuild_set_t<ap_uint<V_ID_W>> set_out;
   sol_node_t<vertex_t> vertex;
 
+  std::cout << "\nINIT HOMO" << std::endl;
+
   while (true) {
+
+    std::cout << "\nSTART HOMO" << std::endl;
+
     ap_uint<1> select = 0;
 
   HOMOMORPHISM_COPYING_EMBEDDING_LOOP:
@@ -872,6 +877,7 @@ mwj_homomorphism(
       set_out.stop = vertex.stop;
       stream_set_out.write(set_out);
       curEmb[vertex.pos] = vertex.node;
+      std::cout << "debug: is sol" << std::endl;
     } while (!vertex.last);
     curQV = vertex.pos + 1;
 
@@ -884,6 +890,7 @@ mwj_homomorphism(
     fake_node.range(7, 0) = tuple.tb_index;
     fake_node.range(15, 8) = tuple.iv_pos;
     fake_node.range(31, 16) = tuple.num_tb_indexed;
+    std::cout << "debug: is min" << std::endl;
     
     set_out.node = fake_node; // 0 or 1???
     set_out.last = false;
@@ -916,6 +923,7 @@ mwj_homomorphism(
       delimeter node */
       if (((equal_bits & valid_bits) == 0 && set_in.valid) || set_in.last) {
         stream_set_out.write(set_out);
+        std::cout << "debug: is set" << std::endl;
       }
 #if DEBUG_STATS
       else {
@@ -924,6 +932,81 @@ mwj_homomorphism(
 #endif
     } while (!set_in.last);
   }
+}
+
+void
+mwj_merge_h(hls::stream<sequencebuild_set_t<ap_uint<V_ID_W>>>& stream_sol0_in,
+              hls::stream<sequencebuild_set_t<ap_uint<V_ID_W>>>& stream_sol1_in,
+              hls::stream<sequencebuild_set_t<ap_uint<V_ID_W>>>& stream_sol_out)
+{
+              sequencebuild_set_t<ap_uint<V_ID_W>> h_sol;
+              bool stop0=false;
+              bool stop1=false;
+
+              /* main loop */
+              while(true) {
+                
+                /* read stream0 */
+                if(!stop0) {
+                  if(stream_sol0_in.read_nb(h_sol)) { // non-blocking since this stream maybe empty
+                    std::cout << "stream 0 : sol " << std::endl;
+                    if(!h_sol.stop) stream_sol_out.write(h_sol);
+                    while ((!h_sol.last)&&(!h_sol.stop)) {
+                        h_sol = stream_sol0_in.read(); //blocking read until last is reached
+                        stream_sol_out.write(h_sol);
+                        std::cout << "stream 0 : sol " << std::endl;
+                    }
+                    if(!h_sol.stop) {
+                      h_sol=stream_sol0_in.read();
+                      stream_sol_out.write(h_sol);
+                      std::cout << "stream 0 : min " << std::endl;
+                    }
+                    while ((!h_sol.last)&&(!h_sol.stop)) {
+                        h_sol = stream_sol0_in.read(); //blocking read until last is reached
+                        stream_sol_out.write(h_sol);
+                        std::cout << "stream 0 : set " << std::endl;
+                    }
+                    stop0=h_sol.stop;
+                    std::cout << "finish stream 0 " << h_sol.stop << std::endl;
+                  }
+                }
+                
+                /* read stream1 */
+                if(!stop1) {
+                  if(stream_sol1_in.read_nb(h_sol)) { // non-blocking since this stream maybe empty
+                    std::cout << "stream 1 : sol " << std::endl;
+                    if(!h_sol.stop) stream_sol_out.write(h_sol);
+                    while ((!h_sol.last)&&(!h_sol.stop)) {
+                        h_sol = stream_sol1_in.read(); //blocking read until last is reached
+                        stream_sol_out.write(h_sol);
+                        std::cout << "stream 1 : sol " << std::endl;
+                    }
+                    if(!h_sol.stop) {
+                      h_sol=stream_sol1_in.read();
+                      stream_sol_out.write(h_sol);
+                      std::cout << "stream 1 : min " << std::endl;
+                    }
+                    while ((!h_sol.last)&&(!h_sol.stop)) {
+                        h_sol = stream_sol1_in.read(); //blocking read until last is reached
+                        stream_sol_out.write(h_sol);
+                        std::cout << "stream 1 : set " << std::endl;
+                    }
+                    stop1=h_sol.stop;
+                    std::cout << "finish stream 1 " << h_sol.stop << std::endl;
+                  }
+                }
+                
+                /* end task for both stop node at input */
+                if(stop0&&stop1) {
+                  break;
+                }
+              }
+
+              /* send stop packet */
+              h_sol.stop=true;
+              stream_sol_out.write(h_sol);
+              
+  
 }
 
 template<size_t BATCH_SIZE_LOG>
@@ -1624,7 +1707,7 @@ ASSEMBLY_TASK_LOOP:
       } else if (!vertex.sol && !vertex.last) {
         counter++;
         ///WARN!!!
-	      //std::cout << "counter: " << counter << std::endl;
+	      std::cout << "counter: " << counter << std::endl;
       }
 
       if (!vertex.sol){
@@ -1646,6 +1729,11 @@ ASSEMBLY_TASK_LOOP:
     #pragma HLS unroll
     streams_stop[g].write(true);
   }
+
+
+  std::cout << "\n\nASSEMBLY STOP!!!" << std::endl << std::flush;
+
+
 }
 
 template<size_t BATCH_SIZE_LOG>
@@ -1782,7 +1870,11 @@ multiwayJoin(ap_uint<DDR_W>* htb_buf0_0,
     hls_thread_local hls::stream<sequencebuild_set_t<ap_uint<V_ID_W>>, S_D>
       h_stream_set0("Homomorphism 0 - set nodes");
     hls_thread_local hls::stream<sequencebuild_set_t<ap_uint<V_ID_W>>, S_D>
-      h_stream_set1("Homomorphism 0 - set nodes");
+      h_stream_set1("Homomorphism 1 - set nodes");
+    
+    /* MERGEH data out */
+    hls_thread_local hls::stream<sequencebuild_set_t<ap_uint<V_ID_W>>, S_D>
+      h_stream_set("Homomorphism MERGE - set nodes"); 
 
     /* X2 SEQUENCEBUILD data out */
     hls_thread_local hls::stream<sequencebuild_tuple_t<ap_uint<V_ID_W>>, S_D>
@@ -1864,7 +1956,7 @@ multiwayJoin(ap_uint<DDR_W>* htb_buf0_0,
     htb_cache_t htb_cache_0(htb_buf0_0);
     //htb_cache_t htb_cache_1(htb_buf0_1);
     htb_cache2_t htb_cache2_0(htb_buf2_0);
-    //htb_cache2_t htb_cache2_1(htb_buf2_1);
+    htb_cache2_t htb_cache2_1(htb_buf2_1);
     dynfifo_init<ap_uint<V_ID_W>,    /* fifo data type */
                  row_t,              /* fifo data type */
                  DYN_FIFO_DEPTH,     /* in/out stream size */
@@ -1893,7 +1985,7 @@ multiwayJoin(ap_uint<DDR_W>* htb_buf0_0,
     //  mwj_bypass_sol, e_stream_sol, re_stream_sol);
 
     hls_thread_local hls::task mwj_sequencebuild0_t(
-      mwj_sequencebuild<PROPOSE_BATCH_LOG>, h_stream_set0, sb_stream_set0);
+      mwj_sequencebuild<PROPOSE_BATCH_LOG>, h_stream_set, sb_stream_set0);
       
     //hls_thread_local hls::task mwj_sequencebuild1_t(
     //  mwj_sequencebuild<PROPOSE_BATCH_LOG>, h_stream_set1, sb_stream_set1);
@@ -1964,7 +2056,7 @@ multiwayJoin(ap_uint<DDR_W>* htb_buf0_0,
                                                fch_stream_sol,
                                                fch_stream_tuple,
                                                fch_stream_filter);
-    /*
+    
     mwj_findchannel<LKP3_HASH_W, T_BLOOM, K_FUN_LOG>(hash1_w,
                                         fch_stream_sol,
                                         fch_stream_tuple,
@@ -1975,7 +2067,6 @@ multiwayJoin(ap_uint<DDR_W>* htb_buf0_0,
                                         p_stream_tuple1,
                                         rc_stream_filter0,
                                         rc_stream_filter1);
-    */
     
     /*
     mwj_readmin_counter<LKP3_HASH_W, MAX_HASH_W, FULL_HASH_W>(hash1_w,
@@ -1999,13 +2090,12 @@ multiwayJoin(ap_uint<DDR_W>* htb_buf0_0,
                                                               fch_stream_tuple,
                                                               rc_stream_tuple0);
 
-    /*
     cache_wrapper(mwj_readmin_edge<mwj_homomorphism
                       T_BLOOM,
                       BLOOM_LOG,
                       K_FUN_LOG,
                       FULL_HASH_W>,
-                  htb_cache2,
+                  htb_cache2_0,
                   rc_stream_tuple0,
                   rc_stream_filter0,
                   re_stream_set0,
@@ -2016,12 +2106,12 @@ multiwayJoin(ap_uint<DDR_W>* htb_buf0_0,
                       BLOOM_LOG,
                       K_FUN_LOG,
                       FULL_HASH_W>,
-                  htb_cache2,
+                  htb_cache2_1,
                   rc_stream_tuple1,
                   rc_stream_filter1,
                   re_stream_set1,
                   re_stream_tuple1);
-    */
+    /*
     cache_wrapper(mwj_readmin_edge<
                       T_BLOOM,
                       BLOOM_LOG,
@@ -2032,14 +2122,17 @@ multiwayJoin(ap_uint<DDR_W>* htb_buf0_0,
                   fch_stream_filter,
                   re_stream_set0,
                   re_stream_tuple0);
-    
+    */
     
     mwj_homomorphism(
-      re_stream_set0, re_stream_tuple0, fch_stream_sol, h_stream_set0);
-    /*
+      re_stream_set0, re_stream_tuple0, re_stream_sol0, h_stream_set0);
+    
     mwj_homomorphism(
       re_stream_set1, re_stream_tuple1, re_stream_sol1, h_stream_set1);
-   */
+    
+    mwj_merge_h(
+      h_stream_set0,h_stream_set1,h_stream_set
+    );
    
     mwj_tuplebuild<PROPOSE_BATCH_LOG, LKP3_HASH_W, MAX_HASH_W, FULL_HASH_W>(
       hash1_w,
@@ -2084,17 +2177,17 @@ multiwayJoin(ap_uint<DDR_W>* htb_buf0_0,
                  result);
 
     htb_cache2_0.get_l1_stats(0, hits_readmin_edge, reqs_readmin_edge);
-    //htb_cache2_1.get_l1_stats(0, hits_readmin_edge, reqs_readmin_edge);
+    htb_cache2_1.get_l1_stats(0, hits_readmin_edge, reqs_readmin_edge);
 #else
 
-    // EDIT : from STOP_S to STOP_S+1
-    for (int g = 0; g < (STOP_S+1); g++)
+    // EDIT : was STOP_S+1, cur: 10
+    for (int g = 0; g < 10; g++)
       hls::stream_globals::incr_task_counter();
 
     htb_cache_0.init();
     //htb_cache_1.init();
     htb_cache2_0.init();
-    //htb_cache2_1.init();
+    htb_cache2_1.init();
 
     std::thread mwj_edgebuild_t(mwj_edgebuild<LKP3_HASH_W, MAX_HASH_W, FULL_HASH_W>,
                                 hash1_w,
@@ -2112,7 +2205,7 @@ multiwayJoin(ap_uint<DDR_W>* htb_buf0_0,
                               std::ref(fch_stream_tuple),
                               fch_stream_filter);
     
-    /*
+    
     std::thread mwj_findchannel_t(mwj_findchannel<LKP3_HASH_W, T_BLOOM, K_FUN_LOG>,
                               hash1_w,
                               std::ref(fch_stream_sol),
@@ -2124,15 +2217,15 @@ multiwayJoin(ap_uint<DDR_W>* htb_buf0_0,
                               std::ref(p_stream_tuple1),
                               rc_stream_filter0,
                               rc_stream_filter1);
-    */
+    
 
-    /*
+    
     std::thread mwj_readmin_counter0_t(
       mwj_readmin_counter<LKP3_HASH_W, MAX_HASH_W, FULL_HASH_W>,
       hash1_w,
       hash2_w,
       hTables0_0,
-      htb_buf1,
+      htb_buf1_0,
       std::ref(p_stream_tuple0),
       std::ref(rc_stream_tuple0));
     std::thread mwj_readmin_counter1_t(
@@ -2140,10 +2233,12 @@ multiwayJoin(ap_uint<DDR_W>* htb_buf0_0,
       hash1_w,
       hash2_w,
       hTables0_1,
-      htb_buf1,
+      htb_buf1_1,
       std::ref(p_stream_tuple1),
       std::ref(rc_stream_tuple1));
-    */
+    
+
+    /* 
     std::thread mwj_readmin_counter_t(
       mwj_readmin_counter<LKP3_HASH_W, MAX_HASH_W, FULL_HASH_W>,
       hash1_w,
@@ -2152,22 +2247,25 @@ multiwayJoin(ap_uint<DDR_W>* htb_buf0_0,
       htb_buf1_0,
       std::ref(fch_stream_tuple),
       std::ref(rc_stream_tuple0));
-    /*
+    */
+
+    
     std::thread mwj_readmin_edge0_t(
       mwj_readmin_edge<T_BLOOM, BLOOM_LOG, K_FUN_LOG, FULL_HASH_W>,
-      std::ref(htb_cache2),
+      std::ref(htb_cache2_0),
       std::ref(rc_stream_tuple0),
       rc_stream_filter0,
       re_stream_set0,
       std::ref(re_stream_tuple0));
     std::thread mwj_readmin_edge1_t(
       mwj_readmin_edge<T_BLOOM, BLOOM_LOG, K_FUN_LOG, FULL_HASH_W>,
-      std::ref(htb_cache2),
+      std::ref(htb_cache2_1),
       std::ref(rc_stream_tuple1),
       rc_stream_filter1,
       re_stream_set1,
       std::ref(re_stream_tuple1));
-    */
+    
+    /*
     std::thread mwj_readmin_edge_t(
       mwj_readmin_edge<T_BLOOM, BLOOM_LOG, K_FUN_LOG, FULL_HASH_W>,
       std::ref(htb_cache2_0),
@@ -2175,9 +2273,9 @@ multiwayJoin(ap_uint<DDR_W>* htb_buf0_0,
       fch_stream_filter,
       re_stream_set0,
       std::ref(re_stream_tuple0));
+    */
 
-
-    /*
+    
     std::thread mwj_homomorphism0_t(mwj_homomorphism,
                                    re_stream_set0,
                                    std::ref(re_stream_tuple0),
@@ -2188,12 +2286,15 @@ multiwayJoin(ap_uint<DDR_W>* htb_buf0_0,
                                    std::ref(re_stream_tuple1),
                                    std::ref(re_stream_sol1),
                                    std::ref(h_stream_set1));
-    */
+    /*
     std::thread mwj_homomorphism_t(mwj_homomorphism,
                                    re_stream_set0,
                                    std::ref(re_stream_tuple0),
                                    std::ref(fch_stream_sol),
-                                   std::ref(h_stream_set0));                          
+                                   std::ref(h_stream_set0));   
+    */
+
+    std:thread mwj_merge_h_t(mwj_merge_h,std::ref(h_stream_set0),std::ref(h_stream_set1),std::ref(h_stream_set));                  
 
     std::thread mwj_tuplebuild0_t(
       mwj_tuplebuild<PROPOSE_BATCH_LOG, LKP3_HASH_W, MAX_HASH_W, FULL_HASH_W>,
@@ -2249,13 +2350,19 @@ multiwayJoin(ap_uint<DDR_W>* htb_buf0_0,
                                std::ref(result));
     mwj_edgebuild_t.join();
     mwj_findmin_t.join();
-    //mwj_findchannel_t.join();
-    mwj_readmin_counter_t.join();
-    //mwj_readmin_counter1_t.join();
-    mwj_readmin_edge_t.join();
-    //mwj_readmin_edge1_t.join();
-    mwj_homomorphism_t.join();
-    //mwj_homomorphism1_t.join();
+    mwj_findchannel_t.join();
+    
+    mwj_readmin_counter0_t.join();
+    mwj_readmin_counter1_t.join();
+
+    mwj_readmin_edge0_t.join();
+    mwj_readmin_edge1_t.join();
+
+    mwj_homomorphism0_t.join();
+    mwj_homomorphism1_t.join();
+
+    mwj_merge_h_t.join();
+
     mwj_tuplebuild0_t.join();
     //mwj_tuplebuild1_t.join();
     mwj_intersect0_t.join();
@@ -2276,7 +2383,8 @@ multiwayJoin(ap_uint<DDR_W>* htb_buf0_0,
     htb_cache_0.stop();
     //htb_cache_1.stop();
     htb_cache2_0.stop();
-    //htb_cache2_1.stop();
+    htb_cache2_1.stop();
+    std::cout << "cache stopped" << std::endl << std::flush;
 
 #endif /* __SYNTHESIS__ */
 }
@@ -2703,8 +2811,9 @@ void subgraphIsomorphism(row_t htb_buf0_0[HASHTABLES_SPACE],
                      dynfifo_space,
                      local_dynfifo_overflow,
                      localResult);
-
+    std::cout << "finish MWJ thread"  << std::endl << std::flush ;
     ap_wait();
+    std::cout << "apwait passed!"  << std::endl << std::flush ;
     result = localResult;
     dynfifo_overflow = local_dynfifo_overflow;
     p_propose_empty = propose_empty;
@@ -2740,6 +2849,9 @@ void subgraphIsomorphism(row_t htb_buf0_0[HASHTABLES_SPACE],
 #if DEBUG_STATS
     debug::print(hash1_w, hash2_w);
 #endif /* DEBUG_STATS */
+
+std::cout << "finish report debug stats"  << std::endl << std::flush ;
+  
 }
 #endif /* SOFTWARE_PREPROC */
 
