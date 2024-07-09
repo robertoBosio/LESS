@@ -72,11 +72,13 @@ unsigned long assembly_empty = 0;
 unsigned long reqs_findmin = 0;
 unsigned long reqs_readmin_counter = 0;
 unsigned long reqs_readmin_edge = 0;
+unsigned long reqs_readmin_edge_1 = 0;
 unsigned long reqs_verify = 0;
 unsigned long reqs_intersect = 0;
 unsigned long hits_findmin = 0;
 unsigned long hits_readmin_counter = 0;
 unsigned long hits_readmin_edge = 0;
+unsigned long hits_readmin_edge_1 = 0;
 unsigned long hits_intersect = 0;
 unsigned long hits_verify = 0;
 unsigned long hmsb0 = 0;
@@ -308,7 +310,7 @@ void
 mwj_propose(hls::stream<ap_uint<V_ID_W>>& stream_fifo_in,
             hls::stream<sol_node_t<vertex_t>>& stream_sol_out)
 {
-#pragma HLS pipeline II = 1 style = flp
+  #pragma HLS pipeline II = 1 style = flp
   const ap_uint<V_ID_W> MASK_RADIX = ~(1UL << (V_ID_W - 1));
   const vertex_t STOP_NODE = ~0;
   const vertex_t FAKE_NODE = ~0 - 1;
@@ -335,6 +337,7 @@ mwj_propose(hls::stream<ap_uint<V_ID_W>>& stream_fifo_in,
       n_nodes++;
     stream_sol_out.write(vertex);
   }
+  //std::cout << "PROPOSE ID: " << (unsigned int)vertex.node << " isstop?: " << vertex.stop << std::endl << std::flush;
 }
 
 /* EDGEBUILD
@@ -464,12 +467,14 @@ FINDMIN_TASK_LOOP:
     do {
       #pragma HLS pipeline II = 1
       vertex = stream_sol_in.read();
+      if(vertex.stop) {
+        vertex.node = 777;
+      }
       stream_sol_out.write(vertex);
     } while (!vertex.last);
     
     if(vertex.stop) {
-    	// WARN PRINT!!!
-    	//std::cout << "STOP detect!" << std::endl;
+    	//std::cout << "FINDMIN STOP detect!" << std::endl;
     	break;
     }
     
@@ -489,30 +494,25 @@ FINDMIN_TASK_LOOP:
       
       
       /* set blooms */
-        for (int s = 0; s < K_FUN; s++) {
-          #pragma HLS unroll
-          T_BLOOM set_bloom = bloom_p[address + s];
-          bloom_s += bloom_intersect<T_BLOOM, BLOOM_LOG>(filter[s], set_bloom);
-        }  
-        reqs_findmin++;
-        #if DEBUG_STATS
-        debug::findmin_reads++;
-        #endif
+      for (int s = 0; s < K_FUN; s++) {
+        #pragma HLS unroll
+        T_BLOOM set_bloom = bloom_p[address + s];
+        bloom_s += bloom_intersect<T_BLOOM, BLOOM_LOG>(filter[s], set_bloom);
+      }  
+      reqs_findmin++;
+      #if DEBUG_STATS
+      debug::findmin_reads++;
+      #endif
       bloom_s >>= K_FUN_LOG;
      
       /* check if min */
-        if (bloom_s < min_size) {
-          min_size = bloom_s;
-          tuple_out.indexing_v = tuple_in.indexing_v;
-          tuple_out.tb_index = tuple_in.tb_index;
-          tuple_out.iv_pos = tuple_in.iv_pos;
-          tuple_out.num_tb_indexed = tuple_in.num_tb_indexed;
-        }
-      
-      
-      
-      
-      
+      if (bloom_s < min_size) {
+        min_size = bloom_s;
+        tuple_out.indexing_v = tuple_in.indexing_v;
+        tuple_out.tb_index = tuple_in.tb_index;
+        tuple_out.iv_pos = tuple_in.iv_pos;
+        tuple_out.num_tb_indexed = tuple_in.num_tb_indexed;
+      }      
    
     } while (!tuple_in.last);
     
@@ -554,23 +554,29 @@ mwj_findchannel(
 		if(fmin_tuple.stop) {
 			// if stop tuple send stop nodes to both channels
 			vertex = stream_sol_in.read(); // ! latest sol must be the stop node
+      // FLUSH RESIDUALS...
+      while(!vertex.last) {
+        vertex = stream_sol_in.read(); // ! latest sol must be the stop node
+      }
 			stream_sol_out0.write(vertex);
 			stream_tuple_out0.write(fmin_tuple);
 			stream_sol_out1.write(vertex);
 			stream_tuple_out1.write(fmin_tuple);
-			break;
+      break;
 		} else {
 			// for each readmin tuple, send related solution & filters
 			ap_uint<LKP3_HASH_W> hash_out;
 			xf::database::details::hashlookup3_core<V_ID_W>(fmin_tuple.indexing_v, hash_out);
 			bool selch_bit = hash_out.test(hash1_w-1);
 			if(selch_bit) {
+        hmsb1++;
 				stream_tuple_out1.write(fmin_tuple);
 				for (int g = 0; g < K_FUN; g++) {
 					#pragma HLS unroll
 					stream_filter_out1[g].write(stream_filter_in[g].read());
 				}
 			} else {
+        hmsb0++;
 				stream_tuple_out0.write(fmin_tuple);
 				for (int g = 0; g < K_FUN; g++) {
 					#pragma HLS unroll
@@ -581,7 +587,7 @@ mwj_findchannel(
 			do {
 				#pragma HLS pipeline II = 1
 				vertex = stream_sol_in.read();
-				if(selch_bit)
+        if(selch_bit)
 					stream_sol_out1.write(vertex);
 				else
 					stream_sol_out0.write(vertex);
@@ -615,78 +621,56 @@ mwj_readmin_counter(const unsigned char hash1_w,
 
 READMIN_COUNTER_TASK_LOOP:
   while (true) {
-#pragma HLS pipeline II = 2
+    #pragma HLS pipeline II = 2
     
-    if (stream_tuple_in.read_nb(tuple_in)){
-      if (tuple_in.stop){
+    //if (stream_tuple_in.read_nb(tuple_in)){
+    tuple_in=stream_tuple_in.read();
+    if (tuple_in.stop){
+      break;
+    }
+    ap_uint<LKP3_HASH_W> hash_out;
+    ap_uint<MAX_HASH_W> hash_trimmed;
+    xf::database::details::hashlookup3_core<V_ID_W>(tuple_in.indexing_v,
+                                                    hash_out);
+    volatile unsigned int start_off = 0;
+    volatile unsigned int end_off;
+    ap_uint<DDR_BIT - C_W> addr_inrow;
+    ap_uint<DDR_W> ram_row;
+    unsigned long addr_row;
+    ap_uint<64> addr_counter;
+    hash_trimmed = hash_out;
+    hash_trimmed = hash_trimmed.range(hash1_w - 1, 0);
+    
+    // assuming hash1 (trimmed) MSBs
+    /*
+    #if DEBUG_INTERFACE
+    ap_uint<2> hmsbs;
+    hmsbs = hash_trimmed.range(hash1_w - 1, hash1_w -2);
+    switch(hmsbs) {
+      case 0:
+        hmsb0++;
         break;
-      }
-      ap_uint<LKP3_HASH_W> hash_out;
-      ap_uint<MAX_HASH_W> hash_trimmed;
-      xf::database::details::hashlookup3_core<V_ID_W>(tuple_in.indexing_v,
-                                                      hash_out);
-      volatile unsigned int start_off = 0;
-      volatile unsigned int end_off;
-      ap_uint<DDR_BIT - C_W> addr_inrow;
-      ap_uint<DDR_W> ram_row;
-      unsigned long addr_row;
-      ap_uint<64> addr_counter;
-      hash_trimmed = hash_out;
-      hash_trimmed = hash_trimmed.range(hash1_w - 1, 0);
-      
-      // assuming hash1 (trimmed) MSBs
-      #if DEBUG_INTERFACE
-      ap_uint<2> hmsbs;
-      hmsbs = hash_trimmed.range(hash1_w - 1, hash1_w -2);
-      switch(hmsbs) {
-      	case 0:
-      		hmsb0++;
-      		break;
-      	case 1:
-      		hmsb1++;
-      		break;
-      	case 2:
-      		hmsb2++;
-      		break;
-      	default:
-      		hmsb3++;
-      		break;
-      }
-      #endif
+      case 1:
+        hmsb1++;
+        break;
+      case 2:
+        hmsb2++;
+        break;
+      default:
+        hmsb3++;
+        break;
+    }
+    #endif
+    */
 
-      if (hash_trimmed != 0) {
-        addr_counter = hash_trimmed - 1;
-        addr_counter <<= hash2_w;
-        addr_counter += (1UL << hash2_w) - 1;
-
-        /* Compute address of row storing the counter */
-        addr_row = hTables[tuple_in.tb_index].start_offset +
-                   (addr_counter >> (DDR_BIT - C_W));
-
-        /* Compute address of data inside the row */
-        addr_inrow = addr_counter.range((DDR_BIT - C_W) - 1, 0);
-
-        /* Read the data */
-        ram_row = m_axi[addr_row];
-        if (addr_inrow == 0) {
-          start_off = ram_row.range((1UL << C_W) - 1, 0);
-        } else if (addr_inrow == 1) {
-          start_off = ram_row.range((2UL << C_W) - 1, 1UL << C_W);
-        } else if (addr_inrow == 2) {
-          start_off = ram_row.range((3UL << C_W) - 1, 2UL << C_W);
-        } else {
-          start_off = ram_row.range((4UL << C_W) - 1, 3UL << C_W);
-        }
-        reqs_readmin_counter++;
-      }
-
-      addr_counter = hash_trimmed;
+    if (hash_trimmed != 0) {
+      addr_counter = hash_trimmed - 1;
       addr_counter <<= hash2_w;
       addr_counter += (1UL << hash2_w) - 1;
 
       /* Compute address of row storing the counter */
       addr_row = hTables[tuple_in.tb_index].start_offset +
-                 (addr_counter >> (DDR_BIT - C_W));
+                  (addr_counter >> (DDR_BIT - C_W));
 
       /* Compute address of data inside the row */
       addr_inrow = addr_counter.range((DDR_BIT - C_W) - 1, 0);
@@ -694,34 +678,59 @@ READMIN_COUNTER_TASK_LOOP:
       /* Read the data */
       ram_row = m_axi[addr_row];
       if (addr_inrow == 0) {
-        end_off = ram_row.range((1UL << C_W) - 1, 0);
+        start_off = ram_row.range((1UL << C_W) - 1, 0);
       } else if (addr_inrow == 1) {
-        end_off = ram_row.range((2UL << C_W) - 1, 1UL << C_W);
+        start_off = ram_row.range((2UL << C_W) - 1, 1UL << C_W);
       } else if (addr_inrow == 2) {
-        end_off = ram_row.range((3UL << C_W) - 1, 2UL << C_W);
+        start_off = ram_row.range((3UL << C_W) - 1, 2UL << C_W);
       } else {
-        end_off = ram_row.range((4UL << C_W) - 1, 3UL << C_W);
+        start_off = ram_row.range((4UL << C_W) - 1, 3UL << C_W);
       }
       reqs_readmin_counter++;
-
-      unsigned int rowstart =
-        hTables[tuple_in.tb_index].start_edges + (start_off >> (DDR_BIT - E_W));
-      unsigned int rowend =
-        hTables[tuple_in.tb_index].start_edges + (end_off >> (DDR_BIT - E_W));
-
-      tuple_out.indexing_v = tuple_in.indexing_v;
-      tuple_out.tb_index = tuple_in.tb_index;
-      tuple_out.iv_pos = tuple_in.iv_pos;
-      tuple_out.num_tb_indexed = tuple_in.num_tb_indexed;
-      tuple_out.rowstart = rowstart;
-      tuple_out.rowend = rowend;
-
-      stream_tuple_out.write(tuple_out);
-
-#if DEBUG_STATS
-      debug::readmin_counter_reads += 2;
-#endif
     }
+
+    addr_counter = hash_trimmed;
+    addr_counter <<= hash2_w;
+    addr_counter += (1UL << hash2_w) - 1;
+
+    /* Compute address of row storing the counter */
+    addr_row = hTables[tuple_in.tb_index].start_offset +
+                (addr_counter >> (DDR_BIT - C_W));
+
+    /* Compute address of data inside the row */
+    addr_inrow = addr_counter.range((DDR_BIT - C_W) - 1, 0);
+
+    /* Read the data */
+    ram_row = m_axi[addr_row];
+    if (addr_inrow == 0) {
+      end_off = ram_row.range((1UL << C_W) - 1, 0);
+    } else if (addr_inrow == 1) {
+      end_off = ram_row.range((2UL << C_W) - 1, 1UL << C_W);
+    } else if (addr_inrow == 2) {
+      end_off = ram_row.range((3UL << C_W) - 1, 2UL << C_W);
+    } else {
+      end_off = ram_row.range((4UL << C_W) - 1, 3UL << C_W);
+    }
+    reqs_readmin_counter++;
+
+    unsigned int rowstart =
+      hTables[tuple_in.tb_index].start_edges + (start_off >> (DDR_BIT - E_W));
+    unsigned int rowend =
+      hTables[tuple_in.tb_index].start_edges + (end_off >> (DDR_BIT - E_W));
+
+    tuple_out.indexing_v = tuple_in.indexing_v;
+    tuple_out.tb_index = tuple_in.tb_index;
+    tuple_out.iv_pos = tuple_in.iv_pos;
+    tuple_out.num_tb_indexed = tuple_in.num_tb_indexed;
+    tuple_out.rowstart = rowstart;
+    tuple_out.rowend = rowend;
+
+    stream_tuple_out.write(tuple_out);
+
+    #if DEBUG_STATS
+      debug::readmin_counter_reads += 2;
+    #endif
+    
   }
 
   /* Propagate stop node */
@@ -857,11 +866,7 @@ mwj_homomorphism(
   sequencebuild_set_t<ap_uint<V_ID_W>> set_out;
   sol_node_t<vertex_t> vertex;
 
-  std::cout << "\nINIT HOMO" << std::endl;
-
   while (true) {
-
-    std::cout << "\nSTART HOMO" << std::endl;
 
     ap_uint<1> select = 0;
 
@@ -877,7 +882,6 @@ mwj_homomorphism(
       set_out.stop = vertex.stop;
       stream_set_out.write(set_out);
       curEmb[vertex.pos] = vertex.node;
-      std::cout << "debug: is sol" << std::endl;
     } while (!vertex.last);
     curQV = vertex.pos + 1;
 
@@ -890,7 +894,6 @@ mwj_homomorphism(
     fake_node.range(7, 0) = tuple.tb_index;
     fake_node.range(15, 8) = tuple.iv_pos;
     fake_node.range(31, 16) = tuple.num_tb_indexed;
-    std::cout << "debug: is min" << std::endl;
     
     set_out.node = fake_node; // 0 or 1???
     set_out.last = false;
@@ -923,7 +926,6 @@ mwj_homomorphism(
       delimeter node */
       if (((equal_bits & valid_bits) == 0 && set_in.valid) || set_in.last) {
         stream_set_out.write(set_out);
-        std::cout << "debug: is set" << std::endl;
       }
 #if DEBUG_STATS
       else {
@@ -932,6 +934,9 @@ mwj_homomorphism(
 #endif
     } while (!set_in.last);
   }
+
+//std::cout << "HOMOMORPHISM stopped" << std::endl << std::flush;
+
 }
 
 void
@@ -949,55 +954,56 @@ mwj_merge_h(hls::stream<sequencebuild_set_t<ap_uint<V_ID_W>>>& stream_sol0_in,
                 /* read stream0 */
                 if(!stop0) {
                   if(stream_sol0_in.read_nb(h_sol)) { // non-blocking since this stream maybe empty
-                    std::cout << "stream 0 : sol " << std::endl;
+                    //std::cout << "stream 0 : sol " << std::endl;
                     if(!h_sol.stop) stream_sol_out.write(h_sol);
                     while ((!h_sol.last)&&(!h_sol.stop)) {
                         h_sol = stream_sol0_in.read(); //blocking read until last is reached
                         stream_sol_out.write(h_sol);
-                        std::cout << "stream 0 : sol " << std::endl;
+                        //std::cout << "stream 0 : sol " << std::endl;
                     }
                     if(!h_sol.stop) {
                       h_sol=stream_sol0_in.read();
                       stream_sol_out.write(h_sol);
-                      std::cout << "stream 0 : min " << std::endl;
+                      //std::cout << "stream 0 : min " << std::endl;
                     }
                     while ((!h_sol.last)&&(!h_sol.stop)) {
                         h_sol = stream_sol0_in.read(); //blocking read until last is reached
                         stream_sol_out.write(h_sol);
-                        std::cout << "stream 0 : set " << std::endl;
+                        //std::cout << "stream 0 : set " << std::endl;
                     }
                     stop0=h_sol.stop;
-                    std::cout << "finish stream 0 " << h_sol.stop << std::endl;
+                    //std::cout << "finish stream 0 " << h_sol.stop << std::endl;
                   }
                 }
                 
                 /* read stream1 */
                 if(!stop1) {
                   if(stream_sol1_in.read_nb(h_sol)) { // non-blocking since this stream maybe empty
-                    std::cout << "stream 1 : sol " << std::endl;
+                    //std::cout << "stream 1 : sol " << std::endl;
                     if(!h_sol.stop) stream_sol_out.write(h_sol);
                     while ((!h_sol.last)&&(!h_sol.stop)) {
                         h_sol = stream_sol1_in.read(); //blocking read until last is reached
                         stream_sol_out.write(h_sol);
-                        std::cout << "stream 1 : sol " << std::endl;
+                        //std::cout << "stream 1 : sol " << std::endl;
                     }
                     if(!h_sol.stop) {
                       h_sol=stream_sol1_in.read();
                       stream_sol_out.write(h_sol);
-                      std::cout << "stream 1 : min " << std::endl;
+                      //std::cout << "stream 1 : min " << std::endl;
                     }
                     while ((!h_sol.last)&&(!h_sol.stop)) {
                         h_sol = stream_sol1_in.read(); //blocking read until last is reached
                         stream_sol_out.write(h_sol);
-                        std::cout << "stream 1 : set " << std::endl;
+                        //std::cout << "stream 1 : set " << std::endl;
                     }
                     stop1=h_sol.stop;
-                    std::cout << "finish stream 1 " << h_sol.stop << std::endl;
+                    //std::cout << "finish stream 1 " << h_sol.stop << std::endl;
                   }
                 }
                 
                 /* end task for both stop node at input */
                 if(stop0&&stop1) {
+                //if(stop1) {
                   break;
                 }
               }
@@ -1005,6 +1011,8 @@ mwj_merge_h(hls::stream<sequencebuild_set_t<ap_uint<V_ID_W>>>& stream_sol0_in,
               /* send stop packet */
               h_sol.stop=true;
               stream_sol_out.write(h_sol);
+
+              //std::cout << "MERGE stopped" << std::endl << std::flush;
               
   
 }
@@ -1560,6 +1568,35 @@ ENLARGE_SOL_WRITING_EMBEDDINGS_LOOP:
 #pragma HLS pipeline II = 1
     vertex.node = curEmb[g];
     vertex.last = (g == (curQV - 1));
+    vertex.pos = g;
+    //vertex.full = curQV;
+    vertex.stop = stop;
+    stream_sol_out.write(vertex);
+  }
+}
+
+void
+mwj_fulldetect(hls::stream<sol_node_t<vertex_t>>& stream_sol_in,
+               hls::stream<sol_node_t<vertex_t>>& stream_sol_out)
+{
+  static vertex_t curEmb[MAX_QV];
+  sol_node_t<vertex_t> vertex;
+  bool stop;
+ENLARGE_SOL_STORING_EMBEDDINGS_LOOP:
+  do {
+#pragma HLS pipeline II = 1
+    vertex = stream_sol_in.read();
+    curEmb[vertex.pos] = vertex.node;
+    stop = vertex.stop;
+  } while (!vertex.last);
+  unsigned char curQV = vertex.pos + 1;
+
+ENLARGE_SOL_WRITING_EMBEDDINGS_LOOP:
+  for (int g = 0; g < curQV; g++) {
+#pragma HLS pipeline II = 1
+    vertex.node = curEmb[g];
+    vertex.last = (g == (curQV - 1));
+    //vertex.pos = g;
     vertex.pos = curQV;
     vertex.stop = stop;
     stream_sol_out.write(vertex);
@@ -1596,7 +1633,7 @@ mwj_merge_solandset(hls::stream<sol_node_t<vertex_t>>& stream_sol_in,
     stop = sol_vertex.stop;
   }
 
-  stream_sol_out.write({ node, pos, last, sol, stop });
+  stream_sol_out.write({ node, pos, last, sol, stop});
 }
 
 void
@@ -1706,8 +1743,7 @@ ASSEMBLY_TASK_LOOP:
         stream_partial_out.write(dynfifo_node);
       } else if (!vertex.sol && !vertex.last) {
         counter++;
-        ///WARN!!!
-	      std::cout << "counter: " << counter << std::endl;
+        std::cout << "counter: " << counter << std::endl;
       }
 
       if (!vertex.sol){
@@ -1731,7 +1767,7 @@ ASSEMBLY_TASK_LOOP:
   }
 
 
-  std::cout << "\n\nASSEMBLY STOP!!!" << std::endl << std::flush;
+  //std::cout << "\n\nASSEMBLY STOP!!!" << std::endl << std::flush;
 
 
 }
@@ -1816,25 +1852,28 @@ multiwayJoin(ap_uint<DDR_W>* htb_buf0_0,
 #pragma HLS DATAFLOW
 
     /* PROPOSE data out */    
-    hls_thread_local hls::stream<sol_node_t<vertex_t>, MAX_QV> p0_stream_sol
+    hls_thread_local hls::stream<sol_node_t<vertex_t>, MAX_QV*3> p0_stream_sol
         ("Propose - partial solution");
     
+    /* ENLARGESOL data out */
+    hls_thread_local hls::stream<sol_node_t<vertex_t>, MAX_QV*3> en_stream_sol
+        ("Enlarge sol - partial solution");
+
     /* EDGEBUILD data out */
-    hls_thread_local hls::stream<sol_node_t<vertex_t>, MAX_QV * 3> e_stream_sol
+    hls_thread_local hls::stream<sol_node_t<vertex_t>, MAX_QV*3> e_stream_sol
         ("Edgebuild - partial solution");
     hls_thread_local hls::stream<findmin_tuple_t, S_D> e_stream_tuple
         ("Edgebuild - tuples");
-    hls_thread_local hls::stream<unsigned char, S_D> chsel_stage0;
     
     /* FINDMIN data out */
-    hls_thread_local hls::stream<sol_node_t<vertex_t>, MAX_QV * 3> fch_stream_sol;
+    hls_thread_local hls::stream<sol_node_t<vertex_t>, MAX_QV*7> fch_stream_sol;
     hls_thread_local hls::stream<readmin_counter_tuple_t, S_D> fch_stream_tuple;
     hls_thread_local hls::stream<bloom_t, 4> fch_stream_filter[1UL << K_FUNCTIONS];
       
     /* X2 FINDCHANNEL data out */
-    hls_thread_local hls::stream<sol_node_t<vertex_t>, MAX_QV> re_stream_sol0
+    hls_thread_local hls::stream<sol_node_t<vertex_t>, MAX_QV*7> re_stream_sol0
       ("Findchannel o0 - partial solution");
-    hls_thread_local hls::stream<sol_node_t<vertex_t>, MAX_QV> re_stream_sol1
+    hls_thread_local hls::stream<sol_node_t<vertex_t>, MAX_QV*7> re_stream_sol1
       ("Findchannel o1 - partial solution");
     hls_thread_local hls::stream<readmin_counter_tuple_t, S_D> p_stream_tuple0 
       ("Findchannel 0 - tuples");
@@ -1843,7 +1882,7 @@ multiwayJoin(ap_uint<DDR_W>* htb_buf0_0,
     hls_thread_local hls::stream<bloom_t, 4> p_stream_filter0[1UL << K_FUNCTIONS];
     hls_thread_local hls::stream<bloom_t, 4> p_stream_filter1[1UL << K_FUNCTIONS];
 
-    /* Readmin counter data out */    
+    /* X2 READMIN COUNTER data out */    
     hls_thread_local hls::stream<bloom_t, 4>
       rc_stream_filter0[1UL << K_FUNCTIONS];
     hls_thread_local hls::stream<bloom_t, 4>
@@ -1853,8 +1892,7 @@ multiwayJoin(ap_uint<DDR_W>* htb_buf0_0,
     hls_thread_local hls::stream<readmin_edge_tuple_t, S_D> rc_stream_tuple1
         ("Readmin counter 1 - tuples");
     
-    /* Readmin edge data out */    
-    
+    /* X2 READMIN EDGE data out */    
     hls_thread_local hls::stream<homomorphism_set_t<ap_uint<V_ID_W>>, S_D>
       re_stream_set0[2];
     hls_thread_local hls::stream<homomorphism_set_t<ap_uint<V_ID_W>>, S_D>
@@ -1876,17 +1914,13 @@ multiwayJoin(ap_uint<DDR_W>* htb_buf0_0,
     hls_thread_local hls::stream<sequencebuild_set_t<ap_uint<V_ID_W>>, S_D>
       h_stream_set("Homomorphism MERGE - set nodes"); 
 
-    /* X2 SEQUENCEBUILD data out */
+    /* SEQUENCEBUILD data out */
     hls_thread_local hls::stream<sequencebuild_tuple_t<ap_uint<V_ID_W>>, S_D>
-      sb_stream_set0("Sequencebuild 0 - set nodes");
-    hls_thread_local hls::stream<sequencebuild_tuple_t<ap_uint<V_ID_W>>, S_D>
-      sb_stream_set1("Sequencebuild 1 - set nodes");
+      sb_stream_set("Sequencebuild - set nodes");
 
     /* X2 TUPLEBUILD data out */    
-    hls_thread_local hls::stream<sol_node_t<vertex_t>, MAX_QV * 7> t_stream_sol0
+    hls_thread_local hls::stream<sol_node_t<vertex_t>, MAX_QV*7> t_stream_sol0
         ("Tuplebuild 0 - partial solution");
-    hls_thread_local hls::stream<sol_node_t<vertex_t>, MAX_QV * 7> t_stream_sol1
-        ("Tuplebuild 1 - partial solution");
     hls_thread_local hls::stream<intersect_tuple_t, S_D> t_stream_tuple0[2];
     hls_thread_local hls::stream<intersect_tuple_t, S_D> t_stream_tuple1[2];
     
@@ -1920,11 +1954,9 @@ multiwayJoin(ap_uint<DDR_W>* htb_buf0_0,
     hls_thread_local hls::stream<assembly_tuple_t, S_D> c_stream_tuple1
         ("Compact 1 - tuples");
 
-    /* X2 ENLARGE SOL data out */    
-    hls_thread_local hls::stream<sol_node_t<vertex_t>, MAX_QV> f_stream_sol0
-        ("Enlarge sol 0 - partial solution");
-    hls_thread_local hls::stream<sol_node_t<vertex_t>, MAX_QV> f_stream_sol1
-        ("Enlarge sol 1 - partial solution");
+    /* FIND FULL data out */    
+    hls_thread_local hls::stream<sol_node_t<vertex_t>, MAX_QV*7> f_stream_sol
+        ("Findfull - partial solution");
         
     /* X2 FILTER data out */
     hls_thread_local hls::stream<assembly_set_t, S_D> f_stream_set0
@@ -1941,7 +1973,6 @@ multiwayJoin(ap_uint<DDR_W>* htb_buf0_0,
         ("Merge solandset unique - nodes");
     
     /* ASSEMLBY data out */
-    //hls::merge::load_balance<ap_uint<V_ID_W>, 2, DYN_FIFO_DEPTH> a_stream_sol;
     hls_thread_local hls::stream<ap_uint<V_ID_W>, DYN_FIFO_DEPTH> a_stream_sol
         ("Assembly - partial solution");
 
@@ -1950,7 +1981,6 @@ multiwayJoin(ap_uint<DDR_W>* htb_buf0_0,
         ("Dynamic fifo - partial solution");
  
     /* STOP signals */
-    //hls::merge::load_balance<bool, 2, 4> streams_stop[STOP_S];
     hls_thread_local hls::stream<bool, 4> streams_stop[STOP_S];
 
     htb_cache_t htb_cache_0(htb_buf0_0);
@@ -1975,25 +2005,23 @@ multiwayJoin(ap_uint<DDR_W>* htb_buf0_0,
     hls_thread_local hls::task mwj_propose_t(
       mwj_propose, dyn_stream_sol, p0_stream_sol);
 
-    //hls_thread_local hls::task mwj_bypassfilter0_t(
-    //  mwj_bypassfilter, fch_stream_filter, rc_stream_filter0);
+    hls_thread_local hls::task mwj_enlarge_sol_t(
+      mwj_enlarge_sol, p0_stream_sol, en_stream_sol); 
+
+    hls_thread_local hls::task mwj_bypassfilter0_t(
+      mwj_bypassfilter, p_stream_filter0, rc_stream_filter0);
     
-    //hls_thread_local hls::task mwj_bypassfilter1_t(
-    //  mwj_bypassfilter, p_stream_filter1, rc_stream_filter1);
+    hls_thread_local hls::task mwj_bypassfilter1_t(
+      mwj_bypassfilter, p_stream_filter1, rc_stream_filter1);
 
     //hls_thread_local hls::task mwj_bypass_sol_t(
     //  mwj_bypass_sol, e_stream_sol, re_stream_sol);
 
-    hls_thread_local hls::task mwj_sequencebuild0_t(
-      mwj_sequencebuild<PROPOSE_BATCH_LOG>, h_stream_set, sb_stream_set0);
-      
-    //hls_thread_local hls::task mwj_sequencebuild1_t(
-    //  mwj_sequencebuild<PROPOSE_BATCH_LOG>, h_stream_set1, sb_stream_set1);
+    hls_thread_local hls::task mwj_sequencebuild_t(
+      mwj_sequencebuild<PROPOSE_BATCH_LOG>, h_stream_set, sb_stream_set);
 
-    hls_thread_local hls::task mwj_enlarge_sol0_t(
-      mwj_enlarge_sol, t_stream_sol0, f_stream_sol0);
-    //hls_thread_local hls::task mwj_enlarge_sol1_t(
-    //  mwj_enlarge_sol, t_stream_sol1, f_stream_sol1);  
+    hls_thread_local hls::task mwj_fulldetect_t(
+      mwj_fulldetect, t_stream_sol0, f_stream_sol);  
 
     hls_thread_local hls::task mwj_offset0_t(
       mwj_offset<BLOCKBUILD_NUM>, i_stream_tuple0, o_stream_tuple0);
@@ -2034,10 +2062,8 @@ multiwayJoin(ap_uint<DDR_W>* htb_buf0_0,
     //hls_thread_local hls::task mwj_filter1_t(
     //  mwj_filter<(1UL << PROPOSE_BATCH_LOG)>, c_stream_tuple1, f_stream_set1);
     
-    hls_thread_local hls::task mwj_merge_solandset0_t(
-      mwj_merge_solandset, f_stream_sol0, f_stream_set0, mss_stream_sol0);
-    //hls_thread_local hls::task mwj_merge_solandset1_t(
-    //  mwj_merge_solandset, f_stream_sol1, f_stream_set1, mss_stream_sol1);
+    hls_thread_local hls::task mwj_merge_solandset_t(
+      mwj_merge_solandset, f_stream_sol, f_stream_set0, mss_stream_sol0);
       
     
 
@@ -2045,7 +2071,7 @@ multiwayJoin(ap_uint<DDR_W>* htb_buf0_0,
 
     mwj_edgebuild<LKP3_HASH_W, MAX_HASH_W, FULL_HASH_W>(hash1_w,
                                        qVertices,
-                                       p0_stream_sol,
+                                       en_stream_sol,
                                        e_stream_tuple,
                                        e_stream_sol);
 
@@ -2065,32 +2091,32 @@ multiwayJoin(ap_uint<DDR_W>* htb_buf0_0,
                                         re_stream_sol1,
                                         p_stream_tuple0,
                                         p_stream_tuple1,
-                                        rc_stream_filter0,
-                                        rc_stream_filter1);
+                                        p_stream_filter0,
+                                        p_stream_filter1);
     
-    /*
-    mwj_readmin_counter<LKP3_HASH_W, MAX_HASH_W, FULL_HASH_W>(hash1_w,
-                                                              hash2_w,
-                                                              hTables0_0,
-                                                              htb_buf1,
-                                                              p_stream_tuple0,
-                                                              rc_stream_tuple0);
-    mwj_readmin_counter<LKP3_HASH_W, MAX_HASH_W, FULL_HASH_W>(hash1_w,
-                                                              hash2_w,
-                                                              hTables0_1,
-                                                              htb_buf1,
-                                                              p_stream_tuple1,
-                                                              rc_stream_tuple1);
-    */
     
     mwj_readmin_counter<LKP3_HASH_W, MAX_HASH_W, FULL_HASH_W>(hash1_w,
                                                               hash2_w,
                                                               hTables0_0,
                                                               htb_buf1_0,
+                                                              p_stream_tuple0,
+                                                              rc_stream_tuple0);
+    mwj_readmin_counter<LKP3_HASH_W, MAX_HASH_W, FULL_HASH_W>(hash1_w,
+                                                              hash2_w,
+                                                              hTables0_1,
+                                                              htb_buf1_1,
+                                                              p_stream_tuple1,
+                                                              rc_stream_tuple1);
+    
+    
+    /* mwj_readmin_counter<LKP3_HASH_W, MAX_HASH_W, FULL_HASH_W>(hash1_w,
+                                                              hash2_w,
+                                                              hTables0_0,
+                                                              htb_buf1_0,
                                                               fch_stream_tuple,
                                                               rc_stream_tuple0);
-
-    cache_wrapper(mwj_readmin_edge<mwj_homomorphism
+    */
+    cache_wrapper(mwj_readmin_edge<
                       T_BLOOM,
                       BLOOM_LOG,
                       K_FUN_LOG,
@@ -2138,18 +2164,9 @@ multiwayJoin(ap_uint<DDR_W>* htb_buf0_0,
       hash1_w,
       hash2_w,
       qVertices,
-      sb_stream_set0,
+      sb_stream_set,
       t_stream_tuple0,
       t_stream_sol0);
-    /*
-    mwj_tuplebuild<PROPOSE_BATCH_LOG, LKP3_HASH_W, MAX_HASH_W, FULL_HASH_W>(
-      hash1_w,
-      hash2_w,
-      qVertices,
-      sb_stream_set1,
-      t_stream_tuple1,
-      t_stream_sol1);
-    */
     
     intersectcache_wrapper<PROPOSE_BATCH_LOG>(
       hTables1_0, htb_cache_0, t_stream_tuple0, i_stream_tuple0);
@@ -2177,7 +2194,7 @@ multiwayJoin(ap_uint<DDR_W>* htb_buf0_0,
                  result);
 
     htb_cache2_0.get_l1_stats(0, hits_readmin_edge, reqs_readmin_edge);
-    htb_cache2_1.get_l1_stats(0, hits_readmin_edge, reqs_readmin_edge);
+    htb_cache2_1.get_l1_stats(0, hits_readmin_edge_1, reqs_readmin_edge_1);
 #else
 
     // EDIT : was STOP_S+1, cur: 10
@@ -2189,10 +2206,11 @@ multiwayJoin(ap_uint<DDR_W>* htb_buf0_0,
     htb_cache2_0.init();
     htb_cache2_1.init();
 
+    /* BLOCK 1 TASKS START */
     std::thread mwj_edgebuild_t(mwj_edgebuild<LKP3_HASH_W, MAX_HASH_W, FULL_HASH_W>,
                                 hash1_w,
                                 qVertices,
-                                std::ref(p0_stream_sol),
+                                std::ref(en_stream_sol),
                                 std::ref(e_stream_tuple),
                                 std::ref(e_stream_sol));
 
@@ -2204,8 +2222,6 @@ multiwayJoin(ap_uint<DDR_W>* htb_buf0_0,
                               std::ref(fch_stream_sol),
                               std::ref(fch_stream_tuple),
                               fch_stream_filter);
-    
-    
     std::thread mwj_findchannel_t(mwj_findchannel<LKP3_HASH_W, T_BLOOM, K_FUN_LOG>,
                               hash1_w,
                               std::ref(fch_stream_sol),
@@ -2215,11 +2231,8 @@ multiwayJoin(ap_uint<DDR_W>* htb_buf0_0,
                               std::ref(re_stream_sol1),
                               std::ref(p_stream_tuple0),
                               std::ref(p_stream_tuple1),
-                              rc_stream_filter0,
-                              rc_stream_filter1);
-    
-
-    
+                              p_stream_filter0,
+                              p_stream_filter1);
     std::thread mwj_readmin_counter0_t(
       mwj_readmin_counter<LKP3_HASH_W, MAX_HASH_W, FULL_HASH_W>,
       hash1_w,
@@ -2236,20 +2249,6 @@ multiwayJoin(ap_uint<DDR_W>* htb_buf0_0,
       htb_buf1_1,
       std::ref(p_stream_tuple1),
       std::ref(rc_stream_tuple1));
-    
-
-    /* 
-    std::thread mwj_readmin_counter_t(
-      mwj_readmin_counter<LKP3_HASH_W, MAX_HASH_W, FULL_HASH_W>,
-      hash1_w,
-      hash2_w,
-      hTables0_0,
-      htb_buf1_0,
-      std::ref(fch_stream_tuple),
-      std::ref(rc_stream_tuple0));
-    */
-
-    
     std::thread mwj_readmin_edge0_t(
       mwj_readmin_edge<T_BLOOM, BLOOM_LOG, K_FUN_LOG, FULL_HASH_W>,
       std::ref(htb_cache2_0),
@@ -2264,18 +2263,6 @@ multiwayJoin(ap_uint<DDR_W>* htb_buf0_0,
       rc_stream_filter1,
       re_stream_set1,
       std::ref(re_stream_tuple1));
-    
-    /*
-    std::thread mwj_readmin_edge_t(
-      mwj_readmin_edge<T_BLOOM, BLOOM_LOG, K_FUN_LOG, FULL_HASH_W>,
-      std::ref(htb_cache2_0),
-      std::ref(rc_stream_tuple0),
-      fch_stream_filter,
-      re_stream_set0,
-      std::ref(re_stream_tuple0));
-    */
-
-    
     std::thread mwj_homomorphism0_t(mwj_homomorphism,
                                    re_stream_set0,
                                    std::ref(re_stream_tuple0),
@@ -2286,35 +2273,16 @@ multiwayJoin(ap_uint<DDR_W>* htb_buf0_0,
                                    std::ref(re_stream_tuple1),
                                    std::ref(re_stream_sol1),
                                    std::ref(h_stream_set1));
-    /*
-    std::thread mwj_homomorphism_t(mwj_homomorphism,
-                                   re_stream_set0,
-                                   std::ref(re_stream_tuple0),
-                                   std::ref(fch_stream_sol),
-                                   std::ref(h_stream_set0));   
-    */
-
     std:thread mwj_merge_h_t(mwj_merge_h,std::ref(h_stream_set0),std::ref(h_stream_set1),std::ref(h_stream_set));                  
-
-    std::thread mwj_tuplebuild0_t(
+    /* BLOCK 2 TASKS START */
+    std::thread mwj_tuplebuild_t(
       mwj_tuplebuild<PROPOSE_BATCH_LOG, LKP3_HASH_W, MAX_HASH_W, FULL_HASH_W>,
       hash1_w,
       hash2_w,
       qVertices,
-      std::ref(sb_stream_set0),
+      std::ref(sb_stream_set),
       std::ref(t_stream_tuple0),
       std::ref(t_stream_sol0));
-    /*
-    std::thread mwj_tuplebuild1_t(
-      mwj_tuplebuild<PROPOSE_BATCH_LOG, LKP3_HASH_W, MAX_HASH_W, FULL_HASH_W>,
-      hash1_w,
-      hash2_w,
-      qVertices,
-      std::ref(sb_stream_set1),
-      std::ref(t_stream_tuple1),
-      std::ref(t_stream_sol1));
-    */
-    
     std::thread mwj_intersect0_t(mwj_intersect<PROPOSE_BATCH_LOG>,
                                 hTables1_0,
                                 std::ref(htb_cache_0),
@@ -2348,23 +2316,19 @@ multiwayJoin(ap_uint<DDR_W>* htb_buf0_0,
                                std::ref(streams_stop),
                                std::ref(a_stream_sol),
                                std::ref(result));
+    /* BLOCK 1 TASKS J */
     mwj_edgebuild_t.join();
     mwj_findmin_t.join();
     mwj_findchannel_t.join();
-    
     mwj_readmin_counter0_t.join();
     mwj_readmin_counter1_t.join();
-
     mwj_readmin_edge0_t.join();
     mwj_readmin_edge1_t.join();
-
     mwj_homomorphism0_t.join();
     mwj_homomorphism1_t.join();
-
     mwj_merge_h_t.join();
-
-    mwj_tuplebuild0_t.join();
-    //mwj_tuplebuild1_t.join();
+    /* BLOCK 2 TASKS J */
+    mwj_tuplebuild_t.join();
     mwj_intersect0_t.join();
     //mwj_intersect1_t.join();
     mwj_verify0_t.join();
@@ -2384,7 +2348,7 @@ multiwayJoin(ap_uint<DDR_W>* htb_buf0_0,
     //htb_cache_1.stop();
     htb_cache2_0.stop();
     htb_cache2_1.stop();
-    std::cout << "cache stopped" << std::endl << std::flush;
+    //std::cout << "CACHE STOPPED" << std::endl << std::flush;
 
 #endif /* __SYNTHESIS__ */
 }
@@ -2811,9 +2775,9 @@ void subgraphIsomorphism(row_t htb_buf0_0[HASHTABLES_SPACE],
                      dynfifo_space,
                      local_dynfifo_overflow,
                      localResult);
-    std::cout << "finish MWJ thread"  << std::endl << std::flush ;
+    //std::cout << "finish MWJ thread"  << std::endl << std::flush ;
     ap_wait();
-    std::cout << "apwait passed!"  << std::endl << std::flush ;
+    //std::cout << "apwait passed!"  << std::endl << std::flush ;
     result = localResult;
     dynfifo_overflow = local_dynfifo_overflow;
     p_propose_empty = propose_empty;
@@ -2850,7 +2814,7 @@ void subgraphIsomorphism(row_t htb_buf0_0[HASHTABLES_SPACE],
     debug::print(hash1_w, hash2_w);
 #endif /* DEBUG_STATS */
 
-std::cout << "finish report debug stats"  << std::endl << std::flush ;
+//std::cout << "finish report debug stats"  << std::endl << std::flush ;
   
 }
 #endif /* SOFTWARE_PREPROC */
