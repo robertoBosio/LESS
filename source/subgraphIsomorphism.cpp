@@ -475,11 +475,12 @@ FINDMIN_TASK_LOOP:
     } while (!vertex.last);
     
     if(vertex.stop) {
-    	FINDMIN_WRITE_S_EMBEDDING_LOOP:
-      for (unsigned char vwr=0;vwr<vnum;vwr++) {
-        #pragma HLS pipeline II = 1
-        stream_sol_out.write(vertexv[vwr]);
-      }
+    	//FINDMIN_WRITE_S_EMBEDDING_LOOP:
+      //for (unsigned char vwr=0;vwr<vnum;vwr++) {
+      //  #pragma HLS pipeline II = 1
+      //  stream_sol_out.write(vertexv[vwr]);
+      //}
+      stream_sol_out.write(vertex);
     	break;
     }
     
@@ -635,15 +636,14 @@ READMIN_COUNTER_TASK_LOOP:
   while (true) {
     #pragma HLS pipeline II = 2
     
-    //if (stream_tuple_in.read_nb(tuple_in)){
-    tuple_in=stream_tuple_in.read();
+  if (stream_tuple_in.read_nb(tuple_in)){
+    //tuple_in=stream_tuple_in.read();
     if (tuple_in.stop){
       break;
     }
     ap_uint<LKP3_HASH_W> hash_out;
     ap_uint<MAX_HASH_W> hash_trimmed;
-    xf::database::details::hashlookup3_core<V_ID_W>(tuple_in.indexing_v,
-                                                    hash_out);
+    xf::database::details::hashlookup3_core<V_ID_W>(tuple_in.indexing_v, hash_out);
     volatile unsigned int start_off = 0;
     volatile unsigned int end_off;
     ap_uint<DDR_BIT - C_W> addr_inrow;
@@ -676,7 +676,7 @@ READMIN_COUNTER_TASK_LOOP:
       } else {
         start_off = ram_row.range((4UL << C_W) - 1, 3UL << C_W);
       }
-      reqs_readmin_counter++;
+      //reqs_readmin_counter++;
     }
 
     addr_counter = hash_trimmed;
@@ -701,7 +701,7 @@ READMIN_COUNTER_TASK_LOOP:
     } else {
       end_off = ram_row.range((4UL << C_W) - 1, 3UL << C_W);
     }
-    reqs_readmin_counter++;
+    //reqs_readmin_counter++;
 
     unsigned int rowstart =
       hTables[tuple_in.tb_index].start_edges + (start_off >> (DDR_BIT - E_W));
@@ -720,6 +720,8 @@ READMIN_COUNTER_TASK_LOOP:
     #if DEBUG_STATS
       debug::readmin_counter_reads += 2;
     #endif
+
+  }
     
   }
 
@@ -815,7 +817,7 @@ READMIN_EDGE_TASK_LOOP:
         set_out.last = false;
         set_out.valid = test && tuple_in.indexing_v == indexing_v;
         stream_set_out[i].write(set_out);
-#if DEBUG_STATS
+        #if DEBUG_STATS
         if (tuple_in.indexing_v == indexing_v)
         {
           if (test)
@@ -827,16 +829,16 @@ READMIN_EDGE_TASK_LOOP:
             debug::bloom_filter++;
           }
         }
-#endif /* DEBUG_STATS */
+        #endif /* DEBUG_STATS */
       }
     }
     set_out.last = true;
     stream_set_out[0].write(set_out);
 
-#if DEBUG_STATS
+  #if DEBUG_STATS
     debug::readmin_edge_reads += cycles + 1;
     debug::readmin_n_sets++;
-#endif /* DEBUG_STATS */
+  #endif /* DEBUG_STATS */
   }
 }
 
