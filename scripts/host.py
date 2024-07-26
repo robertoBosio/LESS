@@ -349,9 +349,13 @@ def subiso(test, path):
             print(f"h1 {hash1_w}, h2 {hash2_w}, blocks: {blocks} max 2048")
             
             ol.subgraphIsomorphism_0.write(axi_addresses["addr_mem0"], MEM.device_address)
+            ol.subgraphIsomorphism_0.write(axi_addresses["addr_mem0_1"], MEM.device_address)
             ol.subgraphIsomorphism_0.write(axi_addresses["addr_mem1"], MEM.device_address)
+            ol.subgraphIsomorphism_0.write(axi_addresses["addr_mem1_1"], MEM.device_address)
             ol.subgraphIsomorphism_0.write(axi_addresses["addr_mem2"], MEM.device_address)
+            ol.subgraphIsomorphism_0.write(axi_addresses["addr_mem2_1"], MEM.device_address)
             ol.subgraphIsomorphism_0.write(axi_addresses["addr_mem3"], MEM.device_address)
+            ol.subgraphIsomorphism_0.write(axi_addresses["addr_mem3_1"], MEM.device_address)
             ol.subgraphIsomorphism_0.write(axi_addresses["addr_bloom"], BLOOM.device_address)
             ol.subgraphIsomorphism_0.write(axi_addresses["addr_fifo"], FIFO.device_address)
             ol.subgraphIsomorphism_0.write(axi_addresses["addr_hash1_w"], hash1_w)
