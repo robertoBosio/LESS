@@ -31,7 +31,7 @@
 
 #pragma GCC diagnostic push
 #pragma GCC diagnostic error "-Wpedantic"
-#pragma GCC diagnostic error "-Wall"
+/* #pragma GCC diagnostic error "-Wall" */
 #pragma GCC diagnostic error "-Wextra"
 #pragma GCC diagnostic ignored "-Wunused-label"
 #pragma GCC diagnostic ignored "-Wsign-compare"
@@ -551,8 +551,8 @@ mwj_bypassfilter(hls::stream<bloom_t> stream_filter_in[1UL << K_FUNCTIONS],
 void
 mwj_readmin_counter(AdjHT* hTables,
                     row_t* m_axi,
-                         hls::stream<readmin_counter_tuple_t> stream_tuple_in[2],
-                         hls::stream<readmin_edge_tuple_t> &stream_tuple_out)
+                    hls::stream<readmin_counter_tuple_t> stream_tuple_in[2],
+                    hls::stream<readmin_edge_tuple_t>& stream_tuple_out)
 {
   readmin_counter_tuple_t tuple_in;
   readmin_edge_tuple_t tuple_out;
@@ -1753,7 +1753,7 @@ multiwayJoin(ap_uint<DDR_W>* htb_buf0,
       mwj_propose, dyn_stream_sol, p0_stream_sol);
 
     hls_thread_local hls::task mwj_bypassfilter_t(
-      mwj_bypassfilter, p_stream_filter, rc_stream_filter);
+      mwj_bypassfilter, (hls::stream<bloom_t, 4> *)p_stream_filter, (hls::stream<bloom_t, 4>*)rc_stream_filter);
 
     hls_thread_local hls::task mwj_bypass_sol_t(
       mwj_bypass_sol, e_stream_sol, re_stream_sol);
@@ -1778,7 +1778,7 @@ multiwayJoin(ap_uint<DDR_W>* htb_buf0,
     }
 
     hls_thread_local hls::task mwj_blockbuild_merge_t(
-      mwj_split_merge<BLOCKBUILD_NUM>, bb_stream_tuple, bb_merge_stream_tuple);
+        mwj_split_merge<BLOCKBUILD_NUM>, (hls::stream<verify_tuple_t, S_D> *)bb_stream_tuple, bb_merge_stream_tuple);
 
     hls_thread_local hls::task mwj_compact_t(
       mwj_compact, v_stream_tuple, c_stream_tuple);
@@ -1816,10 +1816,10 @@ multiwayJoin(ap_uint<DDR_W>* htb_buf0,
                       K_FUN_LOG,
                       FULL_HASH_W>,
                   htb_cache2,
-                  rc_stream_tuple,
-                  rc_stream_filter,
-                  re_stream_set,
-                  re_stream_tuple);
+      rc_stream_tuple,
+      rc_stream_filter,
+      re_stream_set,
+      re_stream_tuple);
 
     mwj_homomorphism(
       re_stream_set, re_stream_tuple, re_stream_sol, h_stream_set);
@@ -1850,7 +1850,8 @@ multiwayJoin(ap_uint<DDR_W>* htb_buf0,
     htb_cache2.get_l1_stats(0, hits_readmin_edge, reqs_readmin_edge);
 #else
 
-    for (int g = 0; g < STOP_S; g++)
+    for (int g = 0; g < STOP_S + 2; g++)
+      // hls::stream_globals<false>::incr_task_counter();
       hls::stream_globals::incr_task_counter();
 
     htb_cache.init();
@@ -2201,6 +2202,8 @@ void subgraphIsomorphism(row_t htb_buf0[HASHTABLES_SPACE],
 #pragma HLS INTERFACE mode=s_axilite port=dynfifo_overflow
 #pragma HLS INTERFACE mode=s_axilite port=return
 
+// #pragma HLS cache port=htb_buf2 lines=512 depth=32
+
 #if DEBUG_INTERFACE
 #pragma HLS INTERFACE mode=s_axilite port=debif_endpreprocess
 #pragma HLS INTERFACE mode=s_axilite port=p_propose_empty
@@ -2304,7 +2307,7 @@ void subgraphIsomorphism(row_t htb_buf0[HASHTABLES_SPACE],
                      dynfifo_space,
                      local_dynfifo_overflow,
                      localResult);
-
+    
     ap_wait();
     result = localResult;
     dynfifo_overflow = local_dynfifo_overflow;

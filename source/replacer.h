@@ -14,8 +14,8 @@
 
 #pragma GCC diagnostic push
 #pragma GCC diagnostic error "-Wpedantic"
-#pragma GCC diagnostic error "-Wall"
-#pragma GCC diagnostic error "-Wextra"
+/* #pragma GCC diagnostic error "-Wall" */
+/* #pragma GCC diagnostic error "-Wextra" */
 #pragma GCC diagnostic ignored "-Wunused-label"
 
 template <bool LRU, typename ADDR_T, size_t N_SETS, size_t N_WAYS, size_t N_WORDS_PER_LINE>

@@ -21,11 +21,12 @@
 
 #pragma GCC diagnostic push
 // #pragma GCC diagnostic error "-Wpedantic"
-// #pragma GCC diagnostic error "-Wall"
+#pragma GCC diagnostic error "-Wall"
 // #pragma GCC diagnostic error "-Wextra"
 #pragma GCC diagnostic ignored "-Wunused-label"
 #pragma GCC diagnostic ignored "-Wsign-compare"
 // #pragma GCC diagnostic ignored "-Wunused-parameter"
+#pragma GCC diagnostic ignored "-Wunknown-pragmas"
 
 struct bloom_write_tuple_t
 {
@@ -969,6 +970,8 @@ blockToHTB(row_t* edge_buf,
 #pragma HLS bind_storage variable=block_counter0 type=RAM_2P impl=URAM
 #pragma HLS bind_storage variable=block_counter1 type=RAM_2P impl=URAM
 
+    ap_uint<64> *htb_p0 = (ap_uint<64> *)htb_buf;
+
 /* Loop 2^(COUNTERS_PER_BLOCK - 2) since one block is split in two memories and
  * every memroy keep two counters per line*/
 INITIALIZE_URAM_LOOP:
@@ -1110,21 +1113,8 @@ STORE_EDGES_INSIDE_BLOCK_LOOP:
             block_counter1[(address >> 2)] = row_offset1;
             block_counter0[(address >> 2)] = row_offset0;
             
-            /* Compute address of row that will store the edge */
-            ap_uint<32> addr_row_edge =
-              hTables[ntb].start_edges + (offset >> (ROW_LOG - EDGE_LOG));
-            
-            /* Compute address of the edge inside the row */
-            ap_uint<32> addr_inrow = offset.range((ROW_LOG - EDGE_LOG) - 1, 0);
-
-            /* Read, modify and write the edge */
-            row_t row_edge = htb_buf[addr_row_edge];
-            row_edge.range(((addr_inrow + 1) << EDGE_LOG) - 1,
-                           addr_inrow << EDGE_LOG) =
-              indexing_node.concat(indexed_node);
-
-            /* Store offset and edge modified */
-            htb_buf[addr_row_edge] = row_edge;
+            ap_uint<32> addr_row_offset = (hTables[ntb].start_edges << 1) + offset;
+            htb_p0[addr_row_offset] = indexing_node.concat(indexed_node);
         }
 
         /* Store the block counters, packing them in a row */

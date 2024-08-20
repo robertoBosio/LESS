@@ -379,8 +379,8 @@ void dynfifo_init(
 
 #else
 
-    for (int g = 0; g < 2; g++) 
-        hls::stream_globals::incr_task_counter();
+/* for (int g = 0; g < 2; g++) */
+/* hls::stream_globals::incr_task_counter(); */
 
     std::thread mmu_fast_t(MMU_fast<DATA_T, DATA_PER_WORD>,
                            std::ref(in_stream),

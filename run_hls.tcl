@@ -15,8 +15,8 @@ config_array_partition -complete_threshold 1
 config_interface -m_axi_latency=1
 # set_part {xczu3eg-sbva484-1-e}
 set_part $XPART
-create_clock -period 333MHz -name default
-set_clock_uncertainty 40%
+create_clock -period 300MHz -name default
+# set_clock_uncertainty 40%
 
 if {$CSIM == 1} {
     csim_design

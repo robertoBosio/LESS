@@ -8,7 +8,7 @@
 
 #pragma GCC diagnostic push
 #pragma GCC diagnostic error "-Wpedantic"
-#pragma GCC diagnostic error "-Wall"
+/* #pragma GCC diagnostic error "-Wall" */
 #pragma GCC diagnostic error "-Wextra"
 #pragma GCC diagnostic ignored "-Wunused-label"
 
@@ -74,7 +74,7 @@ class l1_cache {
 
 			switch (STORAGE_IMPL) {
 				case URAM:
-#pragma HLS bind_storage variable=m_cache_mem type=RAM_2P impl=URAM
+#pragma HLS bind_storage variable=m_cache_mem type=RAM_2P impl=URAM latency=1
 					break;
 				case BRAM:
 #pragma HLS bind_storage variable=m_cache_mem type=RAM_2P impl=BRAM latency=1
@@ -98,6 +98,7 @@ class l1_cache {
 		}
         
 		void foo(){
+#pragma HLS inline
 #pragma HLS dependence variable=m_tag type=inter direction=RAW false
 #pragma HLS dependence variable=m_tag type=inter direction=RAW distance=3 true
         }
@@ -111,53 +112,63 @@ class l1_cache {
 		// 	m_tag[addr.m_set][TAG_SIZE] = 1;
 		// }
 
-		bool get_line(const ap_uint<ADDR_SIZE> addr_main, line_type line) {
+				bool get_line(const ap_uint<ADDR_SIZE> addr_main, line_type line)
+				{
 #pragma HLS inline
-			addr_type addr(addr_main);
-            addr.set_way(0);
-            bool hit_last_used = false;
-            bool hit_local_storage = false;
+					addr_type addr(addr_main);
+					addr.set_way(0);
+					bool hit_last_used = false;
+					bool hit_local_storage = false;
 
-            for (size_t s = 0; s < BRAM_LAT; s++){
+					for (size_t s = 0; s < BRAM_LAT; s++)
+					{
 #pragma HLS unroll
-                auto g = BRAM_LAT - s - 1;
-                if (m_local_raw_cache[g].addr_line == addr.m_addr_line && m_local_valid[g]){
-                    hit_local_storage = true;
-                    hit_last_used = (m_local_raw_cache[g].tag == addr.m_tag);
-                }
-            }
-            for (size_t s = 0; s < BRAM_LAT - 1; s++){
+						auto g = BRAM_LAT - s - 1;
+						if (m_local_raw_cache[g].addr_line == addr.m_addr_line && m_local_valid[g])
+						{
+							hit_local_storage = true;
+							hit_last_used = (m_local_raw_cache[g].tag == addr.m_tag);
+						}
+					}
+					for (size_t s = 0; s < BRAM_LAT - 1; s++)
+					{
 #pragma HLS unroll
-                auto g = BRAM_LAT - s - 1;
-                m_local_raw_cache[g].addr_line = m_local_raw_cache[g - 1].addr_line;
-                m_local_raw_cache[g].tag = m_local_raw_cache[g - 1].tag;
-				m_local_valid[g] = m_local_valid[g - 1];
-            }
+						auto g = BRAM_LAT - s - 1;
+						m_local_raw_cache[g].addr_line = m_local_raw_cache[g - 1].addr_line;
+						m_local_raw_cache[g].tag = m_local_raw_cache[g - 1].tag;
+						m_local_valid[g] = m_local_valid[g - 1];
+					}
 
-            m_local_raw_cache[0].addr_line = addr.m_addr_line;
-            m_local_raw_cache[0].tag = addr.m_tag;
-            m_local_valid[0] = true;
+					m_local_raw_cache[0].addr_line = addr.m_addr_line;
+					m_local_raw_cache[0].tag = addr.m_tag;
+					m_local_valid[0] = true;
 
-            int way = -1;
-            if (hit_local_storage){
-                if (hit_last_used) {
-                    way = 0;
-                }
-            } else {
-                way = hit(addr);
-            }
+					int way = -1;
+					if (hit_local_storage)
+					{
+						if (hit_last_used)
+						{
+							way = 0;
+						}
+					}
+					else
+					{
+						way = hit(addr);
+					}
 
-			if (way == -1){
-				return false;
-	        }
+					if (way == -1)
+					{
+						return false;
+					}
 
-			for (size_t off = 0; off < N_WORDS_PER_LINE; off++) {
+					for (size_t off = 0; off < N_WORDS_PER_LINE; off++)
+					{
 #pragma HLS unroll
 				line[off] = m_cache_mem[addr.m_addr_line][off];
 			}
 
 			return true;
-		}
+				}
 
 		void set_line(const ap_uint<ADDR_SIZE> addr_main,
 				const line_type line) {

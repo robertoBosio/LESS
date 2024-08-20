@@ -43,7 +43,7 @@ Before running the project, ensure that you have the following prerequisites ins
 4. Compile, implement and generate bitstream:
 
    ```bash
-   make run IMPL=1
+   make run CSYNTH=1 EXPORT=1
    ```
 
 ### Input file format

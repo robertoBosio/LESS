@@ -35,7 +35,7 @@ template <size_t NODE_W,
 void load_datagraphs(
         row_t *edge_buf,
         std::string datafile,
-        unsigned long & dynfifo_space,
+        unsigned long &dynfifo_space,
         unsigned long &numDataEdges)
 {
     unsigned long numDataVertices;
@@ -63,7 +63,7 @@ void load_datagraphs(
     dynfifo_space = dynfifo_space - (dynfifo_space % BURST_SIZE) + BURST_SIZE;
     dynfifo_space = RESULT_SPACE - dynfifo_space;
 
-    dynfifo_space = 10;
+    dynfifo_space = 100000;
     edge_buf_p = dynfifo_space;
 
     /* Store data labels */
@@ -341,6 +341,7 @@ int main()
                        K_FUNCTIONS,
                        DDR_BIT,
                        VERTEX_WIDTH_BIT,
+                       VERTEX_WIDTH,
                        HASH_LOOKUP3_BIT,
                        MAX_HASH_TABLE_BIT,
                        64,
@@ -350,6 +351,7 @@ int main()
                        MAX_QUERY_VERTICES,
                        MAX_TABLES,
                        MAX_COLLISIONS>(res_buf,
+                                       htb_buf,
                                        htb_buf,
                                        bloom_p,
                                        qVertices,

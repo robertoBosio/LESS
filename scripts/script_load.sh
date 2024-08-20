@@ -1,6 +1,6 @@
 user="root"
 path="/home/ubuntu/"
-device="kriahlslab1"
+device="kriahlslab0"
 res_file=results_${1}_$(date +%m%d%H%M).csv
 
 if [ $# -lt 2 ]; then
@@ -74,6 +74,11 @@ ssh ${ssh_string} "source /etc/profile && python3 ${path}overlay/host.py ${path}
 # copy result
 scp ${ssh_string}:${path}overlay/results.txt ./${res_file}
 echo $2 >> ./${res_file}
+
+if [ $# -gt 2 ] && [ $3 == "--dry-run" ]; then
+    rm ./${res_file}
+    echo "dry run"
+fi
 
 # cleanup and reloading bitstream to control fan speed
 ssh ${ssh_string} "rm -r ${path}overlay && xmutil unloadapp k26-starter-kits && xmutil loadapp k26-starter-kits"
