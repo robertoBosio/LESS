@@ -1007,8 +1007,6 @@ mwj_merge_h(hls::stream<sequencebuild_set_t<ap_uint<V_ID_W>>>& stream_sol0_in,
               /* send stop packet */
               h_sol.stop=true;
               stream_sol_out.write(h_sol);
-
-              std::cout << "MERGE stopped" << std::endl << std::flush;
               
   
 }
@@ -1201,29 +1199,21 @@ TUPLEBUILD_TASK_LOOP:
         tuple_out.last_batch = tuple_in.last_batch;
 
         bool selch = indexing_h.range(hash1_w-1,hash1_w-2);
-
-
-
-      //
-      //std::cout << "TBUILD IN :: " << (int)tuple_out.last_set << " @ " << (int)tuple_out.indexing_v << " - " <<  (int)tuple_out.indexed_v << std::endl <<  std::flush;
-      //
-
-
+        
         // FIST TUPLE
         if(tuple_out.last_set) {
           stream_tuple_out0[0].write(tuple_out);
           stream_tuple_out1[0].write(tuple_out);
         } else {
           if(selch) {
-            stream_tuple_out0[0].write(tuple_out); // must be removed when splitted
+            //stream_tuple_out0[0].write(tuple_out); // must be removed when splitted
             stream_tuple_out1[0].write(tuple_out); // must be keep when splitted
           } else {
-            stream_tuple_out0[0].write(tuple_out); // must be keep when splitted
+            //stream_tuple_out0[0].write(tuple_out); // must be keep when splitted
             stream_tuple_out1[0].write(tuple_out); // must be removed when splitted
           }
         }
         
-        //stream_tuple_out0[0].write(tuple_out);
         // change addr_counter
         if (addr_counter == 0)
           tuple_out.skip_counter = true;
@@ -1235,26 +1225,21 @@ TUPLEBUILD_TASK_LOOP:
           stream_tuple_out1[1].write(tuple_out);
         } else {
           if(selch) {
-            stream_tuple_out0[1].write(tuple_out); // must be removed when splitted
+            //stream_tuple_out0[1].write(tuple_out); // must be removed when splitted
             stream_tuple_out1[1].write(tuple_out); // must be keep when splitted
           } else {
-            stream_tuple_out0[1].write(tuple_out); // must be keep when splitted
+            //stream_tuple_out0[1].write(tuple_out); // must be keep when splitted
             stream_tuple_out1[1].write(tuple_out); // must be removed when splitted
           }
         }
-        
-        //stream_tuple_out0[1].write(tuple_out);
       }
-    } //else {
-      //std::cout << "TBUILD NO DATA\n" << std::flush;
-    //}
+    }
   }
 
   /* Propagate stop node */
   tuple_out.stop = true;
   stream_tuple_out0[0].write(tuple_out);
   stream_tuple_out1[0].write(tuple_out);
-  std::cout << "TBUILD STOPPED!\n" << std::flush;
 }
 
 template<size_t BATCH_SIZE_LOG>
@@ -1633,6 +1618,8 @@ mwj_merge_solandset(hls::stream<sol_node_t<vertex_t>>& stream_sol_in,
 {
 #pragma HLS PIPELINE II = 1
   static bool select = false;
+  static bool auth0 = true;
+  static bool auth1 = true;
   static unsigned char pos = 0;
   sol_node_t<vertex_t> sol_vertex;
   assembly_set_t set_vertex;
@@ -1640,15 +1627,50 @@ mwj_merge_solandset(hls::stream<sol_node_t<vertex_t>>& stream_sol_in,
   bool last, sol, stop;
   vertex_t node;
   if (select) {
-    set_vertex = stream_set_in.read();
-    select = !set_vertex.last_set;
-    last = set_vertex.last_set;
-    node = set_vertex.node;
-    sol = false;
-    stop = false;
-    //if(last)
-    //  set_vertex = stream_set_in1.read();
+    if(auth1)
+      if(stream_set_in1.read_nb(set_vertex)) {
+        last = set_vertex.last_set;
+        if(last) {
+          auth1=false;
+          if((!auth0)) { //other channels finish!
+            select = !set_vertex.last_set;
+            node = set_vertex.node;
+            sol = false;
+            stop = false;
+            stream_sol_out.write({ node, pos, last, sol, stop});
+          }
+        } else {
+          select = !set_vertex.last_set;
+          node = set_vertex.node;
+          sol = false;
+          stop = false;
+          stream_sol_out.write({ node, pos, last, sol, stop});
+        }
+      }
+    if(auth0)
+      if(stream_set_in.read_nb(set_vertex)) {
+        last = set_vertex.last_set;
+        if(last) {
+          auth0=false;
+          if((!auth1)) { //other channels finish!
+            select = !set_vertex.last_set;
+            node = set_vertex.node;
+            sol = false;
+            stop = false;
+            stream_sol_out.write({ node, pos, last, sol, stop});
+          }
+        } else {
+          select = !set_vertex.last_set;
+          node = set_vertex.node;
+          sol = false;
+          stop = false;
+          stream_sol_out.write({ node, pos, last, sol, stop});
+        }
+      }
+    
   } else {
+    auth0=true;
+    auth1=true;
     sol_vertex = stream_sol_in.read();
     select = sol_vertex.last;
     pos = sol_vertex.pos;
@@ -1656,8 +1678,8 @@ mwj_merge_solandset(hls::stream<sol_node_t<vertex_t>>& stream_sol_in,
     node = sol_vertex.node;
     sol = true;
     stop = sol_vertex.stop;
+    stream_sol_out.write({ node, pos, last, sol, stop});
   }
-  stream_sol_out.write({ node, pos, last, sol, stop});
 }
 
 void
@@ -2298,7 +2320,6 @@ multiwayJoin(ap_uint<DDR_W>* htb_buf0_0,
     htb_cache_1.stop();
     htb_cache2_0.stop();
     htb_cache2_1.stop();
-    //std::cout << "CACHE STOPPED" << std::endl << std::flush;
 
 #endif /* __SYNTHESIS__ */
 }
@@ -2681,7 +2702,7 @@ void subgraphIsomorphism(row_t htb_buf0_0[HASHTABLES_SPACE],
                                hTables0_0,
                                hTables0_1,
                                hTables1_0,
-                               hTables1_0,
+                               hTables1_1,
                                dynfifo_space,
                                n_candidate,
                                start_candidate,
