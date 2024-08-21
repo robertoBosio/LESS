@@ -1209,8 +1209,8 @@ TUPLEBUILD_TASK_LOOP:
             //stream_tuple_out0[0].write(tuple_out); // must be removed when splitted
             stream_tuple_out1[0].write(tuple_out); // must be keep when splitted
           } else {
-            //stream_tuple_out0[0].write(tuple_out); // must be keep when splitted
-            stream_tuple_out1[0].write(tuple_out); // must be removed when splitted
+            stream_tuple_out0[0].write(tuple_out); // must be keep when splitted
+            //stream_tuple_out1[0].write(tuple_out); // must be removed when splitted
           }
         }
         
@@ -1228,8 +1228,8 @@ TUPLEBUILD_TASK_LOOP:
             //stream_tuple_out0[1].write(tuple_out); // must be removed when splitted
             stream_tuple_out1[1].write(tuple_out); // must be keep when splitted
           } else {
-            //stream_tuple_out0[1].write(tuple_out); // must be keep when splitted
-            stream_tuple_out1[1].write(tuple_out); // must be removed when splitted
+            stream_tuple_out0[1].write(tuple_out); // must be keep when splitted
+            //stream_tuple_out1[1].write(tuple_out); // must be removed when splitted
           }
         }
       }
@@ -1368,8 +1368,7 @@ mwj_blockbuild(hls::stream<split_tuple_t>& stream_tuple_in,
 
   tuple_in = stream_tuple_in.read();
   tuple_out.stop = tuple_in.stop;
-  //if(tuple_in.stop)
-  //  std::cout << "BB STOP\n" << std::flush;
+  
   if (!tuple_in.last_set) {
 
     tuple_out.indexing_v = tuple_in.indexing_v;
@@ -1414,8 +1413,6 @@ mwj_split_merge(hls::stream<verify_tuple_t> stream_tuple_in[NUM_SPLIT],
   tuple_in = stream_tuple_in[pointer].read();
   stream_tuple_out.write(tuple_in);
 
-  //if(tuple_in.stop)
-  //  std::cout << "SPLITMERGE STOP\n" << std::flush;
   /* We need to guarantee to read from the same stream until
   the tuples produced from an edge verification job are concluded,
   thus not mixing tuple coming from two different edge. */
@@ -1612,7 +1609,7 @@ mwj_fulldetect(hls::stream<sol_node_t<vertex_t>>& stream_sol_in,
 
 void
 mwj_merge_solandset(hls::stream<sol_node_t<vertex_t>>& stream_sol_in,
-                    hls::stream<assembly_set_t>& stream_set_in,
+                    hls::stream<assembly_set_t>& stream_set_in0,
                     hls::stream<assembly_set_t>& stream_set_in1,
                     hls::stream<assembly_node_t<vertex_t>>& stream_sol_out)
 {
@@ -1627,7 +1624,30 @@ mwj_merge_solandset(hls::stream<sol_node_t<vertex_t>>& stream_sol_in,
   bool last, sol, stop;
   vertex_t node;
   if (select) {
-    if(auth1)
+    // try STREAMSET 0
+    if(auth0) {
+      if(stream_set_in0.read_nb(set_vertex)) {
+        last = set_vertex.last_set;
+        if(last) {
+          auth0=false;
+          if((!auth1)) { //other channels finish!
+            select = !set_vertex.last_set;
+            node = set_vertex.node;
+            sol = false;
+            stop = false;
+            stream_sol_out.write({ node, pos, last, sol, stop});
+          }
+        } else {
+          select = !set_vertex.last_set;
+          node = set_vertex.node;
+          sol = false;
+          stop = false;
+          stream_sol_out.write({ node, pos, last, sol, stop});
+        }
+      }
+    }
+    // try STREAMSET 1
+    if(auth1) {
       if(stream_set_in1.read_nb(set_vertex)) {
         last = set_vertex.last_set;
         if(last) {
@@ -1647,26 +1667,8 @@ mwj_merge_solandset(hls::stream<sol_node_t<vertex_t>>& stream_sol_in,
           stream_sol_out.write({ node, pos, last, sol, stop});
         }
       }
-    if(auth0)
-      if(stream_set_in.read_nb(set_vertex)) {
-        last = set_vertex.last_set;
-        if(last) {
-          auth0=false;
-          if((!auth1)) { //other channels finish!
-            select = !set_vertex.last_set;
-            node = set_vertex.node;
-            sol = false;
-            stop = false;
-            stream_sol_out.write({ node, pos, last, sol, stop});
-          }
-        } else {
-          select = !set_vertex.last_set;
-          node = set_vertex.node;
-          sol = false;
-          stop = false;
-          stream_sol_out.write({ node, pos, last, sol, stop});
-        }
-      }
+    }
+    
     
   } else {
     auth0=true;
