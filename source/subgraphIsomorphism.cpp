@@ -1253,9 +1253,7 @@ TUPLEBUILD_TASK_LOOP:
   /* Propagate stop node */
   tuple_out.stop = true;
   stream_tuple_out0[0].write(tuple_out);
-  stream_tuple_out0[1].write(tuple_out); //added
   stream_tuple_out1[0].write(tuple_out);
-  stream_tuple_out1[1].write(tuple_out); //added
   std::cout << "TBUILD STOPPED!\n" << std::flush;
 }
 
@@ -1280,13 +1278,9 @@ INTERSECT_TASK_LOOP:
   while (true) {
     #pragma HLS pipeline II = 1
     if (stream_tuple_in[stream_p].read_nb(tuple_in)) {
-      //std::cout << "INTERSECT TUPLE :: " << (int)tuple_in.last_set << " @ " << (int)tuple_in.indexing_v << " - " <<  (int)tuple_in.indexed_v << std::endl <<  std::flush;
-
       stream_p = (stream_p + 1) % 2;
-
       if (tuple_in.stop) {
         break;
-        std::cout << "STOP catch intersect!\n" << std::flush;
       } else if (!tuple_in.last_set) {
         ap_uint<(1UL << C_W)> offset = 0;
         tableIndex = tuple_in.tb_index;
@@ -1333,10 +1327,9 @@ INTERSECT_TASK_LOOP:
   tuple_out.stop = true;
   stream_tuple_out.write(tuple_out);
   stream_tuple_out.write(tuple_out);
-  std::cout << "INTERSECT STOPPED!\n" << std::flush;
 }
 
-template<size_t NUM_SPLIT>
+template<size_t NUM_SPLIT, size_t ID>
 void
 mwj_offset(hls::stream<offset_tuple_t>& stream_tuple_in,
            hls::stream<split_tuple_t> stream_tuple_out[NUM_SPLIT])
@@ -1424,7 +1417,7 @@ mwj_blockbuild(hls::stream<split_tuple_t>& stream_tuple_in,
   }
 }
 
-template<size_t NUM_SPLIT>
+template<size_t NUM_SPLIT, size_t ID>
 void
 mwj_split_merge(hls::stream<verify_tuple_t> stream_tuple_in[NUM_SPLIT],
                 hls::stream<verify_tuple_t>& stream_tuple_out)
@@ -1514,6 +1507,7 @@ VERIFY_TASK_LOOP:
 
 /* Or reduce of bits coming from verify, compact edge blocks and output if a
  * single edge is verified or not */
+template<size_t ID>
 void
 mwj_compact(hls::stream<compact_tuple_t>& stream_tuple_in,
             hls::stream<assembly_tuple_t>& stream_tuple_out)
@@ -1549,7 +1543,7 @@ mwj_compact(hls::stream<compact_tuple_t>& stream_tuple_in,
   }
 }
 
-template<size_t MAX_BATCH_SIZE>
+template<size_t MAX_BATCH_SIZE, size_t ID>
 void
 mwj_filter(hls::stream<assembly_tuple_t>& stream_tuple_in,
            hls::stream<assembly_set_t>& stream_set_out)
@@ -1998,9 +1992,9 @@ multiwayJoin(ap_uint<DDR_W>* htb_buf0_0,
       mwj_fulldetect, t_stream_sol, f_stream_sol); 
 
     hls_thread_local hls::task mwj_offset0_t(
-      mwj_offset<BLOCKBUILD_NUM>, i_stream_tuple0, o_stream_tuple0);
-    //hls_thread_local hls::task mwj_offset1_t(
-    //  mwj_offset<BLOCKBUILD_NUM>, i_stream_tuple1, o_stream_tuple1);
+      mwj_offset<BLOCKBUILD_NUM,0>, i_stream_tuple0, o_stream_tuple0);
+    hls_thread_local hls::task mwj_offset1_t(
+      mwj_offset<BLOCKBUILD_NUM,1>, i_stream_tuple1, o_stream_tuple1);
 
 
     hls_thread_local hls::task mwj_blockbuild0_t[BLOCKBUILD_NUM];
@@ -2012,7 +2006,6 @@ multiwayJoin(ap_uint<DDR_W>* htb_buf0_0,
         bb_stream_tuple0[g]);
     }
 
-    /*
     hls_thread_local hls::task mwj_blockbuild1_t[BLOCKBUILD_NUM];
     for (int g = 0; g < BLOCKBUILD_NUM; g++) {
       #pragma HLS unroll
@@ -2021,22 +2014,21 @@ multiwayJoin(ap_uint<DDR_W>* htb_buf0_0,
         o_stream_tuple1[g],
         bb_stream_tuple1[g]);
     }
-    */
     
     hls_thread_local hls::task mwj_blockbuild_merge0_t(
-      mwj_split_merge<BLOCKBUILD_NUM>, bb_stream_tuple0, bb_merge_stream_tuple0);
-    //hls_thread_local hls::task mwj_blockbuild_merge1_t(
-    //  mwj_split_merge<BLOCKBUILD_NUM>, bb_stream_tuple1, bb_merge_stream_tuple1);
+      mwj_split_merge<BLOCKBUILD_NUM,0>, bb_stream_tuple0, bb_merge_stream_tuple0);
+    hls_thread_local hls::task mwj_blockbuild_merge1_t(
+      mwj_split_merge<BLOCKBUILD_NUM,1>, bb_stream_tuple1, bb_merge_stream_tuple1);
 
     hls_thread_local hls::task mwj_compact0_t(
-      mwj_compact, v_stream_tuple0, c_stream_tuple0);
-    //hls_thread_local hls::task mwj_compact1_t(
-    //  mwj_compact, v_stream_tuple1, c_stream_tuple1);
+      mwj_compact<0>, v_stream_tuple0, c_stream_tuple0);
+    hls_thread_local hls::task mwj_compact1_t(
+      mwj_compact<1>, v_stream_tuple1, c_stream_tuple1);
 
     hls_thread_local hls::task mwj_filter0_t(
-      mwj_filter<(1UL << PROPOSE_BATCH_LOG)>, c_stream_tuple0, f_stream_set0);
-    //hls_thread_local hls::task mwj_filter1_t(
-    //  mwj_filter<(1UL << PROPOSE_BATCH_LOG)>, c_stream_tuple1, f_stream_set1);
+      mwj_filter<(1UL << PROPOSE_BATCH_LOG),0>, c_stream_tuple0, f_stream_set0);
+    hls_thread_local hls::task mwj_filter1_t(
+      mwj_filter<(1UL << PROPOSE_BATCH_LOG),1>, c_stream_tuple1, f_stream_set1);
     
     hls_thread_local hls::task mwj_merge_solandset_t(
       mwj_merge_solandset, f_stream_sol, f_stream_set0, f_stream_set1, mss_stream_sol);
@@ -2255,19 +2247,16 @@ multiwayJoin(ap_uint<DDR_W>* htb_buf0_0,
                                 std::ref(htb_cache_1),
                                 std::ref(t_stream_tuple1),
                                 std::ref(i_stream_tuple1));
-    
     std::thread mwj_verify0_t(mwj_verify<PROPOSE_BATCH_LOG>,
                              hTables1_0,
                              std::ref(htb_cache_0),
                              std::ref(bb_merge_stream_tuple0),
                              std::ref(v_stream_tuple0));
-    /*
     std::thread mwj_verify1_t(mwj_verify<PROPOSE_BATCH_LOG>,
                              hTables1_1,
                              std::ref(htb_cache_1),
                              std::ref(bb_merge_stream_tuple1),
                              std::ref(v_stream_tuple1));
-    */
     std::thread mwj_assembly_t(mwj_assembly,
                                htb_buf3_0,
                                n_candidate,
@@ -2293,7 +2282,7 @@ multiwayJoin(ap_uint<DDR_W>* htb_buf0_0,
     mwj_intersect0_t.join();
     mwj_intersect1_t.join();
     mwj_verify0_t.join();
-    //mwj_verify1_t.join();
+    mwj_verify1_t.join();
     mwj_assembly_t.join();
 
 #if DEBUG_STATS
