@@ -1203,6 +1203,7 @@ TUPLEBUILD_TASK_LOOP:
         
         // FIST TUPLE
         if(tuple_out.last_set) {
+          tuple_out.pos = 0;
           stream_tuple_out0[0].write(tuple_out);
           stream_tuple_out1[0].write(tuple_out);
         } else {
@@ -1222,6 +1223,7 @@ TUPLEBUILD_TASK_LOOP:
         
         // SECOND TUPLE
         if(tuple_out.last_set) {
+          tuple_out.pos = 0;
           stream_tuple_out0[1].write(tuple_out);
           stream_tuple_out1[1].write(tuple_out);
         } else {
@@ -1231,6 +1233,15 @@ TUPLEBUILD_TASK_LOOP:
           } else {
             stream_tuple_out0[1].write(tuple_out); // must be keep when splitted
             //stream_tuple_out1[1].write(tuple_out); // must be removed when splitted
+          }
+          // TERZA COPPIA PADDING
+          if(bit_last) {
+            tuple_out.last_set = true;
+            tuple_out.pos = 1;
+            stream_tuple_out0[0].write(tuple_out);
+            stream_tuple_out0[1].write(tuple_out);
+            stream_tuple_out1[0].write(tuple_out);
+            stream_tuple_out1[1].write(tuple_out);
           }
         }
       }
@@ -1306,6 +1317,7 @@ INTERSECT_TASK_LOOP:
       }
       tuple_out.last_batch = tuple_in.last_batch;
       tuple_out.last_set = tuple_in.last_set;
+      tuple_out.pos = tuple_in.pos; //NEW
       stream_tuple_out.write(tuple_out);
     }
   }
@@ -1327,7 +1339,8 @@ mwj_offset(hls::stream<offset_tuple_t>& stream_tuple_in,
   split_tuple_t tuple_out;
 
   tuple_in = stream_tuple_in.read();
-        
+  
+  
   ap_uint<(1UL << C_W)> end_off = tuple_in.offset;
   tuple_out.indexed_v = tuple_in.indexed_v;
   tuple_out.indexing_v = tuple_in.indexing_v;
@@ -1338,6 +1351,7 @@ mwj_offset(hls::stream<offset_tuple_t>& stream_tuple_in,
   tuple_in = stream_tuple_in.read();
   
   tuple_out.last_set = tuple_in.last_set;
+  if (tuple_in.last_set) tuple_out.pos = tuple_in.pos; //NEW
   tuple_out.last_batch = tuple_in.last_batch;
   tuple_out.start_off = tuple_in.offset;
   tuple_out.first_block = tuple_in.offset >> EDGE_BLOCK;
@@ -1345,17 +1359,17 @@ mwj_offset(hls::stream<offset_tuple_t>& stream_tuple_in,
                           ? (unsigned int)(end_off >> EDGE_BLOCK)
                           : (unsigned int)((end_off - 1) >> EDGE_BLOCK);
   tuple_out.flag = (tuple_in.flag == MIN_SET)
-                     ? MIN_SET
-                     : ((tuple_in.offset == end_off) ? NO_EDGE : CHECK);
+                  ? MIN_SET
+                  : ((tuple_in.offset == end_off) ? NO_EDGE : CHECK);
   tuple_out.stop = tuple_in.stop;
 
   stream_tuple_out[pointer].write(tuple_out);
   pointer = (pointer + 1) % NUM_SPLIT;
-  //std::cout << "OFFSET TUPLE :: " << (int)tuple_in.last_set << " @ " << (int)tuple_in.indexing_v << " - " <<  (int)tuple_in.indexed_v << std::endl <<  std::flush;
 
-#if DEBUG_STATS
-  debug::intersect_filter += (tuple_out.flag == NO_EDGE) ? 1 : 0;
-#endif /* DEBUG_STATS */
+  
+  #if DEBUG_STATS
+    debug::intersect_filter += (tuple_out.flag == NO_EDGE) ? 1 : 0;
+  #endif /* DEBUG_STATS */
 }
 
 template<size_t MAX_BATCH_SIZE, size_t ID>
@@ -1382,15 +1396,16 @@ mwj_blockbuild(hls::stream<split_tuple_t>& stream_tuple_in,
     tuple_out.last_set = false;
     unsigned int s = 0;
 
-  SPLIT_MAIN_LOOP:
+    SPLIT_MAIN_LOOP:
     do {
-#pragma HLS pipeline II = 1
+      #pragma HLS pipeline II = 1
       tuple_out.address = tuple_in.start_off + s;
       tuple_out.bit_last_address = (tuple_in.first_block == tuple_in.end_block);
       stream_tuple_out.write(tuple_out);
       tuple_in.first_block++;
       s += (1UL << EDGE_BLOCK);
     } while (tuple_in.first_block <= tuple_in.end_block);
+
   } else {
     /* Setting bit_last_address even for delimeter nodes for
     the merge_split to change stream on which reads. In non delimeter
@@ -1398,6 +1413,7 @@ mwj_blockbuild(hls::stream<split_tuple_t>& stream_tuple_in,
     tuple_out.last_set = tuple_in.last_set;
     tuple_out.last_batch = tuple_in.last_batch;
     tuple_out.bit_last_address = true;
+    tuple_out.pos = tuple_in.pos; //NEW
     stream_tuple_out.write(tuple_out);
   }
 }
@@ -1479,11 +1495,68 @@ VERIFY_TASK_LOOP:
         tuple_out.bit_last_edge = tuple_in.bit_last_edge;
         tuple_out.bit_last_address = tuple_in.bit_last_address;
         tuple_out.indexed_v = candidate_v;
-        tuple_out.pos = tuple_in.pos;
+        //tuple_out.pos = tuple_in.pos;
       }
+      tuple_out.pos = tuple_in.pos; //NEW upper commented out
       tuple_out.last_batch = tuple_in.last_batch;
       tuple_out.last_set = tuple_in.last_set;
       stream_tuple_out.write(tuple_out);
+    }
+  }
+}
+
+void mwj_mergecompact(hls::stream<compact_tuple_t>& stream_tuple_in0,
+                      hls::stream<compact_tuple_t>& stream_tuple_in1,
+                      hls::stream<compact_tuple_t>& stream_tuple_out)
+{
+  compact_tuple_t set_vertex;
+  compact_tuple_t set_vertex_last = {0,0,false,false,false,false,false,false};
+  static bool auth0 = true;
+  static bool auth1 = true;
+  // try STREAMSET 0
+  if(auth0) {
+    if(stream_tuple_in0.read_nb(set_vertex)) {
+      if(set_vertex.last_set) {
+        auth0=false;
+        if((!auth1)) { //other channels finish!
+          if(set_vertex.pos==0) {
+            stream_tuple_out.write(set_vertex);
+          } else {
+            stream_tuple_out.write(set_vertex_last);
+          }
+          auth0=true;
+          auth1=true;
+        }
+      } else {
+        if(set_vertex.bit_last_edge) {
+          set_vertex_last = set_vertex;
+        } else {
+          stream_tuple_out.write(set_vertex);
+        }
+      }
+    }
+  }
+  // try STREAMSET 1
+  if(auth1) {
+    if(stream_tuple_in1.read_nb(set_vertex)) {
+      if(set_vertex.last_set) {
+        auth1=false;
+        if((!auth0)) { //other channels finish!
+          if(set_vertex.pos==0) {
+            stream_tuple_out.write(set_vertex);
+          } else {
+            stream_tuple_out.write(set_vertex_last);
+          }
+          auth0=true;
+          auth1=true;
+        }
+      } else {
+        if(set_vertex.bit_last_edge) {
+          set_vertex_last = set_vertex;
+        } else {
+          stream_tuple_out.write(set_vertex);
+        }
+      }
     }
   }
 }
@@ -1521,16 +1594,19 @@ mwj_compact(hls::stream<compact_tuple_t>& stream_tuple_in,
     tuple_out.last_batch = tuple_in.last_batch;
     tuple_out.last_set = tuple_in.last_set;
     tuple_out.stop = tuple_in.stop;
+    tuple_out.pos = tuple_in.pos; // NEW
     stream_tuple_out.write(tuple_out);
-    checked = false;
+    if(tuple_in.pos==0)
+      checked = false;
   }
 }
 
-void mwj_mergeasmset(hls::stream<compact_tuple_t>& stream_tuple_in0,
-                hls::stream<compact_tuple_t>& stream_tuple_in1,
-                hls::stream<compact_tuple_t>& stream_tuple_out)
+void mwj_mergeasmset(hls::stream<assembly_tuple_t>& stream_tuple_in0,
+                hls::stream<assembly_tuple_t>& stream_tuple_in1,
+                hls::stream<assembly_tuple_t>& stream_tuple_out)
 {
-  compact_tuple_t set_vertex;
+  assembly_tuple_t set_vertex;
+  static assembly_tuple_t set_vertex_last = {0,0,false,false,false,false,false};
   static bool auth0 = true;
   static bool auth1 = true;
   // try STREAMSET 0
@@ -1539,12 +1615,20 @@ void mwj_mergeasmset(hls::stream<compact_tuple_t>& stream_tuple_in0,
       if(set_vertex.last_set) {
         auth0=false;
         if((!auth1)) { //other channels finish!
-          stream_tuple_out.write(set_vertex);
+          if(set_vertex.pos==0) {
+            stream_tuple_out.write(set_vertex);
+          } else {
+            stream_tuple_out.write(set_vertex_last);
+          }
           auth0=true;
           auth1=true;
         }
       } else {
-        stream_tuple_out.write(set_vertex);
+        if(set_vertex.bit_last_edge) {
+          set_vertex_last = set_vertex;
+        } else {
+          stream_tuple_out.write(set_vertex);
+        }
       }
     }
   }
@@ -1554,12 +1638,20 @@ void mwj_mergeasmset(hls::stream<compact_tuple_t>& stream_tuple_in0,
       if(set_vertex.last_set) {
         auth1=false;
         if((!auth0)) { //other channels finish!
-          stream_tuple_out.write(set_vertex);
+          if(set_vertex.pos==0) {
+            stream_tuple_out.write(set_vertex);
+          } else {
+            stream_tuple_out.write(set_vertex_last);
+          }
           auth0=true;
           auth1=true;
         }
       } else {
-        stream_tuple_out.write(set_vertex);
+        if(set_vertex.bit_last_edge) {
+          set_vertex_last = set_vertex;
+        } else {
+          stream_tuple_out.write(set_vertex);
+        }
       }
     }
   }
@@ -1576,6 +1668,7 @@ mwj_filter(hls::stream<assembly_tuple_t>& stream_tuple_in,
   assembly_set_t tuple_out;
 
   tuple_in = stream_tuple_in.read();
+
   if (!tuple_in.last_set) {
     unsigned short p = tuple_in.pos;
     bits[p] = bits[p] && tuple_in.bit_checked;
@@ -1593,6 +1686,7 @@ mwj_filter(hls::stream<assembly_tuple_t>& stream_tuple_in,
     tuple_out.stop = tuple_in.stop;
     stream_set_out.write(tuple_out);
   }
+  
 }
 
 void
@@ -1738,7 +1832,7 @@ ASSEMBLY_TASK_LOOP:
         stream_partial_out.write(dynfifo_node);
       } else if (!vertex.sol && !vertex.last) {
         counter++;
-        //std::cout << "counter: " << counter << std::endl;
+        std::cout << "counter: " << counter << std::endl;
       }
 
       if (!vertex.sol){
@@ -1942,16 +2036,18 @@ multiwayJoin(ap_uint<DDR_W>* htb_buf0_0,
         ("Verify 0 - tuples");
     hls_thread_local hls::stream<compact_tuple_t, S_D> v_stream_tuple1
         ("Verify 1 - tuples");
-    
-    /* MERGEASMSET data out */
-    hls_thread_local hls::stream<compact_tuple_t, S_D> c_stream_tupleu
-        ("Compact Unified - tuples");
+    hls_thread_local hls::stream<compact_tuple_t, S_D> v_stream_tupleu
+        ("Verify U - tuples");
     
     /* X2 COMPACT data out */
     hls_thread_local hls::stream<assembly_tuple_t, S_D> c_stream_tuple0
         ("Compact 0 - tuples");
     hls_thread_local hls::stream<assembly_tuple_t, S_D> c_stream_tuple1
         ("Compact 1 - tuples");
+
+    /* MERGEASMSET data out */
+    hls_thread_local hls::stream<assembly_tuple_t, S_D> c_stream_tupleu
+        ("Compact Unified - tuples");
 
     /* FIND FULL data out */    
     hls_thread_local hls::stream<sol_node_t<vertex_t>, MAX_QV*10> f_stream_sol
@@ -2056,16 +2152,19 @@ multiwayJoin(ap_uint<DDR_W>* htb_buf0_0,
     hls_thread_local hls::task mwj_blockbuild_merge1_t(
       mwj_split_merge<BLOCKBUILD_NUM,1>, bb_stream_tuple1, bb_merge_stream_tuple1);
 
-    hls_thread_local hls::task mwj_mergeasmset_t(
-      mwj_mergeasmset, v_stream_tuple0, v_stream_tuple1, c_stream_tupleu);
+    //hls_thread_local hls::task mwj_mergecompact_t(
+    //  mwj_mergecompact,v_stream_tuple0,v_stream_tuple1,v_stream_tupleu);
 
     hls_thread_local hls::task mwj_compact0_t(
-      mwj_compact<0>, c_stream_tupleu, c_stream_tuple0);
-    //hls_thread_local hls::task mwj_compact1_t(
-    //  mwj_compact<1>, v_stream_tuple1, c_stream_tuple1);
+      mwj_compact<0>, v_stream_tuple0, c_stream_tuple0);
+    hls_thread_local hls::task mwj_compact1_t(
+      mwj_compact<1>, v_stream_tuple1, c_stream_tuple1);
+
+    hls_thread_local hls::task mwj_mergeasmset_t(
+      mwj_mergeasmset, c_stream_tuple0, c_stream_tuple1, c_stream_tupleu);
 
     hls_thread_local hls::task mwj_filter0_t(
-      mwj_filter<(1UL << PROPOSE_BATCH_LOG),0>, c_stream_tuple0, f_stream_set0);
+      mwj_filter<(1UL << PROPOSE_BATCH_LOG),0>, c_stream_tupleu, f_stream_set0);
     
     hls_thread_local hls::task mwj_merge_solandset_t(
       mwj_merge_solandset, f_stream_sol, f_stream_set0, mss_stream_sol);
