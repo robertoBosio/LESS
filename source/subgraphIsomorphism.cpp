@@ -1150,102 +1150,118 @@ mwj_tuplebuild(
   intersect_tuple_t tuple_out;
   sequencebuild_tuple_t<ap_uint<V_ID_W>> tuple_in;
   unsigned char curQV = 0;
-
+  bool extra_tuple=false;
   tuple_out.stop = false;
 
-TUPLEBUILD_TASK_LOOP:
+  TUPLEBUILD_TASK_LOOP:
   while (true) {
     #pragma HLS pipeline II = 1
-    if (stream_tuple_in.read_nb(tuple_in)) {
-      if (tuple_in.sol) {
-        curEmb[tuple_in.pos] = tuple_in.node;
-        stream_sol_out.write(
-          { tuple_in.node, tuple_in.pos, tuple_in.last_edge, tuple_in.stop });
-        if (tuple_in.stop) {
-          break;
-        }
-        curQV = tuple_in.pos + 1;
-      } else {
-        uint8_t tableIndex =
-          qVertices[curQV].tables_indexed[tuple_in.query_edge];
-        uint8_t ivPos =
-          qVertices[curQV].vertex_indexing[tuple_in.query_edge];
-
-        bool bit_last = tuple_in.last_edge;
-        bool bit_min =
-          (tuple_in.tb_index == tableIndex && tuple_in.iv_pos == ivPos);
-
-        vToVerify = tuple_in.node;
-        hash_in0.write(vToVerify);
-        hash_in1.write(curEmb[ivPos]);
-        xf::database::hashLookup3<V_ID_W>(hash_in0, hash_out0);
-        xf::database::hashLookup3<V_ID_W>(hash_in1, hash_out1);
-        ap_uint<MAX_HASH_W> indexed_h = hash_out0.read();
-        ap_uint<MAX_HASH_W> indexing_h = hash_out1.read();
-
-        addr_counter = indexing_h.range(hash1_w - 1, 0);
-        addr_counter <<= hash2_w;
-        addr_counter += indexed_h.range(hash2_w - 1, 0);
-
-        tuple_out.indexed_v = vToVerify;
-        tuple_out.indexing_v = curEmb[ivPos];
-        tuple_out.addr_counter = addr_counter;
-        tuple_out.tb_index = tableIndex;
-        tuple_out.pos = tuple_in.pos;
-        tuple_out.bit_last_edge = bit_last;
-        tuple_out.flag = (bit_min) ? MIN_SET : CHECK;
-        tuple_out.skip_counter = false;
-        tuple_out.last_set = tuple_in.last_set;
-        tuple_out.last_batch = tuple_in.last_batch;
-
-        // HASH DIVIDING!!!
-        bool selch = indexing_h.range(hash1_w-1,hash1_w-2);
-        
-        // FIST TUPLE
-        if(tuple_out.last_set) {
-          tuple_out.pos = 0;
-          stream_tuple_out0[0].write(tuple_out);
-          stream_tuple_out1[0].write(tuple_out);
-        } else {
-          if(selch) {
-            //stream_tuple_out0[0].write(tuple_out); // must be removed when splitted
-            stream_tuple_out1[0].write(tuple_out); // must be keep when splitted
-          } else {
-            stream_tuple_out0[0].write(tuple_out); // must be keep when splitted
-            //stream_tuple_out1[0].write(tuple_out); // must be removed when splitted
+    if(extra_tuple) {
+      tuple_out.last_set = true;
+      tuple_out.pos = 1;
+      stream_tuple_out0[0].write(tuple_out);
+      stream_tuple_out0[1].write(tuple_out);
+      stream_tuple_out1[0].write(tuple_out);
+      stream_tuple_out1[1].write(tuple_out);
+      extra_tuple=false;
+    } else {
+      if (stream_tuple_in.read_nb(tuple_in)) {
+        extra_tuple = (!tuple_in.sol) & (!tuple_in.last_set) & tuple_in.last_edge;
+        if (tuple_in.sol) {
+          curEmb[tuple_in.pos] = tuple_in.node;
+          stream_sol_out.write(
+            { tuple_in.node, tuple_in.pos, tuple_in.last_edge, tuple_in.stop });
+          if (tuple_in.stop) {
+            break;
           }
-        }
-        
-        // change addr_counter
-        if (addr_counter == 0)
-          tuple_out.skip_counter = true;
-        tuple_out.addr_counter = addr_counter - 1;
-        
-        // SECOND TUPLE
-        if(tuple_out.last_set) {
-          tuple_out.pos = 0;
-          stream_tuple_out0[1].write(tuple_out);
-          stream_tuple_out1[1].write(tuple_out);
+          curQV = tuple_in.pos + 1;
         } else {
-          if(selch) {
-            //stream_tuple_out0[1].write(tuple_out); // must be removed when splitted
-            stream_tuple_out1[1].write(tuple_out); // must be keep when splitted
-          } else {
-            stream_tuple_out0[1].write(tuple_out); // must be keep when splitted
-            //stream_tuple_out1[1].write(tuple_out); // must be removed when splitted
-          }
-          // TERZA COPPIA PADDING
-          if(bit_last) {
-            tuple_out.last_set = true;
-            tuple_out.pos = 1;
+          uint8_t tableIndex =
+            qVertices[curQV].tables_indexed[tuple_in.query_edge];
+          uint8_t ivPos =
+            qVertices[curQV].vertex_indexing[tuple_in.query_edge];
+
+          bool bit_last = tuple_in.last_edge;
+          bool bit_min =
+            (tuple_in.tb_index == tableIndex && tuple_in.iv_pos == ivPos);
+
+          vToVerify = tuple_in.node;
+          hash_in0.write(vToVerify);
+          hash_in1.write(curEmb[ivPos]);
+          xf::database::hashLookup3<V_ID_W>(hash_in0, hash_out0);
+          xf::database::hashLookup3<V_ID_W>(hash_in1, hash_out1);
+          ap_uint<MAX_HASH_W> indexed_h = hash_out0.read();
+          ap_uint<MAX_HASH_W> indexing_h = hash_out1.read();
+
+          addr_counter = indexing_h.range(hash1_w - 1, 0);
+          addr_counter <<= hash2_w;
+          addr_counter += indexed_h.range(hash2_w - 1, 0);
+
+          tuple_out.indexed_v = vToVerify;
+          tuple_out.indexing_v = curEmb[ivPos];
+          tuple_out.addr_counter = addr_counter;
+          tuple_out.tb_index = tableIndex;
+          tuple_out.pos = tuple_in.pos;
+          tuple_out.bit_last_edge = bit_last;
+          tuple_out.flag = (bit_min) ? MIN_SET : CHECK;
+          tuple_out.skip_counter = false;
+          tuple_out.last_set = tuple_in.last_set;
+          tuple_out.last_batch = tuple_in.last_batch;
+
+          // HASH DIVIDING!!!
+          bool selch = indexing_h.range(hash1_w-1,hash1_w-2);
+          
+          // FIST TUPLE
+          if(tuple_out.last_set) {
+            tuple_out.pos = 0;
             stream_tuple_out0[0].write(tuple_out);
-            stream_tuple_out0[1].write(tuple_out);
             stream_tuple_out1[0].write(tuple_out);
+          } else {
+            if(selch) {
+              //stream_tuple_out0[0].write(tuple_out); // must be removed when splitted
+              stream_tuple_out1[0].write(tuple_out); // must be keep when splitted
+            } else {
+              stream_tuple_out0[0].write(tuple_out); // must be keep when splitted
+              //stream_tuple_out1[0].write(tuple_out); // must be removed when splitted
+            }
+          }
+          
+          // change addr_counter
+          if (addr_counter == 0)
+            tuple_out.skip_counter = true;
+          tuple_out.addr_counter = addr_counter - 1;
+          
+          // SECOND TUPLE
+          if(tuple_out.last_set) {
+            tuple_out.pos = 0;
+            stream_tuple_out0[1].write(tuple_out);
             stream_tuple_out1[1].write(tuple_out);
+          } else {
+            if(selch) {
+              //stream_tuple_out0[1].write(tuple_out); // must be removed when splitted
+              stream_tuple_out1[1].write(tuple_out); // must be keep when splitted
+            } else {
+              stream_tuple_out0[1].write(tuple_out); // must be keep when splitted
+              //stream_tuple_out1[1].write(tuple_out); // must be removed when splitted
+            }
+            // TERZA COPPIA PADDING
+            /*
+            if(bit_last) {
+              tuple_out.last_set = true;
+              tuple_out.pos = 1;
+              stream_tuple_out0[0].write(tuple_out);
+              stream_tuple_out0[1].write(tuple_out);
+              stream_tuple_out1[0].write(tuple_out);
+              stream_tuple_out1[1].write(tuple_out);
+            }
+            */
           }
         }
+      } else {
+        extra_tuple=false;
       }
     }
+    
   }
 
   /* Propagate stop node */
@@ -1832,7 +1848,7 @@ ASSEMBLY_TASK_LOOP:
         stream_partial_out.write(dynfifo_node);
       } else if (!vertex.sol && !vertex.last) {
         counter++;
-        std::cout << "counter: " << counter << std::endl;
+        //std::cout << "counter: " << counter << std::endl;
       }
 
       if (!vertex.sol){
@@ -2008,7 +2024,7 @@ multiwayJoin(ap_uint<DDR_W>* htb_buf0_0,
       sb_stream_set("Sequencebuild - set nodes");
 
     /* X1.5 TUPLEBUILD data out */    
-    hls_thread_local hls::stream<sol_node_t<vertex_t>, MAX_QV*10> t_stream_sol
+    hls_thread_local hls::stream<sol_node_t<vertex_t>, MAX_QV*15> t_stream_sol
         ("Tuplebuild - partial solution");
     hls_thread_local hls::stream<intersect_tuple_t, S_D> t_stream_tuple0[2];
     hls_thread_local hls::stream<intersect_tuple_t, S_D> t_stream_tuple1[2];
@@ -2064,7 +2080,7 @@ multiwayJoin(ap_uint<DDR_W>* htb_buf0_0,
         ("Merge solandset - nodes");
     
     /* ASSEMLBY data out */
-    hls_thread_local hls::stream<ap_uint<V_ID_W>, DYN_FIFO_DEPTH> a_stream_sol
+    hls_thread_local hls::stream<ap_uint<V_ID_W>, DYN_FIFO_DEPTH*2> a_stream_sol
         ("Assembly - partial solution");
 
     /* DYNFIFO data out */
@@ -2151,9 +2167,6 @@ multiwayJoin(ap_uint<DDR_W>* htb_buf0_0,
       mwj_split_merge<BLOCKBUILD_NUM,0>, bb_stream_tuple0, bb_merge_stream_tuple0);
     hls_thread_local hls::task mwj_blockbuild_merge1_t(
       mwj_split_merge<BLOCKBUILD_NUM,1>, bb_stream_tuple1, bb_merge_stream_tuple1);
-
-    //hls_thread_local hls::task mwj_mergecompact_t(
-    //  mwj_mergecompact,v_stream_tuple0,v_stream_tuple1,v_stream_tupleu);
 
     hls_thread_local hls::task mwj_compact0_t(
       mwj_compact<0>, v_stream_tuple0, c_stream_tuple0);
