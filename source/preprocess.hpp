@@ -643,7 +643,7 @@ template<size_t NODE_W,
          size_t MAX_LABELS>
 void
 countEdgesPerBlock(hls::stream<counter_tuple_t> stream_address[2],
-                  unsigned int block_n_edges[2048])
+                  unsigned int block_n_edges[4096])
 {
     const size_t BRAM_LAT = 3;
     unsigned int local_cache_address[BRAM_LAT];
@@ -719,7 +719,7 @@ countEdgesPerBlockWrap(row_t* edge_buf,
                 const unsigned char hash2_w,
                 const ap_uint<8> labelToTable[MAX_LABELS][MAX_LABELS],
                 const unsigned long numDataEdges,
-                unsigned int block_n_edges[2048])
+                unsigned int block_n_edges[4096])
 {
 #pragma HLS dataflow
     hls::stream<counter_tuple_t, 32> stream_address[2];
@@ -849,7 +849,7 @@ template<size_t NODE_W,
 void
 storeEdgesPerBlock(hls::stream<store_tuple_t<row_t> > stream_edge[2],
                   row_t* m_axi,
-                  unsigned int block_n_edges[2048])
+                  unsigned int block_n_edges[4096])
 {
     const size_t BRAM_LAT = 3;
     unsigned int local_cache_address[BRAM_LAT];
@@ -922,7 +922,7 @@ storeEdgePerBlockWrap(row_t* edge_buf,
                       const unsigned char hash2_w,
                       const ap_uint<8> labelToTable[MAX_LABELS][MAX_LABELS],
                       const unsigned int numDataEdges,
-                      unsigned int block_n_edges[2048])
+                      unsigned int block_n_edges[4096])
 {
 #pragma HLS dataflow
     hls::stream<store_tuple_t<row_t>, 30> stream_edge[2];
@@ -956,7 +956,7 @@ blockToHTB(row_t* edge_buf,
            const unsigned char hash1_w,
            const unsigned char hash2_w,
            const unsigned int numTables,
-           const unsigned int block_n_edges[2048])
+           const unsigned int block_n_edges[4096])
 {
     constexpr size_t COUNTERS_PER_BLOCK = 14;
     constexpr size_t IXG_NODE = 0;
@@ -1148,7 +1148,7 @@ storeEdgesHTB(row_t* edge_buf,
               const unsigned char hash1_w,
               const unsigned char hash2_w,
               const unsigned int numTables,
-              const unsigned int block_n_edges[2048])
+              const unsigned int block_n_edges[4096])
 {
     constexpr size_t OFFSETS_PER_BLOCK = 14;
     constexpr size_t IXG_NODE = 0;
@@ -1406,7 +1406,7 @@ fillTablesURAM(row_t* edge_buf,
     const unsigned int block_per_table =
       (1UL << (hash1_w + hash2_w - COUNTERS_PER_BLOCK));
     unsigned long start_addr = 0;
-    unsigned int block_n_edges[2048];
+    unsigned int block_n_edges[4096];
 #pragma HLS bind_storage variable = block_n_edges type = RAM_T2P impl = BRAM
 
 #ifndef __SYNTHESIS__

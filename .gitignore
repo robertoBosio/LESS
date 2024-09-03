@@ -16,3 +16,4 @@ scripts/netlist4RM.py
 *.wcfg
 settings.tcl
 *.txt
+source_old/*

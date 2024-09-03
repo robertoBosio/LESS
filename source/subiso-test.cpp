@@ -397,19 +397,6 @@ int main()
                 counters[9],
                 counters[10],
                 counters[11],
-                counters[12],
-                counters[13],
-                counters[14],
-                counters[15],
-                counters[16],
-                counters[17],
-                counters[18],
-                counters[19],
-                counters[20],
-                counters[21],
-                counters[22],
-                counters[23],
-                counters[24],
 #endif
                 result);
 
@@ -442,19 +429,6 @@ int main()
                 counters[9],
                 counters[10],
                 counters[11],
-                counters[12],
-                counters[13],
-                counters[14],
-                counters[15],
-                counters[16],
-                counters[17],
-                counters[18],
-                counters[19],
-                counters[20],
-                counters[21],
-                counters[22],
-                counters[23],
-                counters[24],
 #endif
                 result);
 #endif /* SOFTWARE_PREPROC */

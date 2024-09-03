@@ -232,6 +232,7 @@ template<typename DDR_WORD_T,
 void
 MMU_slow(DDR_WORD_T* mem,
          const unsigned long space,
+         unsigned long &reqs_dynfifo,
          hls::stream<DDR_WORD_T>& in_stream,
          hls::stream<DDR_WORD_T>& out_stream,
          hls::stream<bool>& stop_req_stream)
@@ -255,7 +256,7 @@ MMU_slow(DDR_WORD_T* mem,
 
 MMU_SLOW_TASK_LOOP:
   while (true) {
-#pragma HLS pipeline II = 32
+#pragma HLS pipeline II=BURST_SIZE
     switch (state) {
 
       case bypass:
@@ -288,6 +289,7 @@ MMU_SLOW_TASK_LOOP:
           mem_head = 0;
 
         state = stall_ddr;
+        reqs_dynfifo++;
         break;
 
       case burst_read:
@@ -299,6 +301,7 @@ MMU_SLOW_TASK_LOOP:
         if (mem_tail == space)
           mem_tail = 0;
         state = (mem_head == mem_tail) ? bypass : stall_ddr;
+        reqs_dynfifo++;
         break;
 
       case stall_ddr:
@@ -339,6 +342,7 @@ void dynfifo_init(
         DDR_WORD_T mem[DDR_WORDS],
         const unsigned long space,
         unsigned int &overflow,
+        unsigned long &reqs_dynfifo,
         hls::stream<DATA_T> &in_stream,
         hls::stream<DATA_T> &out_stream,
         hls::stream<bool> &stop_req_stream_fast,
@@ -375,7 +379,12 @@ void dynfifo_init(
       stop_req_stream_fast);
 
     MMU_slow<DDR_WORD_T, FIFO_SIZE_P, DDR_WORDS, BURST_SIZE>(
-      mem, space, store_p_stream, load_p_stream, stop_req_stream_slow);
+      mem,
+      space,
+      reqs_dynfifo,
+      store_p_stream,
+      load_p_stream,
+      stop_req_stream_slow);
 
 #else
 
@@ -395,6 +404,7 @@ void dynfifo_init(
       MMU_slow<DDR_WORD_T, FIFO_SIZE_P, DDR_WORDS, BURST_SIZE>,
       mem,
       space,
+      std::ref(reqs_dynfifo),
       std::ref(store_p_stream),
       std::ref(load_p_stream),
       std::ref(stop_req_stream_slow));

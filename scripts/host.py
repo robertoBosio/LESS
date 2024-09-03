@@ -115,29 +115,33 @@ def subiso(test, path):
         "addr_dyn_ovf_ctrl" : 0x94,
         "addr_preproc" : 0xa0,
         "addr_preproc_ctrl" : 0xa4,
-        "addr_hit_findminl" : 0x218,
-        "addr_hit_findminh" : 0x21c,
-        "addr_hit_readmin_counterl" : 0x230,
-        "addr_hit_readmin_counterh" : 0x234,
-        "addr_hit_readmin_edgel" : 0x248,
-        "addr_hit_readmin_edgeh" : 0x24c,
-        "addr_hit_intersectl" : 0x260,
-        "addr_hit_intersecth" : 0x264,
-        "addr_hit_verifyl" : 0x278,
-        "addr_hit_verifyh" : 0x27c,
-        "addr_req_findminl" : 0x290,
-        "addr_req_findminh" : 0x294,
-        "addr_req_readmin_counterl" : 0x2a8,
-        "addr_req_readmin_counterh" : 0x2ac,
-        "addr_req_readmin_edgel" : 0x2c0,
-        "addr_req_readmin_edgeh" : 0x2c4,
-        "addr_req_intersectl" : 0x2d8,
-        "addr_req_intersecth" : 0x2dc,
-        "addr_req_verifyl" : 0x2f0,
-        "addr_req_verifyh" : 0x2f4,
-        "addr_resl" : 0x308,
-        "addr_resh" : 0x30c,
-        "addr_res_ctrl" : 0x310,
+        "addr_hit_findminl" : 0xb0,
+        "addr_hit_findminh" : 0xb4,
+        "addr_hit_readmin_counterl" : 0xc8,
+        "addr_hit_readmin_counterh" : 0xcc,
+        "addr_hit_readmin_edgel" : 0xe0,
+        "addr_hit_readmin_edgeh" : 0xe4,
+        "addr_hit_intersectl" : 0xf8,
+        "addr_hit_intersecth" : 0xfc,
+        "addr_hit_verifyl" : 0x110,
+        "addr_hit_verifyh" : 0x114,
+        "addr_req_findminl" : 0x128,
+        "addr_req_findminh" : 0x12c,
+        "addr_req_readmin_counterl" : 0x140,
+        "addr_req_readmin_counterh" : 0x144,
+        "addr_req_readmin_edgel" : 0x158,
+        "addr_req_readmin_edgeh" : 0x15c,
+        "addr_req_intersectl" : 0x170,
+        "addr_req_intersecth" : 0x174,
+        "addr_req_verifyl" : 0x188,
+        "addr_req_verifyh" : 0x18c,
+        "addr_req_dynfifol" : 0x1a0,
+        "addr_req_dynfifoh" : 0x1a4,
+        "addr_bloom_filteredl" : 0x1b8,
+        "addr_bloom_filteredh" : 0x1bc,
+        "addr_resl" : 0x1d0,
+        "addr_resh" : 0x1d4,
+        "addr_res_ctrl" : 0x1d8,
     }
 
     node_t = np.uint32
@@ -155,7 +159,7 @@ def subiso(test, path):
     dynfifo_space = 0
 
     fres = open(path + "results.txt", "a")
-    print("query,datagraph,h1,h2,power,time,preproc,hit_findmin,req_findmin,hit_readmin_counter,req_readmin_counter,hit_readmin_edge,req_readmin_edge,hit_intersect,req_intersect,hit_verify,req_verify,matches", file=fres)
+    print("query,datagraph,h1,h2,power,time,preproc,hit_findmin,req_findmin,hit_readmin_counter,req_readmin_counter,hit_readmin_edge,req_readmin_edge,hit_intersect,req_intersect,hit_verify,req_verify,req_dynfifo,bloom_filtered,matches", file=fres)
 
     for data in test.keys():
         datagraph = path + "data/" + data
@@ -317,14 +321,16 @@ def subiso(test, path):
                 hash2_w = 14 - hash1_w
 
             blocks = len(tablelist) * 2**(hash1_w + hash2_w - 14)
-            while(blocks > 2048):
+            while(blocks > 4096):
                 hash2_w -= 1
+                print(f"Reducing hash2 width to {hash2_w} due to blocks ({blocks} > 4096)", flush=True)
                 blocks = len(tablelist) * 2**(hash1_w + hash2_w - 14)
             
             hashtable_spaceused = len(tablelist) * (2**hash1_w) * (2**hash2_w) * byte_counter
             hashtable_spaceused += datagraph_e * byte_edge
             while (hashtable_spaceused > MEM.nbytes):
                 hash2_w -= 1
+                print(f"Reducing hash2 width to {hash2_w} due to memory overflow ({hashtable_spaceused} > {MEM.nbytes})", flush=True)
                 hashtable_spaceused = len(tablelist) * (2**hash1_w) * (2**hash2_w) * byte_counter
                 hashtable_spaceused += datagraph_e * byte_edge
 
@@ -412,6 +418,10 @@ def subiso(test, path):
                 req_intersecth = ol.subgraphIsomorphism_0.read(axi_addresses["addr_req_intersecth"])
                 req_verifyl = ol.subgraphIsomorphism_0.read(axi_addresses["addr_req_verifyl"])
                 req_verifyh = ol.subgraphIsomorphism_0.read(axi_addresses["addr_req_verifyh"])
+                req_dynfifol = ol.subgraphIsomorphism_0.read(axi_addresses["addr_req_dynfifol"])
+                req_dynfifoh = ol.subgraphIsomorphism_0.read(axi_addresses["addr_req_dynfifoh"])
+                bloom_filteredl = ol.subgraphIsomorphism_0.read(axi_addresses["addr_bloom_filteredl"])
+                bloom_filteredh = ol.subgraphIsomorphism_0.read(axi_addresses["addr_bloom_filteredh"])
 
                 if (overflow == 1):
                     resh = 0
@@ -435,6 +445,8 @@ def subiso(test, path):
                       f",{(req_intersecth << 32) | req_intersectl}",
                       f",{(hit_verifyh << 32) | hit_verifyl}",
                       f",{(req_verifyh << 32) | req_verifyl}",
+                      f",{(req_dynfifoh << 32) | req_dynfifol}",
+                      f",{(bloom_filteredh << 32) | bloom_filteredl}",
                       f",{(resh << 32) | resl}",
                       sep="",
                       file=fres)

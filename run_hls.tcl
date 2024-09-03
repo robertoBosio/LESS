@@ -17,6 +17,7 @@ config_interface -m_axi_latency=1
 set_part $XPART
 create_clock -period 300MHz -name default
 # set_clock_uncertainty 40%
+# set_param hls.enable_fifo_io_regslice true
 
 if {$CSIM == 1} {
     csim_design

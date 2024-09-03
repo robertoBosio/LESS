@@ -54,21 +54,6 @@
 #define BLOCKBUILD_NUM 2
 
 #if DEBUG_INTERFACE
-unsigned long propose_empty = 0;
-unsigned long edgebuild_empty = 0;
-unsigned long findmin_empty = 0;
-unsigned long readmin_counter_empty = 0;
-unsigned long readmin_edge_empty = 0;
-unsigned long homomorphism_empty = 0;
-unsigned long batchbuild_empty = 0;
-unsigned long tuplebuild_empty = 0;
-unsigned long intersect_empty = 0;
-unsigned long offset_empty = 0;
-unsigned long split_empty = 0;
-unsigned long verify_empty = 0;
-unsigned long compact_empty = 0;
-unsigned long filter_empty = 0;
-unsigned long assembly_empty = 0;
 unsigned long reqs_findmin = 0;
 unsigned long reqs_readmin_counter = 0;
 unsigned long reqs_readmin_edge = 0;
@@ -79,32 +64,49 @@ unsigned long hits_readmin_counter = 0;
 unsigned long hits_readmin_edge = 0;
 unsigned long hits_intersect = 0;
 unsigned long hits_verify = 0;
+unsigned long bloom_filtered = 0;
 #endif
 
-#if CACHE_ENABLE
-typedef cache< ap_uint<DDR_W>, true, false, 2,
-        HASHTABLES_SPACE, 0, 0, (1UL << CACHE_WORDS_PER_LINE), false, 512, 1,
-        false, 1, AUTO, BRAM> htb_cache_t;
+typedef cache<ap_uint<DDR_W>,
+              true,
+              false,
+              2,
+              HASHTABLES_SPACE,
+              0,
+              0,
+              (1UL << CACHE_WORDS_PER_LINE),
+              false,
+              4096,
+              1,
+              false,
+              1,
+              AUTO,
+              URAM>
+  htb_cache_t;
 
-// typedef cache< ap_uint<DDR_W>, true, false, 1,
-//         HASHTABLES_SPACE, 0, 0, 1, false, 2048, 1,
-//         false, 1, AUTO, BRAM> htb_cache1_t;
-
-typedef cache< ap_uint<DDR_W>, true, false, 1,
-        HASHTABLES_SPACE, 0, 0, 32, false, 512, 1,
-        false, 1, AUTO, BRAM> htb_cache2_t;
-
-// typedef cache< bloom_t, true, false, 1,
-//         BLOOM_SPACE, 0, 0, (1UL << K_FUNCTIONS), false, 512, 1,
-//         false, 1, AUTO, BRAM> bloom_cache_t;
-#endif /* CACHE_ENABLE */
+typedef cache<ap_uint<DDR_W>,
+              true,
+              false,
+              1,
+              HASHTABLES_SPACE,
+              0,
+              0,
+              16,
+              false,
+              512,
+              1,
+              false,
+              1,
+              AUTO,
+              BRAM>
+  htb_cache2_t;
 
 /******** Tuple definition ********/
 enum edge_flag
 {
-    MIN_SET = 1,
-    NO_EDGE = 2,
-    CHECK = 0
+  MIN_SET = 1,
+  NO_EDGE = 2,
+  CHECK = 0
 };
 typedef ap_uint<2> edge_flag_type;
 
@@ -156,7 +158,7 @@ typedef struct
   
   /* Minimum set starting and ending row addresses */
   unsigned int rowstart;
-  unsigned int rowend;
+  unsigned int cycles;
   bool stop;
 } readmin_edge_tuple_t;
 
@@ -308,6 +310,57 @@ struct assembly_node_t
 
 /******** End tuple definition ********/
 
+/* Count the number of 1s in a bloom filter */
+template<typename T_BLOOM, size_t BLOOM_LOG, size_t K_FUN_LOG>
+unsigned int
+bloom_bitset(T_BLOOM filter)
+{
+  unsigned int count{ 0 };
+  for (int c = 0; c < (1UL << (BLOOM_LOG - 5)); c++) {
+#pragma HLS unroll
+    unsigned int u = filter.range(((c + 1) * 32) - 1, c * 32);
+    u = u - ((u >> 1) & 0x55555555);
+    u = (u & 0x33333333) + ((u >> 2) & 0x33333333);
+    count += (((u + (u >> 4)) & 0x0F0F0F0F) * 0x01010101) >> 24;
+  }
+  return (count >> K_FUN_LOG);
+}
+
+template<typename T_BLOOM, size_t BLOOM_LOG>
+unsigned short
+bloom_intersect(T_BLOOM& filter, T_BLOOM set_bloom)
+{
+#pragma HLS inline
+  unsigned short bloom_s = bloom_bitset<T_BLOOM, BLOOM_LOG, 0>(set_bloom);
+  filter = filter & set_bloom;
+  return bloom_s;
+}
+
+template<size_t W>
+void
+hash_wrapper(ap_uint<W> key_val, ap_uint<64>& hash_val)
+{
+#pragma HLS inline off
+  xf::database::details::hashlookup3_core<W>(key_val, hash_val);
+}
+
+template<typename T_BLOOM, size_t BLOOM_LOG, size_t K_FUN, size_t FULL_HASH_W>
+void
+bloom_test(T_BLOOM filter[K_FUN], ap_uint<64> hash_val, bool& test)
+{
+#pragma HLS inline off
+  for (int g = 0; g < K_FUN; g++) {
+#pragma HLS unroll
+    ap_uint<BLOOM_LOG> idx =
+      hash_val.range((FULL_HASH_W / K_FUN) * (g + 1) - 1,
+                     (FULL_HASH_W / K_FUN) * (g + 1) - BLOOM_LOG);
+    test = test && (filter[g][idx] == 1);
+  }
+}
+
+/* Reads the partial solutions in the format of radix followed by a set of
+ * extensions, and streams them out registering which position each node has in
+ * the query vertex order */
 void
 mwj_propose(hls::stream<ap_uint<V_ID_W>>& stream_fifo_in,
             hls::stream<sol_node_t<vertex_t>>& stream_sol_out)
@@ -366,7 +419,7 @@ mwj_edgebuild(const unsigned char hash1_w,
 
 EDGEBUILD_TASK_LOOP:
   while (true) {
-  
+
   EDGEBUILD_COPYING_EMBEDDING_LOOP:
     do {
 #pragma HLS pipeline II = 1
@@ -375,7 +428,7 @@ EDGEBUILD_TASK_LOOP:
       stream_sol_out.write(vertex);
     } while (!vertex.last);
 
-    if (vertex.stop){
+    if (vertex.stop) {
       break;
     }
 
@@ -389,8 +442,7 @@ EDGEBUILD_TASK_LOOP:
       // Computing addresses of indexed sets
       ap_uint<LKP3_HASH_W> hash_out;
       ap_uint<MAX_HASH_W> hash_trimmed;
-      xf::database::details::hashlookup3_core<V_ID_W>(
-        curEmb[iv_pos], hash_out);
+      xf::database::details::hashlookup3_core<V_ID_W>(curEmb[iv_pos], hash_out);
       hash_trimmed = hash_out;
       hash_trimmed = hash_trimmed.range(hash1_w - 1, 0);
       unsigned int address = (tb_index * (1UL << hash1_w)) + hash_trimmed;
@@ -413,39 +465,21 @@ EDGEBUILD_TASK_LOOP:
   stream_tuple_out.write(tuple_out);
 }
 
-/* Count the number of 1s in a bloom filter */
-template<typename T_BLOOM, size_t BLOOM_LOG, size_t K_FUN_LOG>
-unsigned int
-bloom_bitset(T_BLOOM filter)
-{
-    unsigned int count {0};
-    for (int c = 0; c < (1UL << (BLOOM_LOG - 5)); c++){
-#pragma HLS unroll
-        unsigned int u = filter.range(((c + 1) * 32) - 1, c * 32);
-        u = u - ((u >> 1) & 0x55555555);
-        u = (u & 0x33333333) + ((u >> 2) & 0x33333333);
-        count += (((u + (u >> 4)) & 0x0F0F0F0F) * 0x01010101) >> 24;
-    }
-    return (count >> K_FUN_LOG);
-}
-
-template<typename T_BLOOM, size_t BLOOM_LOG>
-unsigned short
-bloom_intersect(T_BLOOM& filter, T_BLOOM set_bloom)
-{
-#pragma HLS inline
-  unsigned short bloom_s = bloom_bitset<T_BLOOM, BLOOM_LOG, 0>(set_bloom);
-  filter = filter & set_bloom;
-  return bloom_s;
-}
-
-template <typename T_BLOOM, size_t BLOOM_LOG, size_t K_FUN_LOG, size_t LKP3_HASH_W, size_t MAX_HASH_W, size_t FULL_HASH_W>
-void mwj_findmin(bloom_t *bloom_p,
-                 const unsigned char hash1_w,
-                 const unsigned char hash2_w,
-                 hls::stream<findmin_tuple_t> &stream_tuple_in,
-                 hls::stream<readmin_counter_tuple_t> stream_tuple_out[2],
-                 hls::stream<T_BLOOM> stream_filter_out[1 << K_FUN_LOG])
+/* Finds the set with the smallest cardinality in the intersection. Intersects
+ * the bloom filters */
+template<typename T_BLOOM,
+         size_t BLOOM_LOG,
+         size_t K_FUN_LOG,
+         size_t LKP3_HASH_W,
+         size_t MAX_HASH_W,
+         size_t FULL_HASH_W>
+void
+mwj_findmin(bloom_t* bloom_p,
+            const unsigned char hash1_w,
+            const unsigned char hash2_w,
+            hls::stream<findmin_tuple_t>& stream_tuple_in,
+            hls::stream<readmin_counter_tuple_t> stream_tuple_out[2],
+            hls::stream<T_BLOOM> stream_filter_out[1 << K_FUN_LOG])
 {
   constexpr size_t K_FUN = (1UL << K_FUN_LOG);
   T_BLOOM filter[K_FUN];
@@ -456,7 +490,7 @@ void mwj_findmin(bloom_t *bloom_p,
   ap_uint<LKP3_HASH_W> hash_out;
   ap_uint<MAX_HASH_W> hash_trimmed;
 #pragma HLS array_partition variable = filter type = complete dim = 1
-  
+
   tuple_out.stop = false;
 
 FINDMIN_TASK_LOOP:
@@ -532,7 +566,7 @@ FINDMIN_TASK_LOOP:
       }
     }
   }
-  
+
   /* Propagate stop node */
   tuple_out.stop = true;
   stream_tuple_out[0].write(tuple_out);
@@ -618,7 +652,7 @@ READMIN_COUNTER_TASK_LOOP:
       if (stream_p == 0){
         tuple_out.rowstart = row;
       } else {
-        tuple_out.rowend = row;
+        tuple_out.cycles = row - tuple_out.rowstart;
         stream_tuple_out.write(tuple_out);
       }
       stream_p = (stream_p + 1) % 2;
@@ -630,117 +664,93 @@ READMIN_COUNTER_TASK_LOOP:
   stream_tuple_out.write(tuple_out);
 }
 
-template <size_t W>
-void hash_wrapper(ap_uint<W> key_val, ap_uint<64> &hash_val) {
-#pragma HLS inline off
-    xf::database::details::hashlookup3_core<W>(key_val, hash_val);
-}
-
-template <typename T_BLOOM,
-          size_t BLOOM_LOG,
-          size_t K_FUN,
-          size_t FULL_HASH_W>
-void bloom_test(T_BLOOM filter[K_FUN], ap_uint<64> hash_val, bool &test)
-{
-#pragma HLS inline off
-  for (int g = 0; g < K_FUN; g++)
-  {
-#pragma HLS unroll
-    ap_uint<BLOOM_LOG> idx =
-        hash_val.range((FULL_HASH_W / K_FUN) * (g + 1) - 1,
-                       (FULL_HASH_W / K_FUN) * (g + 1) - BLOOM_LOG);
-    test = test && (filter[g][idx] == 1);
-  }
-}
-
-template <typename T_BLOOM,
-          size_t BLOOM_LOG,
-          size_t K_FUN_LOG,
-          size_t FULL_HASH_W>
-void mwj_readmin_edge(
-    htb_cache2_t &m_axi,
-    hls::stream<readmin_edge_tuple_t> &stream_tuple_in,
-    hls::stream<T_BLOOM> stream_filter_in[1UL << K_FUN_LOG],
-    hls::stream<homomorphism_set_t<ap_uint<V_ID_W>>> stream_set_out[2],
-    hls::stream<minset_tuple_t> &stream_tuple_out)
+template<typename T_BLOOM,
+         size_t BLOOM_LOG,
+         size_t K_FUN_LOG,
+         size_t FULL_HASH_W>
+void
+mwj_readmin_edge_pipelined(
+  htb_cache2_t& m_axi,
+  hls::stream<readmin_edge_tuple_t>& stream_tuple_in,
+  hls::stream<T_BLOOM> stream_filter_in[1UL << K_FUN_LOG],
+  hls::stream<homomorphism_set_t<ap_uint<V_ID_W>>> stream_set_out[2],
+  hls::stream<minset_tuple_t>& stream_tuple_out)
 {
   constexpr size_t K_FUN = (1UL << K_FUN_LOG);
   T_BLOOM filter[K_FUN];
-#pragma HLS array_partition variable = filter type = complete dim = 1
-  hls::stream<ap_uint<FULL_HASH_W>, 2> hash_out_s;
-  hls::stream<ap_uint<V_ID_W>, 2> hash_in_s;
-  homomorphism_set_t<ap_uint<V_ID_W>> set_out;
-  ap_uint<V_ID_W> indexing_v, indexed_v;
-  ap_uint<FULL_HASH_W> hash_out;
   readmin_edge_tuple_t tuple_in;
-  minset_tuple_t tuple_out;
-  ap_uint<V_ID_W * 2> edge;
-  tuple_out.stop = false;
+  bool read_new = true;
+  unsigned int cycles = 0;
+  unsigned int counter = 0;
+#pragma HLS array_partition variable = filter type = complete dim = 1
 
 READMIN_EDGE_TASK_LOOP:
-  while (true)
-  {
-    tuple_in = stream_tuple_in.read();
-
-    if (tuple_in.stop)
-    {
-      break;
-    }
-
-    tuple_out.tb_index = tuple_in.tb_index;
-    tuple_out.iv_pos = tuple_in.iv_pos;
-    tuple_out.num_tb_indexed = tuple_in.num_tb_indexed;
-    stream_tuple_out.write(tuple_out);
-    for (int g = 0; g < K_FUN; g++)
-    {
-#pragma HLS unroll
-      filter[g] = stream_filter_in[g].read();
-    }
-
-    unsigned int cycles = tuple_in.rowend - tuple_in.rowstart;
-  READMIN_EDGES_MAIN_LOOP:
-    for (int g = 0; g <= cycles; g++)
-    {
+  while (true) {
 #pragma HLS pipeline II = 1
-      row_t row = m_axi[tuple_in.rowstart + g];
-      for (int i = 0; i < EDGE_ROW; i++)
-      {
+
+    if (read_new) {
+
+      // Non blocking read since Vitis 2022.2 does not want to apply flushable
+      if (stream_tuple_in.read_nb(tuple_in)) {
+        if (tuple_in.stop) {
+          break;
+        }
+        
+        minset_tuple_t tuple_out;
+        tuple_out.stop = false;
+        tuple_out.tb_index = tuple_in.tb_index;
+        tuple_out.iv_pos = tuple_in.iv_pos;
+        tuple_out.num_tb_indexed = tuple_in.num_tb_indexed;
+        stream_tuple_out.write(tuple_out);
+        
+        for (int g = 0; g < K_FUN; g++) {
 #pragma HLS unroll
-        edge = row.range(((i + 1) << E_W) - 1, i << E_W);
+          filter[g] = stream_filter_in[g].read();
+        }
+        read_new = false;
+        cycles = tuple_in.cycles;
+        counter = 0;
+      }
+
+    } else {
+
+      if (counter == cycles) {
+        read_new = true;
+      }
+
+      row_t row = m_axi[tuple_in.rowstart + counter];
+      for (int i = 0; i < EDGE_ROW; i++) {
+#pragma HLS unroll
+        ap_uint<V_ID_W> indexing_v, indexed_v;
+        ap_uint<FULL_HASH_W> hash_out;
+        ap_uint<V_ID_W * 2> edge = row.range(((i + 1) << E_W) - 1, i << E_W);
         indexing_v = edge.range(V_ID_W * 2 - 1, V_ID_W);
         indexed_v = edge.range(V_ID_W - 1, 0);
 
         hash_wrapper<V_ID_W>(indexed_v, hash_out);
         bool test = true;
         bloom_test<T_BLOOM, BLOOM_LOG, K_FUN, FULL_HASH_W>(
-            filter, hash_out, test);
+          filter, hash_out, test);
 
+        homomorphism_set_t<ap_uint<V_ID_W>> set_out;
         set_out.node = indexed_v;
-        set_out.last = false;
+        set_out.last = (i == EDGE_ROW - 1) && (counter == cycles);
         set_out.valid = test && tuple_in.indexing_v == indexing_v;
         stream_set_out[i].write(set_out);
-#if DEBUG_STATS
-        if (tuple_in.indexing_v == indexing_v)
-        {
-          if (test)
-          {
-            debug::readmin_vstream++;
-          }
-          else
-          {
-            debug::bloom_filter++;
+        
+        if (tuple_in.indexing_v == indexing_v) {
+          if (!test) {
+            bloom_filtered++;
           }
         }
-#endif /* DEBUG_STATS */
       }
-    }
-    set_out.last = true;
-    stream_set_out[0].write(set_out);
+      counter++;
 
 #if DEBUG_STATS
-    debug::readmin_edge_reads += cycles + 1;
-    debug::readmin_n_sets++;
+      debug::readmin_edge_reads += cycles + 1;
+      debug::readmin_n_sets++;
 #endif /* DEBUG_STATS */
+    }
   }
 }
 
@@ -815,15 +825,16 @@ void mwj_homomorphism(
         }
       }
       set_out.node = vToVerify;
-      set_out.last = set_in.last;
+      set_out.last = false;
       set_out.min_set = false;
       set_out.sol = false;
 
       /* Write out in case of not duplicate in current solution or
       delimeter node */
-      if (((equal_bits & valid_bits) == 0 && set_in.valid) || set_in.last)
+      if ((equal_bits & valid_bits) == 0 && set_in.valid)
       {
         stream_set_out.write(set_out);
+        // std::cout << "Sending node " << vToVerify << std::endl;
       }
 #if DEBUG_STATS
       else
@@ -832,6 +843,10 @@ void mwj_homomorphism(
       }
 #endif
     } while (!set_in.last);
+    
+    // std::cout << "Propagate last set" << std::endl;
+    set_out.last = true;
+    stream_set_out.write(set_out);
   }
 }
 
@@ -1046,11 +1061,12 @@ mwj_bypass_sol(hls::stream<sol_node_t<vertex_t>>& stream_sol_in,
   stream_sol_out.write(stream_sol_in.read());
 }
 
-template <size_t BATCH_SIZE_LOG, size_t NUM_SPLIT>
-void mwj_intersect(AdjHT *hTables,
-                   htb_cache_t &htb_buf,
-                   hls::stream<intersect_tuple_t> stream_tuple_in[2],
-                   hls::stream<split_tuple_t> stream_tuple_out[NUM_SPLIT])
+template<size_t BATCH_SIZE_LOG>
+void
+mwj_intersect(AdjHT* hTables,
+              htb_cache_t& htb_buf,
+              hls::stream<intersect_tuple_t> stream_tuple_in[2],
+              hls::stream<split_tuple_t>& stream_tuple_out)
 {
   constexpr size_t EDGE_BLOCK = (CACHE_WORDS_PER_LINE + DDR_BIT - E_W);
   intersect_tuple_t tuple_in;
@@ -1062,7 +1078,6 @@ void mwj_intersect(AdjHT *hTables,
   ap_uint<DDR_BIT - C_W> addr_inrow;
   ap_uint<64> addr_counter;
   unsigned char stream_p_in = 0;
-  unsigned char stream_p_out = 0;
   tuple_out.stop = false;
 
 INTERSECT_TASK_LOOP:
@@ -1140,8 +1155,7 @@ INTERSECT_TASK_LOOP:
                              : ((offset == end_off) ? NO_EDGE : CHECK);
         
         // Writing and switching output stream
-        stream_tuple_out[stream_p_out].write(tuple_out);
-        stream_p_out = (stream_p_out + 1) % NUM_SPLIT;
+        stream_tuple_out.write(tuple_out);
 
 #if DEBUG_STATS
         debug::intersect_filter += (tuple_out.flag == NO_EDGE) ? 1 : 0;
@@ -1155,88 +1169,57 @@ INTERSECT_TASK_LOOP:
 
   /* Propagating stop node */
   tuple_out.stop = true;
-  stream_tuple_out[stream_p_out].write(tuple_out);
+  stream_tuple_out.write(tuple_out);
 }
-
-// template<size_t NUM_SPLIT>
-// void
-// mwj_offset(hls::stream<offset_tuple_t>& stream_tuple_in,
-//            hls::stream<split_tuple_t> stream_tuple_out[NUM_SPLIT])
-// {
-// #pragma HLS pipeline II = 2 style = flp
-//   constexpr size_t EDGE_BLOCK = (CACHE_WORDS_PER_LINE + DDR_BIT - E_W);
-//   static unsigned char pointer = 0;
-//   offset_tuple_t tuple_in;
-//   split_tuple_t tuple_out;
-
-//   tuple_in = stream_tuple_in.read();
-//   tuple_out.indexed_v = tuple_in.indexed_v;
-//   tuple_out.indexing_v = tuple_in.indexing_v;
-//   tuple_out.pos = tuple_in.pos;
-//   tuple_out.tb_index = tuple_in.tb_index;
-//   tuple_out.bit_last_edge = tuple_in.bit_last_edge;
-
-//   tuple_in = stream_tuple_in.read();
-//   tuple_out.last_set = tuple_in.last_set;
-//   tuple_out.last_batch = tuple_in.last_batch;
-//   tuple_out.start_off = tuple_in.offset;
-//   tuple_out.first_block = tuple_in.offset >> EDGE_BLOCK;
-//   tuple_out.end_block = (tuple_in.offset == end_off)
-//                           ? (unsigned int)(end_off >> EDGE_BLOCK)
-//                           : (unsigned int)((end_off - 1) >> EDGE_BLOCK);
-//   tuple_out.flag = (tuple_in.flag == MIN_SET)
-//                      ? MIN_SET
-//                      : ((tuple_in.offset == end_off) ? NO_EDGE : CHECK);
-//   tuple_out.stop = tuple_in.stop;
-
-//   stream_tuple_out[pointer].write(tuple_out);
-//   pointer = (pointer + 1) % NUM_SPLIT;
-
-// #if DEBUG_STATS
-//   debug::intersect_filter += (tuple_out.flag == NO_EDGE) ? 1 : 0;
-// #endif /* DEBUG_STATS */
-// }
 
 template<size_t MAX_BATCH_SIZE, size_t ID>
 void
-mwj_blockbuild(hls::stream<split_tuple_t>& stream_tuple_in,
-               hls::stream<verify_tuple_t>& stream_tuple_out)
+mwj_blockbuild_pipelined(hls::stream<split_tuple_t>& stream_tuple_in,
+                         hls::stream<verify_tuple_t>& stream_tuple_out)
 {
-  constexpr size_t EDGE_BLOCK = (CACHE_WORDS_PER_LINE + DDR_BIT - E_W);
-  split_tuple_t tuple_in;
-  verify_tuple_t tuple_out;
-
-  tuple_in = stream_tuple_in.read();
-  tuple_out.stop = tuple_in.stop;
-  if (!tuple_in.last_set) {
-
-    tuple_out.indexing_v = tuple_in.indexing_v;
-    tuple_out.indexed_v = tuple_in.indexed_v;
-    tuple_out.tb_index = tuple_in.tb_index;
-    tuple_out.pos = tuple_in.pos;
-    tuple_out.bit_last_edge = tuple_in.bit_last_edge;
-    tuple_out.flag = tuple_in.flag;
-    tuple_out.last_batch = tuple_in.last_batch;
-    tuple_out.last_set = false;
-    unsigned int s = 0;
-
-  SPLIT_MAIN_LOOP:
-    do {
 #pragma HLS pipeline II = 1
+  constexpr size_t EDGE_BLOCK = (CACHE_WORDS_PER_LINE + DDR_BIT - E_W);
+  static split_tuple_t tuple_in;
+  static bool read_new = true;
+  static unsigned int s = 0;
+
+  if (read_new) {
+    tuple_in = stream_tuple_in.read();
+    s = 0;
+    read_new = false;
+  } else {
+    if (!tuple_in.last_set) {
+      verify_tuple_t tuple_out;
+      tuple_out.indexing_v = tuple_in.indexing_v;
+      tuple_out.indexed_v = tuple_in.indexed_v;
+      tuple_out.tb_index = tuple_in.tb_index;
+      tuple_out.pos = tuple_in.pos;
+      tuple_out.bit_last_edge = tuple_in.bit_last_edge;
+      tuple_out.flag = tuple_in.flag;
+      tuple_out.last_batch = tuple_in.last_batch;
+      tuple_out.last_set = false;
+      tuple_out.stop = tuple_in.stop;
+
       tuple_out.address = tuple_in.start_off + s;
       tuple_out.bit_last_address = (tuple_in.first_block == tuple_in.end_block);
       stream_tuple_out.write(tuple_out);
+      if (tuple_in.first_block == tuple_in.end_block) {
+        read_new = true;
+      }
       tuple_in.first_block++;
       s += (1UL << EDGE_BLOCK);
-    } while (tuple_in.first_block <= tuple_in.end_block);
-  } else {
-    /* Setting bit_last_address even for delimeter nodes for
-    the merge_split to change stream on which reads. In non delimeter
-    nodes, bit_last_address is used to identify the last tuple generated */
-    tuple_out.last_set = tuple_in.last_set;
-    tuple_out.last_batch = tuple_in.last_batch;
-    tuple_out.bit_last_address = true;
-    stream_tuple_out.write(tuple_out);
+    } else {
+      /* Setting bit_last_address even for delimeter nodes for
+      the merge_split to change stream on which reads. In non delimeter
+      nodes, bit_last_address is used to identify the last tuple generated */
+      verify_tuple_t tuple_out;
+      tuple_out.stop = tuple_in.stop;
+      tuple_out.last_set = tuple_in.last_set;
+      tuple_out.last_batch = tuple_in.last_batch;
+      tuple_out.bit_last_address = true;
+      stream_tuple_out.write(tuple_out);
+      read_new = true;
+    }
   }
 }
 
@@ -1431,6 +1414,7 @@ mwj_merge_solandset(hls::stream<sol_node_t<vertex_t>>& stream_sol_in,
   static unsigned char pos = 0;
   sol_node_t<vertex_t> sol_vertex;
   assembly_set_t set_vertex;
+  static bool printing_sol = false;
 
   bool last, sol, stop;
   vertex_t node;
@@ -1441,6 +1425,15 @@ mwj_merge_solandset(hls::stream<sol_node_t<vertex_t>>& stream_sol_in,
     node = set_vertex.node;
     sol = false;
     stop = false;
+
+    // if (printing_sol) {
+    //   if (last) {
+    //     std::cout << std::endl;
+    //     printing_sol = false;
+    //   } else {
+    //     std::cout << node << ", ";
+    //   }
+    // }
   } else {
     sol_vertex = stream_sol_in.read();
     select = sol_vertex.last;
@@ -1449,6 +1442,11 @@ mwj_merge_solandset(hls::stream<sol_node_t<vertex_t>>& stream_sol_in,
     node = sol_vertex.node;
     sol = true;
     stop = sol_vertex.stop;
+
+    // if (sol_vertex.pos == 3){
+    //   std::cout << sol_vertex.node << " ";
+    //   printing_sol = true;
+    // }
   }
 
   stream_sol_out.write({ node, pos, last, sol, stop });
@@ -1477,19 +1475,6 @@ ASSEMBLY_TASK_LOOP:
   do {
     // Test if there are some node from start batch
     if (nodes_read < n_candidate) {
-      // token_new_start = true;
-      // row_t row = m_axi[nodes_read >> 2];
-      // for (int g = 0; g < 4; g++, nodes_read++) {
-      //   if (nodes_read < n_candidate) {
-      //     ap_uint<2> word_select = nodes_read.range(1, 0);
-      //     ap_uint<V_ID_W> node = row.range((V_ID_W << word_select) - 1,
-      //     V_ID_W << word_select); stream_partial_out.write(node |
-      //     MASK_NEW_SOLUTION);
-
-      //     /* False extension for single node solutions */
-      //     stream_partial_out.write(0 | MASK_END_EXTENSION);
-      //     partial_sol++;
-      //   }
       ap_uint<2> word_select = nodes_read.range(1, 0);
       ap_uint<32> row_select = nodes_read >> 2;
       row_t row = m_axi[start_candidate + row_select];
@@ -1551,44 +1536,15 @@ ASSEMBLY_TASK_LOOP:
   }
 }
 
-// template <typename T_BLOOM,
-//           size_t BLOOM_LOG,
-//           size_t K_FUN_LOG>
-// void readmincache_wrapper(
-//     AdjHT *hTables,
-//     htb_cache_t &htb_buf,
-//     hls::stream<readmin_tuple_t> &stream_tuple_in,
-//     hls::stream<T_BLOOM> &stream_filter_in,
-//     hls::stream<bool> &stream_stop,
-
-//     hls::stream< ap_uint<V_ID_W> > &stream_set_out,
-//     hls::stream<bool> &stream_set_end_out,
-//     hls::stream<tuplebuild_tuple_t> &stream_tuple_out)
-// {
-//     htb_buf.init(2);
-//     mwj_readmin<T_BLOOM,
-//                 BLOOM_LOG,
-//                 K_FUN_LOG>
-//                 (
-//         hTables,
-//         htb_buf,
-//         stream_tuple_in,
-//         stream_filter_in,
-//         stream_stop,
-//         stream_set_out,
-//         stream_set_end_out,
-//         stream_tuple_out);
-// }
-
-template<size_t BATCH_SIZE_LOG, size_t NUM_SPLIT>
+template<size_t BATCH_SIZE_LOG>
 void
 intersectcache_wrapper(AdjHT* hTables,
                        htb_cache_t& htb_buf,
                        hls::stream<intersect_tuple_t> stream_tuple_in[2],
-                       hls::stream<split_tuple_t> stream_tuple_out[NUM_SPLIT])
+                       hls::stream<split_tuple_t>& stream_tuple_out)
 {
   htb_buf.init(1);
-  mwj_intersect<BATCH_SIZE_LOG, NUM_SPLIT>(
+  mwj_intersect<BATCH_SIZE_LOG>(
     hTables, htb_buf, stream_tuple_in, stream_tuple_out);
 #if DEBUG_INTERFACE && __SYNTHESIS__
   htb_buf.get_l1_stats(1, hits_intersect, reqs_intersect);
@@ -1634,6 +1590,7 @@ multiwayJoin(ap_uint<DDR_W>* htb_buf0,
              const unsigned char hash2_w,
              const unsigned long dynfifo_space,
              unsigned int& dynfifo_overflow,
+             unsigned long& reqs_dynfifo,
              long unsigned int& result)
 {
 #pragma HLS STABLE variable=htb_buf0
@@ -1689,18 +1646,11 @@ multiwayJoin(ap_uint<DDR_W>* htb_buf0,
         ("Tuplebuild - partial solution");
     hls_thread_local hls::stream<intersect_tuple_t, S_D> t_stream_tuple[2];
     
-    /* Intersect data out */    
-    // hls_thread_local hls::stream<offset_tuple_t, S_D> i_stream_tuple
-    //     ("Intersect - tuples");
-    
     /* Offset data out */    
-    hls_thread_local hls::stream<split_tuple_t, S_D> o_stream_tuple[BLOCKBUILD_NUM];
+    hls_thread_local hls::stream<split_tuple_t, S_D> o_stream_tuple;
     
     /* Blockbuild data out */    
-    hls_thread_local hls::stream<verify_tuple_t, S_D> bb_stream_tuple[BLOCKBUILD_NUM];
-
-    /* Blockbuild merge data out */
-    hls_thread_local hls::stream<verify_tuple_t, S_D> bb_merge_stream_tuple;
+    hls_thread_local hls::stream<verify_tuple_t, S_D> bb_stream_tuple;
     
     /* Verify data out */
     hls_thread_local hls::stream<compact_tuple_t, S_D> v_stream_tuple
@@ -1744,6 +1694,7 @@ multiwayJoin(ap_uint<DDR_W>* htb_buf0,
       (res_buf,
        dynfifo_space,
        dynfifo_overflow,
+       reqs_dynfifo,
        a_stream_sol,
        dyn_stream_sol,
        streams_stop[STOP_S - 2],
@@ -1763,22 +1714,9 @@ multiwayJoin(ap_uint<DDR_W>* htb_buf0,
 
     hls_thread_local hls::task mwj_enlarge_sol_t(
       mwj_enlarge_sol, t_stream_sol, f_stream_sol);
-
-    // hls_thread_local hls::task mwj_offset_t(
-    //   mwj_offset<BLOCKBUILD_NUM>, i_stream_tuple, o_stream_tuple);
-
-    hls_thread_local hls::task mwj_blockbuild_t[BLOCKBUILD_NUM];
-
-    for (int g = 0; g < BLOCKBUILD_NUM; g++) {
-#pragma HLS unroll
-      mwj_blockbuild_t[g](
-        mwj_blockbuild<(1UL << PROPOSE_BATCH_LOG), __COUNTER__>,
-        o_stream_tuple[g],
-        bb_stream_tuple[g]);
-    }
-
-    hls_thread_local hls::task mwj_blockbuild_merge_t(
-        mwj_split_merge<BLOCKBUILD_NUM>, (hls::stream<verify_tuple_t, S_D> *)bb_stream_tuple, bb_merge_stream_tuple);
+    
+    hls_thread_local hls::task mwj_blockbuild_t(
+      mwj_blockbuild_pipelined<(1UL << PROPOSE_BATCH_LOG), __COUNTER__>, o_stream_tuple, bb_stream_tuple);
 
     hls_thread_local hls::task mwj_compact_t(
       mwj_compact, v_stream_tuple, c_stream_tuple);
@@ -1791,35 +1729,29 @@ multiwayJoin(ap_uint<DDR_W>* htb_buf0,
 
 #ifdef __SYNTHESIS__
 
-    mwj_edgebuild<LKP3_HASH_W, MAX_HASH_W, FULL_HASH_W>(hash1_w,
-                                       qVertices,
-                                       p0_stream_sol,
-                                       e_stream_tuple,
-                                       e_stream_sol);
+    mwj_edgebuild<LKP3_HASH_W, MAX_HASH_W, FULL_HASH_W>(
+      hash1_w, qVertices, p0_stream_sol, e_stream_tuple, e_stream_sol);
 
-    mwj_findmin<T_BLOOM, BLOOM_LOG, K_FUN_LOG, LKP3_HASH_W, MAX_HASH_W, FULL_HASH_W>(
-                  bloom_p,
-                  hash1_w,
-                  hash2_w,
-                  e_stream_tuple,
-                  p_stream_tuple,
-                  p_stream_filter);
+    mwj_findmin<T_BLOOM,
+                BLOOM_LOG,
+                K_FUN_LOG,
+                LKP3_HASH_W,
+                MAX_HASH_W,
+                FULL_HASH_W>(bloom_p,
+                             hash1_w,
+                             hash2_w,
+                             e_stream_tuple,
+                             p_stream_tuple,
+                             p_stream_filter);
 
-    mwj_readmin_counter(hTables0,
-                        htb_buf1,
-                  p_stream_tuple,
-                  rc_stream_tuple);
+    mwj_readmin_counter(hTables0, htb_buf1, p_stream_tuple, rc_stream_tuple);
 
-    cache_wrapper(mwj_readmin_edge<
-                      T_BLOOM,
-                      BLOOM_LOG,
-                      K_FUN_LOG,
-                      FULL_HASH_W>,
+    cache_wrapper(mwj_readmin_edge_pipelined<T_BLOOM, BLOOM_LOG, K_FUN_LOG, FULL_HASH_W>,
                   htb_cache2,
-      rc_stream_tuple,
-      rc_stream_filter,
-      re_stream_set,
-      re_stream_tuple);
+                  rc_stream_tuple,
+                  rc_stream_filter,
+                  re_stream_set,
+                  re_stream_tuple);
 
     mwj_homomorphism(
       re_stream_set, re_stream_tuple, re_stream_sol, h_stream_set);
@@ -1832,11 +1764,11 @@ multiwayJoin(ap_uint<DDR_W>* htb_buf0,
       t_stream_tuple,
       t_stream_sol);
 
-    intersectcache_wrapper<PROPOSE_BATCH_LOG, BLOCKBUILD_NUM>(
+    intersectcache_wrapper<PROPOSE_BATCH_LOG>(
       hTables1, htb_cache, t_stream_tuple, o_stream_tuple);
 
     verifycache_wrapper<PROPOSE_BATCH_LOG>(
-      hTables1, htb_cache, bb_merge_stream_tuple, v_stream_tuple);
+      hTables1, htb_cache, bb_stream_tuple, v_stream_tuple);
 
     mwj_assembly(htb_buf3,
                  n_candidate,
@@ -1880,7 +1812,7 @@ multiwayJoin(ap_uint<DDR_W>* htb_buf0,
         std::ref(rc_stream_tuple));
 
     std::thread mwj_readmin_edge_t(
-      mwj_readmin_edge<T_BLOOM, BLOOM_LOG, K_FUN_LOG, FULL_HASH_W>,
+      mwj_readmin_edge_pipelined<T_BLOOM, BLOOM_LOG, K_FUN_LOG, FULL_HASH_W>,
       std::ref(htb_cache2),
       std::ref(rc_stream_tuple),
       rc_stream_filter,
@@ -1902,16 +1834,16 @@ multiwayJoin(ap_uint<DDR_W>* htb_buf0,
       std::ref(t_stream_tuple),
       std::ref(t_stream_sol));
 
-    std::thread mwj_intersect_t(mwj_intersect<PROPOSE_BATCH_LOG, BLOCKBUILD_NUM>,
+    std::thread mwj_intersect_t(mwj_intersect<PROPOSE_BATCH_LOG>,
                                 hTables1,
                                 std::ref(htb_cache),
                                 std::ref(t_stream_tuple),
-                                o_stream_tuple);
+                                std::ref(o_stream_tuple));
 
     std::thread mwj_verify_t(mwj_verify<PROPOSE_BATCH_LOG>,
                              hTables1,
                              std::ref(htb_cache),
-                             std::ref(bb_merge_stream_tuple),
+                             std::ref(bb_stream_tuple),
                              std::ref(v_stream_tuple));
 
     std::thread mwj_assembly_t(mwj_assembly,
@@ -2145,21 +2077,6 @@ void subgraphIsomorphism(row_t htb_buf0[HASHTABLES_SPACE],
 
 #if DEBUG_INTERFACE
                          volatile unsigned int &debif_endpreprocess,
-                         unsigned long &p_propose_empty,
-                         unsigned long &p_edgebuild_empty,
-                         unsigned long &p_findmin_empty,
-                         unsigned long &p_readmin_counter_empty,
-                         unsigned long &p_readmin_edge_empty,
-                         unsigned long &p_homomorphism_empty,
-                         unsigned long &p_batchbuild_empty,
-                         unsigned long &p_tuplebuild_empty,
-                         unsigned long &p_intersect_empty,
-                         unsigned long &p_offset_empty,
-                         unsigned long &p_split_empty,
-                         unsigned long &p_verify_empty,
-                         unsigned long &p_compact_empty,
-                         unsigned long &p_filter_empty,
-                         unsigned long &p_assembly_empty,
                          unsigned long &p_hits_findmin,
                          unsigned long &p_hits_readmin_counter,
                          unsigned long &p_hits_readmin_edge,
@@ -2170,6 +2087,8 @@ void subgraphIsomorphism(row_t htb_buf0[HASHTABLES_SPACE],
                          unsigned long &p_reqs_readmin_edge,
                          unsigned long &p_reqs_intersect,
                          unsigned long &p_reqs_verify,
+                         unsigned long &p_reqs_dynfifo,
+                         unsigned long &p_bloom_filtered,
 #endif /* DEBUG_INTERFACE */
                          long unsigned int &result)
 {
@@ -2177,21 +2096,33 @@ void subgraphIsomorphism(row_t htb_buf0[HASHTABLES_SPACE],
 #pragma HLS INTERFACE mode=m_axi port=htb_buf0 bundle=cache \
     max_widen_bitwidth=128 num_write_outstanding=1 max_write_burst_length=2 \
     latency=0
-#pragma HLS INTERFACE mode=m_axi port=htb_buf1 bundle=readmin_c \
-    max_widen_bitwidth=128 num_write_outstanding=1 max_write_burst_length=2 \
-    latency=0
+// #pragma HLS INTERFACE mode=m_axi port=htb_buf1 bundle=readmin_c \
+//     max_widen_bitwidth=128 num_write_outstanding=1 max_write_burst_length=2 \
+//     latency=0
 #pragma HLS INTERFACE mode=m_axi port=htb_buf2 bundle=readmin_e \
     max_widen_bitwidth=128 num_write_outstanding=1 max_write_burst_length=2 \
     latency=0 max_read_burst_length=16
-#pragma HLS INTERFACE mode=m_axi port=htb_buf3 bundle=prop_batch \
-    max_widen_bitwidth=128 latency=0
+// #pragma HLS INTERFACE mode=m_axi port=htb_buf3 bundle=prop_batch \
+//     max_widen_bitwidth=128 latency=0
+// #pragma HLS INTERFACE mode=m_axi port=htb_buf2 bundle=readmin_e \
+//     max_widen_bitwidth=128 num_write_outstanding=1 max_write_burst_length=2 \
+//     latency=0 max_read_burst_length=16 channel=0
+#pragma HLS INTERFACE mode=m_axi port=htb_buf1 bundle=readmin_c \
+    max_widen_bitwidth=128 num_write_outstanding=1 max_write_burst_length=2 \
+    latency=0 max_read_burst_length=16 channel=1
+#pragma HLS INTERFACE mode=m_axi port=htb_buf3 bundle=readmin_c \
+    max_widen_bitwidth=128 num_write_outstanding=1 max_write_burst_length=2 \
+    latency=0 max_read_burst_length=16 channel=2
+// #pragma HLS INTERFACE mode=m_axi port=htb_buf0 bundle=readmin_e \
+//     max_widen_bitwidth=128 num_write_outstanding=1 max_write_burst_length=2 \
+//     latency=0 max_read_burst_length=16 channel=3
 #pragma HLS INTERFACE mode=m_axi port=res_buf bundle=fifo \
     max_widen_bitwidth=128 max_read_burst_length=32 max_write_burst_length=32 \
     latency=0
 #pragma HLS INTERFACE mode=m_axi port=bloom_p bundle=bloom \
     max_widen_bitwidth=128 latency=20
 
-#pragma HLS alias ports=htb_buf0,htb_buf1,htb_buf2,htb_buf3 distance=0
+// #pragma HLS alias ports=htb_buf0,htb_buf1,htb_buf2,htb_buf3 distance=0
 
 #pragma HLS INTERFACE mode=s_axilite port=numQueryVert
 #pragma HLS INTERFACE mode=s_axilite port=numQueryEdges
@@ -2206,31 +2137,18 @@ void subgraphIsomorphism(row_t htb_buf0[HASHTABLES_SPACE],
 
 #if DEBUG_INTERFACE
 #pragma HLS INTERFACE mode=s_axilite port=debif_endpreprocess
-#pragma HLS INTERFACE mode=s_axilite port=p_propose_empty
-#pragma HLS INTERFACE mode=s_axilite port=p_edgebuild_empty
-#pragma HLS INTERFACE mode=s_axilite port=p_findmin_empty
-#pragma HLS INTERFACE mode=s_axilite port=p_readmin_counter_empty
-#pragma HLS INTERFACE mode=s_axilite port=p_readmin_edge_empty
-#pragma HLS INTERFACE mode=s_axilite port=p_tuplebuild_empty
-#pragma HLS INTERFACE mode=s_axilite port=p_intersect_empty
-#pragma HLS INTERFACE mode=s_axilite port=p_verify_empty
-#pragma HLS INTERFACE mode=s_axilite port=p_assembly_empty
-#pragma HLS INTERFACE mode=s_axilite port=p_homomorphism_empty
-#pragma HLS INTERFACE mode=s_axilite port=p_batchbuild_empty
-#pragma HLS INTERFACE mode=s_axilite port=p_offset_empty 
-#pragma HLS INTERFACE mode=s_axilite port=p_split_empty
-#pragma HLS INTERFACE mode=s_axilite port=p_compact_empty
-#pragma HLS INTERFACE mode=s_axilite port=p_filter_empty 
 #pragma HLS INTERFACE mode=s_axilite port=p_reqs_findmin
 #pragma HLS INTERFACE mode=s_axilite port=p_reqs_readmin_counter
 #pragma HLS INTERFACE mode=s_axilite port=p_reqs_readmin_edge
 #pragma HLS INTERFACE mode=s_axilite port=p_reqs_intersect
 #pragma HLS INTERFACE mode=s_axilite port=p_reqs_verify
+#pragma HLS INTERFACE mode=s_axilite port=p_reqs_dynfifo
 #pragma HLS INTERFACE mode=s_axilite port=p_hits_findmin
 #pragma HLS INTERFACE mode=s_axilite port=p_hits_readmin_counter
 #pragma HLS INTERFACE mode=s_axilite port=p_hits_readmin_edge
 #pragma HLS INTERFACE mode=s_axilite port=p_hits_intersect
 #pragma HLS INTERFACE mode=s_axilite port=p_hits_verify
+#pragma HLS INTERFACE mode=s_axilite port=p_bloom_filtered
 #endif /* DEBUG_INTERFACE */
 
 #pragma HLS INTERFACE mode=s_axilite port=result
@@ -2245,6 +2163,7 @@ void subgraphIsomorphism(row_t htb_buf0[HASHTABLES_SPACE],
     unsigned int local_dynfifo_overflow = 0;
     unsigned int n_candidate = 0;
     unsigned int start_candidate = 0;
+    unsigned long reqs_dynfifo = 0;
 
     preprocess<row_t,
                bloom_t,
@@ -2306,36 +2225,24 @@ void subgraphIsomorphism(row_t htb_buf0[HASHTABLES_SPACE],
                      hash2_w,
                      dynfifo_space,
                      local_dynfifo_overflow,
+                     reqs_dynfifo,
                      localResult);
     
     ap_wait();
     result = localResult;
     dynfifo_overflow = local_dynfifo_overflow;
-    p_propose_empty = propose_empty;
-    p_edgebuild_empty = edgebuild_empty;
-    p_findmin_empty = findmin_empty;
-    p_readmin_counter_empty = readmin_counter_empty;
-    p_readmin_edge_empty = readmin_edge_empty;
-    p_homomorphism_empty = homomorphism_empty;
-    p_batchbuild_empty = batchbuild_empty;
-    p_tuplebuild_empty = tuplebuild_empty;
-    p_intersect_empty = intersect_empty;
-    p_offset_empty = offset_empty;
-    p_split_empty = split_empty;
-    p_verify_empty = verify_empty;
-    p_compact_empty = compact_empty;
-    p_filter_empty = filter_empty;
-    p_assembly_empty = assembly_empty;
     p_reqs_findmin = reqs_findmin;
     p_reqs_readmin_counter = reqs_readmin_counter;
     p_reqs_readmin_edge = reqs_readmin_edge;
-    p_reqs_verify = reqs_verify;
     p_reqs_intersect = reqs_intersect;
+    p_reqs_verify = reqs_verify;
+    p_reqs_dynfifo = reqs_dynfifo;
     p_hits_findmin = hits_findmin;
     p_hits_readmin_counter = hits_readmin_counter;
     p_hits_readmin_edge = hits_readmin_edge;
     p_hits_verify = hits_verify;
     p_hits_intersect = hits_intersect;
+    p_bloom_filtered = bloom_filtered;
 
 #if DEBUG_STATS
     debug::print(hash1_w, hash2_w);
