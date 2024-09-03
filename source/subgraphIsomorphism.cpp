@@ -471,7 +471,7 @@ FINDMIN_TASK_LOOP:
     unsigned char vnum=0;
     FINDMIN_COPYING_EMBEDDING_LOOP:
     do {
-      #pragma HLS pipeline II = 1
+      #pragma HLS pipeline II = 4
       vertex = stream_sol_in.read();
       vertexv[vnum]=vertex;
       //stream_sol_out.write(vertex);
@@ -1155,7 +1155,7 @@ mwj_tuplebuild(
 
   TUPLEBUILD_TASK_LOOP:
   while (true) {
-    #pragma HLS pipeline II = 1
+    #pragma HLS pipeline II = 1 style = flp
     if(extra_tuple) {
       tuple_out.last_set = true;
       tuple_out.pos = 1;
@@ -1165,7 +1165,8 @@ mwj_tuplebuild(
       stream_tuple_out1[1].write(tuple_out);
       extra_tuple=false;
     } else {
-      if (stream_tuple_in.read_nb(tuple_in)) {
+      //if (stream_tuple_in.read_nb(tuple_in)) {
+        tuple_in = stream_tuple_in.read();
         extra_tuple = (!tuple_in.sol) & (!tuple_in.last_set) & tuple_in.last_edge;
         if (tuple_in.sol) {
           curEmb[tuple_in.pos] = tuple_in.node;
@@ -1257,9 +1258,9 @@ mwj_tuplebuild(
             */
           }
         }
-      } else {
-        extra_tuple=false;
-      }
+      //} else {
+      //  extra_tuple=false;
+      //}
     }
     
   }
@@ -2139,8 +2140,7 @@ multiwayJoin(ap_uint<DDR_W>* htb_buf0_0,
       #pragma HLS unroll
       mwj_blockbuild0_t[g](
         mwj_blockbuild<(1UL << PROPOSE_BATCH_LOG), __COUNTER__>,
-        o_stream_tuple0[g],
-        bb_stream_tuple0[g]);
+        o_stream_tuple0[g],bb_stream_tuple0[g]);
     }
 
     hls_thread_local hls::task mwj_blockbuild1_t[BLOCKBUILD_NUM];
@@ -2148,8 +2148,7 @@ multiwayJoin(ap_uint<DDR_W>* htb_buf0_0,
       #pragma HLS unroll
       mwj_blockbuild1_t[g](
         mwj_blockbuild<(1UL << PROPOSE_BATCH_LOG), __COUNTER__>,
-        o_stream_tuple1[g],
-        bb_stream_tuple1[g]);
+        o_stream_tuple1[g],bb_stream_tuple1[g]);
     }
     */
 
