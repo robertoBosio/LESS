@@ -200,7 +200,7 @@ proc create_root_design { parentCell } {
   set_property -dict [list \
     CONFIG.CLKOUT1_JITTER {94.863} \
     CONFIG.CLKOUT1_PHASE_ERROR {87.181} \
-    CONFIG.CLKOUT1_REQUESTED_OUT_FREQ {300} \
+    CONFIG.CLKOUT1_REQUESTED_OUT_FREQ {250} \
     CONFIG.MMCM_CLKFBOUT_MULT_F {12.000} \
     CONFIG.MMCM_CLKOUT0_DIVIDE_F {4.000} \
     CONFIG.MMCM_DIVCLK_DIVIDE {1} \
@@ -220,7 +220,7 @@ proc create_root_design { parentCell } {
 
   # Create instance: smartconnect_0, and set properties
   set smartconnect_0 [ create_bd_cell -type ip -vlnv xilinx.com:ip:smartconnect:1.0 smartconnect_0 ]
-  set_property CONFIG.NUM_SI {3} $smartconnect_0
+  set_property CONFIG.NUM_SI {7} $smartconnect_0
 
 
   # Create instance: subgraphIsomorphism_0, and set properties
@@ -624,13 +624,23 @@ Port;FD4A0000;FD4AFFFF;0|FPD;DPDMA;FD4C0000;FD4CFFFF;0|FPD;DDR_XMPU5_CFG;FD05000
   # Create interface connections
   connect_bd_intf_net -intf_net ps8_0_axi_periph_M00_AXI [get_bd_intf_pins ps8_0_axi_periph/M00_AXI] [get_bd_intf_pins subgraphIsomorphism_0/s_axi_control]
   connect_bd_intf_net -intf_net smartconnect_0_M00_AXI [get_bd_intf_pins smartconnect_0/M00_AXI] [get_bd_intf_pins zynq_ultra_ps_e_0/S_AXI_HP3_FPD]
-  connect_bd_intf_net -intf_net subgraphIsomorphism_0_m_axi_bloom [get_bd_intf_pins subgraphIsomorphism_0/m_axi_bloom] [get_bd_intf_pins zynq_ultra_ps_e_0/S_AXI_HP2_FPD]
-  connect_bd_intf_net -intf_net subgraphIsomorphism_0_m_axi_cache [get_bd_intf_pins subgraphIsomorphism_0/m_axi_cache] [get_bd_intf_pins zynq_ultra_ps_e_0/S_AXI_HP0_FPD]
-  connect_bd_intf_net -intf_net subgraphIsomorphism_0_m_axi_fifo [get_bd_intf_pins smartconnect_0/S00_AXI] [get_bd_intf_pins subgraphIsomorphism_0/m_axi_fifo]
-  connect_bd_intf_net -intf_net subgraphIsomorphism_0_m_axi_prop_batch [get_bd_intf_pins smartconnect_0/S01_AXI] [get_bd_intf_pins subgraphIsomorphism_0/m_axi_prop_batch]
-  connect_bd_intf_net -intf_net subgraphIsomorphism_0_m_axi_readmin_c [get_bd_intf_pins subgraphIsomorphism_0/m_axi_readmin_c] [get_bd_intf_pins zynq_ultra_ps_e_0/S_AXI_HP1_FPD]
-  connect_bd_intf_net -intf_net subgraphIsomorphism_0_m_axi_readmin_e [get_bd_intf_pins smartconnect_0/S02_AXI] [get_bd_intf_pins subgraphIsomorphism_0/m_axi_readmin_e]
-  connect_bd_intf_net -intf_net zynq_ultra_ps_e_0_M_AXI_HPM0_FPD [get_bd_intf_pins ps8_0_axi_periph/S00_AXI] [get_bd_intf_pins zynq_ultra_ps_e_0/M_AXI_HPM0_FPD]
+  #connect_bd_intf_net -intf_net subgraphIsomorphism_0_m_axi_bloom [get_bd_intf_pins subgraphIsomorphism_0/m_axi_bloom] [get_bd_intf_pins zynq_ultra_ps_e_0/S_AXI_HP2_FPD]
+  #connect_bd_intf_net -intf_net subgraphIsomorphism_0_m_axi_cache [get_bd_intf_pins subgraphIsomorphism_0/m_axi_cache] [get_bd_intf_pins zynq_ultra_ps_e_0/S_AXI_HP0_FPD]
+  #connect_bd_intf_net -intf_net subgraphIsomorphism_0_m_axi_fifo [get_bd_intf_pins smartconnect_0/S00_AXI] [get_bd_intf_pins subgraphIsomorphism_0/m_axi_fifo]
+  #connect_bd_intf_net -intf_net subgraphIsomorphism_0_m_axi_prop_batch [get_bd_intf_pins smartconnect_0/S01_AXI] [get_bd_intf_pins subgraphIsomorphism_0/m_axi_prop_batch]
+  #connect_bd_intf_net -intf_net subgraphIsomorphism_0_m_axi_readmin_c [get_bd_intf_pins subgraphIsomorphism_0/m_axi_readmin_c] [get_bd_intf_pins zynq_ultra_ps_e_0/S_AXI_HP1_FPD]
+  #connect_bd_intf_net -intf_net subgraphIsomorphism_0_m_axi_readmin_e [get_bd_intf_pins smartconnect_0/S02_AXI] [get_bd_intf_pins subgraphIsomorphism_0/m_axi_readmin_e]
+  #connect_bd_intf_net -intf_net zynq_ultra_ps_e_0_M_AXI_HPM0_FPD [get_bd_intf_pins ps8_0_axi_periph/S00_AXI] [get_bd_intf_pins zynq_ultra_ps_e_0/M_AXI_HPM0_FPD]
+  connect_bd_intf_net [get_bd_intf_pins subgraphIsomorphism_0/m_axi_cache_0] [get_bd_intf_pins smartconnect_0/S00_AXI]
+  connect_bd_intf_net [get_bd_intf_pins subgraphIsomorphism_0/m_axi_cache_1] [get_bd_intf_pins smartconnect_0/S01_AXI]
+  connect_bd_intf_net [get_bd_intf_pins subgraphIsomorphism_0/m_axi_readmin_c_0] [get_bd_intf_pins smartconnect_0/S02_AXI]
+  connect_bd_intf_net [get_bd_intf_pins subgraphIsomorphism_0/m_axi_readmin_c_1] [get_bd_intf_pins smartconnect_0/S03_AXI]
+  connect_bd_intf_net [get_bd_intf_pins subgraphIsomorphism_0/m_axi_readmin_e_0] [get_bd_intf_pins smartconnect_0/S04_AXI]
+  connect_bd_intf_net [get_bd_intf_pins subgraphIsomorphism_0/m_axi_readmin_e_1] [get_bd_intf_pins smartconnect_0/S05_AXI]
+  connect_bd_intf_net [get_bd_intf_pins subgraphIsomorphism_0/m_axi_prop_batch_0] [get_bd_intf_pins smartconnect_0/S06_AXI]
+  connect_bd_intf_net [get_bd_intf_pins subgraphIsomorphism_0/m_axi_prop_batch_1] [get_bd_intf_pins zynq_ultra_ps_e_0/S_AXI_HP0_FPD]
+  connect_bd_intf_net [get_bd_intf_pins subgraphIsomorphism_0/m_axi_bloom] [get_bd_intf_pins zynq_ultra_ps_e_0/S_AXI_HP1_FPD]
+  connect_bd_intf_net [get_bd_intf_pins subgraphIsomorphism_0/m_axi_fifo] [get_bd_intf_pins zynq_ultra_ps_e_0/S_AXI_HP2_FPD]
 
   # Create port connections
   connect_bd_net -net clk_wiz_0_clk_out1 [get_bd_pins clk_wiz_0/clk_out1] [get_bd_pins ps8_0_axi_periph/ACLK] [get_bd_pins ps8_0_axi_periph/M00_ACLK] [get_bd_pins ps8_0_axi_periph/S00_ACLK] [get_bd_pins rst_ps8_0_99M/slowest_sync_clk] [get_bd_pins smartconnect_0/aclk] [get_bd_pins subgraphIsomorphism_0/ap_clk] [get_bd_pins zynq_ultra_ps_e_0/maxihpm0_fpd_aclk] [get_bd_pins zynq_ultra_ps_e_0/saxihp0_fpd_aclk] [get_bd_pins zynq_ultra_ps_e_0/saxihp1_fpd_aclk] [get_bd_pins zynq_ultra_ps_e_0/saxihp2_fpd_aclk] [get_bd_pins zynq_ultra_ps_e_0/saxihp3_fpd_aclk]
@@ -644,21 +654,34 @@ Port;FD4A0000;FD4AFFFF;0|FPD;DPDMA;FD4C0000;FD4CFFFF;0|FPD;DDR_XMPU5_CFG;FD05000
   assign_bd_address -offset 0x000800000000 -range 0x000800000000 -target_address_space [get_bd_addr_spaces subgraphIsomorphism_0/Data_m_axi_bloom] [get_bd_addr_segs zynq_ultra_ps_e_0/SAXIGP4/HP2_DDR_HIGH] -force
   assign_bd_address -offset 0x00000000 -range 0x80000000 -target_address_space [get_bd_addr_spaces subgraphIsomorphism_0/Data_m_axi_bloom] [get_bd_addr_segs zynq_ultra_ps_e_0/SAXIGP4/HP2_DDR_LOW] -force
   assign_bd_address -offset 0xC0000000 -range 0x20000000 -target_address_space [get_bd_addr_spaces subgraphIsomorphism_0/Data_m_axi_bloom] [get_bd_addr_segs zynq_ultra_ps_e_0/SAXIGP4/HP2_QSPI] -force
-  assign_bd_address -offset 0x000800000000 -range 0x000800000000 -target_address_space [get_bd_addr_spaces subgraphIsomorphism_0/Data_m_axi_cache] [get_bd_addr_segs zynq_ultra_ps_e_0/SAXIGP2/HP0_DDR_HIGH] -force
-  assign_bd_address -offset 0x00000000 -range 0x80000000 -target_address_space [get_bd_addr_spaces subgraphIsomorphism_0/Data_m_axi_cache] [get_bd_addr_segs zynq_ultra_ps_e_0/SAXIGP2/HP0_DDR_LOW] -force
-  assign_bd_address -offset 0xC0000000 -range 0x20000000 -target_address_space [get_bd_addr_spaces subgraphIsomorphism_0/Data_m_axi_cache] [get_bd_addr_segs zynq_ultra_ps_e_0/SAXIGP2/HP0_QSPI] -force
+  assign_bd_address -offset 0x000800000000 -range 0x000800000000 -target_address_space [get_bd_addr_spaces subgraphIsomorphism_0/Data_m_axi_cache_0] [get_bd_addr_segs zynq_ultra_ps_e_0/SAXIGP2/HP0_DDR_HIGH] -force
+  assign_bd_address -offset 0x000800000000 -range 0x000800000000 -target_address_space [get_bd_addr_spaces subgraphIsomorphism_0/Data_m_axi_cache_1] [get_bd_addr_segs zynq_ultra_ps_e_0/SAXIGP2/HP0_DDR_HIGH] -force
+  assign_bd_address -offset 0x00000000 -range 0x80000000 -target_address_space [get_bd_addr_spaces subgraphIsomorphism_0/Data_m_axi_cache_0] [get_bd_addr_segs zynq_ultra_ps_e_0/SAXIGP2/HP0_DDR_LOW] -force
+  assign_bd_address -offset 0x00000000 -range 0x80000000 -target_address_space [get_bd_addr_spaces subgraphIsomorphism_0/Data_m_axi_cache_1] [get_bd_addr_segs zynq_ultra_ps_e_0/SAXIGP2/HP0_DDR_LOW] -force
+  assign_bd_address -offset 0xC0000000 -range 0x20000000 -target_address_space [get_bd_addr_spaces subgraphIsomorphism_0/Data_m_axi_cache_0] [get_bd_addr_segs zynq_ultra_ps_e_0/SAXIGP2/HP0_QSPI] -force
+  assign_bd_address -offset 0xC0000000 -range 0x20000000 -target_address_space [get_bd_addr_spaces subgraphIsomorphism_0/Data_m_axi_cache_1] [get_bd_addr_segs zynq_ultra_ps_e_0/SAXIGP2/HP0_QSPI] -force
   assign_bd_address -offset 0x000800000000 -range 0x000800000000 -target_address_space [get_bd_addr_spaces subgraphIsomorphism_0/Data_m_axi_fifo] [get_bd_addr_segs zynq_ultra_ps_e_0/SAXIGP5/HP3_DDR_HIGH] -force
   assign_bd_address -offset 0x00000000 -range 0x80000000 -target_address_space [get_bd_addr_spaces subgraphIsomorphism_0/Data_m_axi_fifo] [get_bd_addr_segs zynq_ultra_ps_e_0/SAXIGP5/HP3_DDR_LOW] -force
   assign_bd_address -offset 0xC0000000 -range 0x20000000 -target_address_space [get_bd_addr_spaces subgraphIsomorphism_0/Data_m_axi_fifo] [get_bd_addr_segs zynq_ultra_ps_e_0/SAXIGP5/HP3_QSPI] -force
-  assign_bd_address -offset 0x000800000000 -range 0x000800000000 -target_address_space [get_bd_addr_spaces subgraphIsomorphism_0/Data_m_axi_prop_batch] [get_bd_addr_segs zynq_ultra_ps_e_0/SAXIGP5/HP3_DDR_HIGH] -force
-  assign_bd_address -offset 0x00000000 -range 0x80000000 -target_address_space [get_bd_addr_spaces subgraphIsomorphism_0/Data_m_axi_prop_batch] [get_bd_addr_segs zynq_ultra_ps_e_0/SAXIGP5/HP3_DDR_LOW] -force
-  assign_bd_address -offset 0xC0000000 -range 0x20000000 -target_address_space [get_bd_addr_spaces subgraphIsomorphism_0/Data_m_axi_prop_batch] [get_bd_addr_segs zynq_ultra_ps_e_0/SAXIGP5/HP3_QSPI] -force
-  assign_bd_address -offset 0x000800000000 -range 0x000800000000 -target_address_space [get_bd_addr_spaces subgraphIsomorphism_0/Data_m_axi_readmin_c] [get_bd_addr_segs zynq_ultra_ps_e_0/SAXIGP3/HP1_DDR_HIGH] -force
-  assign_bd_address -offset 0x00000000 -range 0x80000000 -target_address_space [get_bd_addr_spaces subgraphIsomorphism_0/Data_m_axi_readmin_c] [get_bd_addr_segs zynq_ultra_ps_e_0/SAXIGP3/HP1_DDR_LOW] -force
-  assign_bd_address -offset 0xC0000000 -range 0x20000000 -target_address_space [get_bd_addr_spaces subgraphIsomorphism_0/Data_m_axi_readmin_c] [get_bd_addr_segs zynq_ultra_ps_e_0/SAXIGP3/HP1_QSPI] -force
-  assign_bd_address -offset 0x000800000000 -range 0x000800000000 -target_address_space [get_bd_addr_spaces subgraphIsomorphism_0/Data_m_axi_readmin_e] [get_bd_addr_segs zynq_ultra_ps_e_0/SAXIGP5/HP3_DDR_HIGH] -force
-  assign_bd_address -offset 0x00000000 -range 0x80000000 -target_address_space [get_bd_addr_spaces subgraphIsomorphism_0/Data_m_axi_readmin_e] [get_bd_addr_segs zynq_ultra_ps_e_0/SAXIGP5/HP3_DDR_LOW] -force
-  assign_bd_address -offset 0xC0000000 -range 0x20000000 -target_address_space [get_bd_addr_spaces subgraphIsomorphism_0/Data_m_axi_readmin_e] [get_bd_addr_segs zynq_ultra_ps_e_0/SAXIGP5/HP3_QSPI] -force
+  assign_bd_address -offset 0x000800000000 -range 0x000800000000 -target_address_space [get_bd_addr_spaces subgraphIsomorphism_0/Data_m_axi_prop_batch_0] [get_bd_addr_segs zynq_ultra_ps_e_0/SAXIGP5/HP3_DDR_HIGH] -force
+  assign_bd_address -offset 0x000800000000 -range 0x000800000000 -target_address_space [get_bd_addr_spaces subgraphIsomorphism_0/Data_m_axi_prop_batch_1] [get_bd_addr_segs zynq_ultra_ps_e_0/SAXIGP5/HP3_DDR_HIGH] -force
+  assign_bd_address -offset 0x00000000 -range 0x80000000 -target_address_space [get_bd_addr_spaces subgraphIsomorphism_0/Data_m_axi_prop_batch_0] [get_bd_addr_segs zynq_ultra_ps_e_0/SAXIGP5/HP3_DDR_LOW] -force
+  assign_bd_address -offset 0x00000000 -range 0x80000000 -target_address_space [get_bd_addr_spaces subgraphIsomorphism_0/Data_m_axi_prop_batch_1] [get_bd_addr_segs zynq_ultra_ps_e_0/SAXIGP5/HP3_DDR_LOW] -force
+  assign_bd_address -offset 0xC0000000 -range 0x20000000 -target_address_space [get_bd_addr_spaces subgraphIsomorphism_0/Data_m_axi_prop_batch_0] [get_bd_addr_segs zynq_ultra_ps_e_0/SAXIGP5/HP3_QSPI] -force
+  assign_bd_address -offset 0xC0000000 -range 0x20000000 -target_address_space [get_bd_addr_spaces subgraphIsomorphism_0/Data_m_axi_prop_batch_1] [get_bd_addr_segs zynq_ultra_ps_e_0/SAXIGP5/HP3_QSPI] -force
+  
+  assign_bd_address -offset 0x000800000000 -range 0x000800000000 -target_address_space [get_bd_addr_spaces subgraphIsomorphism_0/Data_m_axi_readmin_c_0] [get_bd_addr_segs zynq_ultra_ps_e_0/SAXIGP3/HP1_DDR_HIGH] -force
+  assign_bd_address -offset 0x000800000000 -range 0x000800000000 -target_address_space [get_bd_addr_spaces subgraphIsomorphism_0/Data_m_axi_readmin_c_1] [get_bd_addr_segs zynq_ultra_ps_e_0/SAXIGP3/HP1_DDR_HIGH] -force
+  assign_bd_address -offset 0x00000000 -range 0x80000000 -target_address_space [get_bd_addr_spaces subgraphIsomorphism_0/Data_m_axi_readmin_c_0] [get_bd_addr_segs zynq_ultra_ps_e_0/SAXIGP3/HP1_DDR_LOW] -force
+  assign_bd_address -offset 0x00000000 -range 0x80000000 -target_address_space [get_bd_addr_spaces subgraphIsomorphism_0/Data_m_axi_readmin_c_1] [get_bd_addr_segs zynq_ultra_ps_e_0/SAXIGP3/HP1_DDR_LOW] -force
+  assign_bd_address -offset 0xC0000000 -range 0x20000000 -target_address_space [get_bd_addr_spaces subgraphIsomorphism_0/Data_m_axi_readmin_c_0] [get_bd_addr_segs zynq_ultra_ps_e_0/SAXIGP3/HP1_QSPI] -force
+  assign_bd_address -offset 0xC0000000 -range 0x20000000 -target_address_space [get_bd_addr_spaces subgraphIsomorphism_0/Data_m_axi_readmin_c_1] [get_bd_addr_segs zynq_ultra_ps_e_0/SAXIGP3/HP1_QSPI] -force
+  assign_bd_address -offset 0x000800000000 -range 0x000800000000 -target_address_space [get_bd_addr_spaces subgraphIsomorphism_0/Data_m_axi_readmin_e_0] [get_bd_addr_segs zynq_ultra_ps_e_0/SAXIGP5/HP3_DDR_HIGH] -force
+  assign_bd_address -offset 0x000800000000 -range 0x000800000000 -target_address_space [get_bd_addr_spaces subgraphIsomorphism_0/Data_m_axi_readmin_e_1] [get_bd_addr_segs zynq_ultra_ps_e_0/SAXIGP5/HP3_DDR_HIGH] -force
+  assign_bd_address -offset 0x00000000 -range 0x80000000 -target_address_space [get_bd_addr_spaces subgraphIsomorphism_0/Data_m_axi_readmin_e_0] [get_bd_addr_segs zynq_ultra_ps_e_0/SAXIGP5/HP3_DDR_LOW] -force
+  assign_bd_address -offset 0x00000000 -range 0x80000000 -target_address_space [get_bd_addr_spaces subgraphIsomorphism_0/Data_m_axi_readmin_e_1] [get_bd_addr_segs zynq_ultra_ps_e_0/SAXIGP5/HP3_DDR_LOW] -force
+  assign_bd_address -offset 0xC0000000 -range 0x20000000 -target_address_space [get_bd_addr_spaces subgraphIsomorphism_0/Data_m_axi_readmin_e_0] [get_bd_addr_segs zynq_ultra_ps_e_0/SAXIGP5/HP3_QSPI] -force
+  assign_bd_address -offset 0xC0000000 -range 0x20000000 -target_address_space [get_bd_addr_spaces subgraphIsomorphism_0/Data_m_axi_readmin_e_1] [get_bd_addr_segs zynq_ultra_ps_e_0/SAXIGP5/HP3_QSPI] -force
   assign_bd_address -offset 0xA0000000 -range 0x00010000 -target_address_space [get_bd_addr_spaces zynq_ultra_ps_e_0/Data] [get_bd_addr_segs subgraphIsomorphism_0/s_axi_control/Reg] -force
 
 
