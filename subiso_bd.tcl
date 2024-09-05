@@ -631,6 +631,7 @@ Port;FD4A0000;FD4AFFFF;0|FPD;DPDMA;FD4C0000;FD4CFFFF;0|FPD;DDR_XMPU5_CFG;FD05000
   #connect_bd_intf_net -intf_net subgraphIsomorphism_0_m_axi_readmin_c [get_bd_intf_pins subgraphIsomorphism_0/m_axi_readmin_c] [get_bd_intf_pins zynq_ultra_ps_e_0/S_AXI_HP1_FPD]
   #connect_bd_intf_net -intf_net subgraphIsomorphism_0_m_axi_readmin_e [get_bd_intf_pins smartconnect_0/S02_AXI] [get_bd_intf_pins subgraphIsomorphism_0/m_axi_readmin_e]
   #connect_bd_intf_net -intf_net zynq_ultra_ps_e_0_M_AXI_HPM0_FPD [get_bd_intf_pins ps8_0_axi_periph/S00_AXI] [get_bd_intf_pins zynq_ultra_ps_e_0/M_AXI_HPM0_FPD]
+  connect_bd_intf_net [get_bd_intf_pins zynq_ultra_ps_e_0/M_AXI_HPM0_FPD] -boundary_type upper [get_bd_intf_pins ps8_0_axi_periph/S00_AXI]
   connect_bd_intf_net [get_bd_intf_pins subgraphIsomorphism_0/m_axi_cache_0] [get_bd_intf_pins smartconnect_0/S00_AXI]
   connect_bd_intf_net [get_bd_intf_pins subgraphIsomorphism_0/m_axi_cache_1] [get_bd_intf_pins smartconnect_0/S01_AXI]
   connect_bd_intf_net [get_bd_intf_pins subgraphIsomorphism_0/m_axi_readmin_c_0] [get_bd_intf_pins smartconnect_0/S02_AXI]
