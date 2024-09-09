@@ -117,6 +117,90 @@ runhls: setup | check_hls
 runimpl: setup | check_vivado
 	vivado -mode tcl -source script_vivado.tcl
 
+
+XSA := subgraph.xsa
+MK_PATH := $(abspath $(lastword $(MAKEFILE_LIST)))
+COMMON_REPO ?= $(shell bash -c 'export MK_PATH=$(MK_PATH); echo $${MK_PATH%/*}')
+PWD = $(shell readlink -f .)
+
+TARGET ?= hw
+TOP_NAME = subgraphIsomorphism
+TEMP_DIR := $(CUR_DIR)/_x.$(TARGET).$(XSA)
+BUILD_DIR := $(CUR_DIR)/build_dir.$(TARGET).$(XSA)
+LINK_OUTPUT := $(BUILD_DIR)/$(TOP_NAME).link.xclbin
+PACKAGE_OUT = ./package.$(TARGET)
+
+VPP_PFLAGS :=
+VPP_LDFLAGS :=
+
+############################## Setting up Host Variables ##############################
+CMD_ARGS = -x $(BUILD_DIR)/$(TOP_NAME).xclbin
+
+#Include Required Host Source Files
+CXXFLAGS += -I$(CUR_DIR)/source
+CXXFLAGS += -I$(XILINX_XRT)/include
+CXXFLAGS += -I$(XILINX_VIVADO)/include
+CXXFLAGS += -I$(XILINX_HLS)/include
+CXXFLAGS += -Wno-attributes
+CXXFLAGS += -Wno-unknown-pragmas
+CXXFLAGS += -O3
+CXXFLAGS += -g
+# CXXFLAGS += -std=c++17
+CXXFLAGS += -fmessage-length=0
+CXXFLAGS += -DXILINX_XRT
+
+HOST_SRCS := $(CUR_DIR)/source/cmdlineparser.cpp
+HOST_SRCS += $(CUR_DIR)/source/logger.cpp
+HOST_SRCS += $(CUR_DIR)/source/subgraphIsomorphism.cpp
+
+# Host compiler global settings
+LDFLAGS += -lrt -lstdc++
+LDFLAGS += -luuid -lxrt_coreutil -pthread -lopencv_imgproc -lopencv_core -lopencv_imgcodecs
+LDFLAGS += -L$(XILINX_XRT)/lib -pthread -lOpenCL
+
+EXECUTABLE = $(CUR_DIR)/host.o
+EMCONFIG_DIR = $(TEMP_DIR)
+
+############################## Kernel Source Files Repository##########################
+emconfig:$(EMCONFIG_DIR)/emconfig.json
+$(EMCONFIG_DIR)/emconfig.json:
+	emconfigutil --platform $(PLATFORM) --od $(EMCONFIG_DIR)
+
+.PHONY: test
+test: $(EXECUTABLE) emconfig check-target check-top
+ifeq ($(TARGET),$(filter $(TARGET),sw_emu hw_emu))
+	cd $(CUR_DIR) && cp $(EMCONFIG_DIR)/emconfig.json .
+	cd $(CUR_DIR) && XCL_EMULATION_MODE=$(TARGET) $(EXECUTABLE) $(CMD_ARGS)
+else
+	$(EXECUTABLE) $(CMD_ARGS)
+endif
+
+.PHONY: host
+host: $(EXECUTABLE)
+
+############################## Setting up Kernel Variables ##############################
+# Kernel compiler global settings
+VPP_FLAGS += --save-temps
+VPP_FLAGS += --config subiso_hls.cfg
+# VPP_FLAGS += --profile_kernel data:all:all:all
+
+VPP_LDFLAGS += --vivado.synth.jobs 4
+VPP_LDFLAGS += --vivado.impl.jobs 4
+VPP_LDFLAGS += --config subiso_link.cfg
+# VPP_LDFLAGS += --profile_kernel data:all:all:all
+
+$(TEMP_DIR)/$(TOP_NAME).xo: $(CUR_DIR)/source/subgraphIsomorphism.cpp
+	mkdir -p $(TEMP_DIR)
+	v++ -g -c $(VPP_FLAGS) -t $(TARGET) --platform $(PLATFORM) -k $(TOP_NAME) --temp_dir $(TEMP_DIR) -o'$@' '$<'
+
+$(BUILD_DIR)/$(TOP_NAME).xclbin: $(TEMP_DIR)/$(TOP_NAME).xo
+	mkdir -p $(BUILD_DIR)
+	v++ -g -l  $(VPP_FLAGS) $(VPP_LDFLAGS) -t $(TARGET) --platform $(PLATFORM) --temp_dir $(TEMP_DIR) -o $(LINK_OUTPUT) $(+)
+	v++ -p $(LINK_OUTPUT) $(VPP_FLAGS) -t $(TARGET) --platform $(PLATFORM) --package.out_dir $(PACKAGE_OUT) -o $(BUILD_DIR)/$(TOP_NAME).xclbin
+
+$(EXECUTABLE): $(HOST_SRCS)
+	g++ -o $@ $^ $(CXXFLAGS) $(LDFLAGS)
+
 clean:
 	rm -rf settings.tcl *_hls.log vivado*.log vivado*.jou vivado*.str
 

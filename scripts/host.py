@@ -80,7 +80,7 @@ def subiso(test, path):
   
     HASHTABLES_SPACE = 1 << 28  #~ 256 MB
     BLOOM_SPACE  = 1 << 27  #~ 128 MB
-    RESULTS_SPACE = 1 << 29  #~ 512 MB
+    RESULTS_SPACE = 1 << 30  #~ 1024 MB
     MAX_QDATA = 300
     BURST_SIZE = 32
     nfile = 0
@@ -94,7 +94,7 @@ def subiso(test, path):
     mem_counter = 0
     byte_bloom = 16 * 4
     byte_counter = 4
-    byte_edge = 5
+    byte_edge = 16
    
     ## AXILITE register addresses ##
     axi_addresses = {
@@ -336,7 +336,7 @@ def subiso(test, path):
 
             bloom_spaceused = len(tablelist) * (2**hash1_w) * byte_bloom
             
-            print(f"h1 {hash1_w}, h2 {hash2_w}, blocks: {blocks} max 2048")
+            print(f"h1 {hash1_w}, h2 {hash2_w}, blocks: {blocks} max 4096")
             
             ol.subgraphIsomorphism_0.write(axi_addresses["addr_mem0"], MEM.device_address)
             ol.subgraphIsomorphism_0.write(axi_addresses["addr_mem1"], MEM.device_address)

@@ -754,11 +754,12 @@ READMIN_EDGE_TASK_LOOP:
   }
 }
 
-void mwj_homomorphism(
-    hls::stream<homomorphism_set_t<ap_uint<V_ID_W>>> stream_set_in[2],
-    hls::stream<minset_tuple_t> &stream_tuple_in,
-    hls::stream<sol_node_t<vertex_t>> &stream_sol_in,
-    hls::stream<sequencebuild_set_t<ap_uint<V_ID_W>>> &stream_set_out)
+void
+mwj_homomorphism(
+  hls::stream<homomorphism_set_t<ap_uint<V_ID_W>>> stream_set_in[2],
+  hls::stream<minset_tuple_t>& stream_tuple_in,
+  hls::stream<sol_node_t<vertex_t>>& stream_sol_in,
+  hls::stream<sequencebuild_set_t<ap_uint<V_ID_W>>>& stream_set_out)
 {
   ap_uint<8> curQV;
   ap_uint<V_ID_W> curEmb[MAX_QV];
@@ -768,15 +769,22 @@ void mwj_homomorphism(
   homomorphism_set_t<ap_uint<V_ID_W>> set_in;
   sequencebuild_set_t<ap_uint<V_ID_W>> set_out;
   sol_node_t<vertex_t> vertex;
-
-  while (true)
+  enum State_enum
   {
-    ap_uint<1> select = 0;
+    streaming_embedding = 0,
+    streaming_minset = 1,
+    checking = 2,
+    last = 3
+  };
+  typedef ap_uint<2> state_t;
+  state_t state = streaming_embedding;
+  ap_uint<1> select = 0;
 
-  HOMOMORPHISM_COPYING_EMBEDDING_LOOP:
-    do
-    {
-#pragma HLS pipeline II = 1
+HOMOMORPHISM_LOOP:
+  while (true) {
+#pragma HLS pipeline II = 1 style = flp
+
+    if (state == streaming_embedding) {
       vertex = stream_sol_in.read();
       set_out.node = vertex.node;
       set_out.last = vertex.last;
@@ -786,41 +794,38 @@ void mwj_homomorphism(
       set_out.stop = vertex.stop;
       stream_set_out.write(set_out);
       curEmb[vertex.pos] = vertex.node;
-    } while (!vertex.last);
-    curQV = vertex.pos + 1;
+      curQV = vertex.pos + 1;
+      if (vertex.last) {
+        state = streaming_minset;
+      }
+      if (vertex.stop) {
+        break;
+      }
+    } else if (state == streaming_minset) {
 
-    if (vertex.stop)
-    {
-      break;
-    }
-
-    /* Fake node is the tuple about min_set data */
-    minset_tuple_t tuple = stream_tuple_in.read();
-    fake_node.range(7, 0) = tuple.tb_index;
-    fake_node.range(15, 8) = tuple.iv_pos;
-    fake_node.range(31, 16) = tuple.num_tb_indexed;
-    set_out.node = fake_node;
-    set_out.last = false;
-    set_out.min_set = true;
-    set_out.sol = false;
-    set_out.stop = false;
-    stream_set_out.write(set_out);
-    valid_bits = (1UL << curQV) - 1;
-
-  HOMOMORPHISM_CHECK_LOOP:
-    do
-    {
-#pragma HLS pipeline II = 1
+      /* Fake node is the tuple about min_set data */
+      minset_tuple_t tuple = stream_tuple_in.read();
+      fake_node.range(7, 0) = tuple.tb_index;
+      fake_node.range(15, 8) = tuple.iv_pos;
+      fake_node.range(31, 16) = tuple.num_tb_indexed;
+      set_out.node = fake_node;
+      set_out.last = false;
+      set_out.min_set = true;
+      set_out.sol = false;
+      set_out.stop = false;
+      stream_set_out.write(set_out);
+      valid_bits = (1UL << curQV) - 1;
+      state = checking;
+      select = 0;
+    } else if (state == checking) {
       set_in = stream_set_in[select].read();
       select++;
       ap_uint<V_ID_W> vToVerify = set_in.node;
       equal_bits = 0;
 
-      for (int g = 0; g < MAX_QV; g++)
-      {
+      for (int g = 0; g < MAX_QV; g++) {
 #pragma HLS unroll
-        if (vToVerify == curEmb[g])
-        {
+        if (vToVerify == curEmb[g]) {
           equal_bits[g] = 1;
         }
       }
@@ -831,22 +836,23 @@ void mwj_homomorphism(
 
       /* Write out in case of not duplicate in current solution or
       delimeter node */
-      if ((equal_bits & valid_bits) == 0 && set_in.valid)
-      {
+      if ((equal_bits & valid_bits) == 0 && set_in.valid) {
         stream_set_out.write(set_out);
         // std::cout << "Sending node " << vToVerify << std::endl;
       }
 #if DEBUG_STATS
-      else
-      {
+      else {
         debug::homomo_trashed++;
       }
 #endif
-    } while (!set_in.last);
-    
-    // std::cout << "Propagate last set" << std::endl;
-    set_out.last = true;
-    stream_set_out.write(set_out);
+      if (set_in.last) {
+        state = last;
+      }
+    } else {
+      set_out.last = true;
+      stream_set_out.write(set_out);
+      state = streaming_embedding;
+    }
   }
 }
 
