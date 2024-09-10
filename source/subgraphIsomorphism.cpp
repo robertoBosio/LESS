@@ -479,12 +479,7 @@ FINDMIN_TASK_LOOP:
     } while (!vertex.last);
     
     if(vertex.stop) {
-    	//FINDMIN_WRITE_S_EMBEDDING_LOOP:
-      //for (unsigned char vwr=0;vwr<vnum;vwr++) {
-      //  #pragma HLS pipeline II = 1
-      //  stream_sol_out.write(vertexv[vwr]);
-      //}
-      stream_sol_out.write(vertex);
+    	stream_sol_out.write(vertex);
     	break;
     }
     
@@ -1165,102 +1160,87 @@ mwj_tuplebuild(
       stream_tuple_out1[1].write(tuple_out);
       extra_tuple=false;
     } else {
-      //if (stream_tuple_in.read_nb(tuple_in)) {
-        tuple_in = stream_tuple_in.read();
-        extra_tuple = (!tuple_in.sol) & (!tuple_in.last_set) & tuple_in.last_edge;
-        if (tuple_in.sol) {
-          curEmb[tuple_in.pos] = tuple_in.node;
-          stream_sol_out.write(
-            { tuple_in.node, tuple_in.pos, tuple_in.last_edge, tuple_in.stop });
-          if (tuple_in.stop) {
-            break;
-          }
-          curQV = tuple_in.pos + 1;
+      tuple_in = stream_tuple_in.read();
+      extra_tuple = (!tuple_in.sol) & (!tuple_in.last_set) & tuple_in.last_edge;
+      if (tuple_in.sol) {
+        curEmb[tuple_in.pos] = tuple_in.node;
+        stream_sol_out.write(
+          { tuple_in.node, tuple_in.pos, tuple_in.last_edge, tuple_in.stop });
+        if (tuple_in.stop) {
+          break;
+        }
+        curQV = tuple_in.pos + 1;
+      } else {
+        uint8_t tableIndex =
+          qVertices[curQV].tables_indexed[tuple_in.query_edge];
+        uint8_t ivPos =
+          qVertices[curQV].vertex_indexing[tuple_in.query_edge];
+
+        bool bit_last = tuple_in.last_edge;
+        bool bit_min =
+          (tuple_in.tb_index == tableIndex && tuple_in.iv_pos == ivPos);
+
+        vToVerify = tuple_in.node;
+        hash_in0.write(vToVerify);
+        hash_in1.write(curEmb[ivPos]);
+        xf::database::hashLookup3<V_ID_W>(hash_in0, hash_out0);
+        xf::database::hashLookup3<V_ID_W>(hash_in1, hash_out1);
+        ap_uint<MAX_HASH_W> indexed_h = hash_out0.read();
+        ap_uint<MAX_HASH_W> indexing_h = hash_out1.read();
+
+        addr_counter = indexing_h.range(hash1_w - 1, 0);
+        addr_counter <<= hash2_w;
+        addr_counter += indexed_h.range(hash2_w - 1, 0);
+
+        tuple_out.indexed_v = vToVerify;
+        tuple_out.indexing_v = curEmb[ivPos];
+        tuple_out.addr_counter = addr_counter;
+        tuple_out.tb_index = tableIndex;
+        tuple_out.pos = tuple_in.pos;
+        tuple_out.bit_last_edge = bit_last;
+        tuple_out.flag = (bit_min) ? MIN_SET : CHECK;
+        tuple_out.skip_counter = false;
+        tuple_out.last_set = tuple_in.last_set;
+        tuple_out.last_batch = tuple_in.last_batch;
+
+        // HASH DIVIDING!!!
+        bool selch = indexing_h.range(hash1_w-1,hash1_w-2);
+        
+        // FIST TUPLE
+        if(tuple_out.last_set) {
+          tuple_out.pos = 0;
+          stream_tuple_out0[0].write(tuple_out);
+          stream_tuple_out1[0].write(tuple_out);
         } else {
-          uint8_t tableIndex =
-            qVertices[curQV].tables_indexed[tuple_in.query_edge];
-          uint8_t ivPos =
-            qVertices[curQV].vertex_indexing[tuple_in.query_edge];
-
-          bool bit_last = tuple_in.last_edge;
-          bool bit_min =
-            (tuple_in.tb_index == tableIndex && tuple_in.iv_pos == ivPos);
-
-          vToVerify = tuple_in.node;
-          hash_in0.write(vToVerify);
-          hash_in1.write(curEmb[ivPos]);
-          xf::database::hashLookup3<V_ID_W>(hash_in0, hash_out0);
-          xf::database::hashLookup3<V_ID_W>(hash_in1, hash_out1);
-          ap_uint<MAX_HASH_W> indexed_h = hash_out0.read();
-          ap_uint<MAX_HASH_W> indexing_h = hash_out1.read();
-
-          addr_counter = indexing_h.range(hash1_w - 1, 0);
-          addr_counter <<= hash2_w;
-          addr_counter += indexed_h.range(hash2_w - 1, 0);
-
-          tuple_out.indexed_v = vToVerify;
-          tuple_out.indexing_v = curEmb[ivPos];
-          tuple_out.addr_counter = addr_counter;
-          tuple_out.tb_index = tableIndex;
-          tuple_out.pos = tuple_in.pos;
-          tuple_out.bit_last_edge = bit_last;
-          tuple_out.flag = (bit_min) ? MIN_SET : CHECK;
-          tuple_out.skip_counter = false;
-          tuple_out.last_set = tuple_in.last_set;
-          tuple_out.last_batch = tuple_in.last_batch;
-
-          // HASH DIVIDING!!!
-          bool selch = indexing_h.range(hash1_w-1,hash1_w-2);
-          
-          // FIST TUPLE
-          if(tuple_out.last_set) {
-            tuple_out.pos = 0;
-            stream_tuple_out0[0].write(tuple_out);
-            stream_tuple_out1[0].write(tuple_out);
+          if(selch) {
+            //stream_tuple_out0[0].write(tuple_out); // must be removed when splitted
+            stream_tuple_out1[0].write(tuple_out); // must be keep when splitted
           } else {
-            if(selch) {
-              //stream_tuple_out0[0].write(tuple_out); // must be removed when splitted
-              stream_tuple_out1[0].write(tuple_out); // must be keep when splitted
-            } else {
-              stream_tuple_out0[0].write(tuple_out); // must be keep when splitted
-              //stream_tuple_out1[0].write(tuple_out); // must be removed when splitted
-            }
-          }
-          
-          // change addr_counter
-          if (addr_counter == 0)
-            tuple_out.skip_counter = true;
-          tuple_out.addr_counter = addr_counter - 1;
-          
-          // SECOND TUPLE
-          if(tuple_out.last_set) {
-            tuple_out.pos = 0;
-            stream_tuple_out0[1].write(tuple_out);
-            stream_tuple_out1[1].write(tuple_out);
-          } else {
-            if(selch) {
-              //stream_tuple_out0[1].write(tuple_out); // must be removed when splitted
-              stream_tuple_out1[1].write(tuple_out); // must be keep when splitted
-            } else {
-              stream_tuple_out0[1].write(tuple_out); // must be keep when splitted
-              //stream_tuple_out1[1].write(tuple_out); // must be removed when splitted
-            }
-            // TERZA COPPIA PADDING
-            /*
-            if(bit_last) {
-              tuple_out.last_set = true;
-              tuple_out.pos = 1;
-              stream_tuple_out0[0].write(tuple_out);
-              stream_tuple_out0[1].write(tuple_out);
-              stream_tuple_out1[0].write(tuple_out);
-              stream_tuple_out1[1].write(tuple_out);
-            }
-            */
+            stream_tuple_out0[0].write(tuple_out); // must be keep when splitted
+            //stream_tuple_out1[0].write(tuple_out); // must be removed when splitted
           }
         }
-      //} else {
-      //  extra_tuple=false;
-      //}
+        
+        // change addr_counter
+        if (addr_counter == 0)
+          tuple_out.skip_counter = true;
+        tuple_out.addr_counter = addr_counter - 1;
+        
+        // SECOND TUPLE
+        if(tuple_out.last_set) {
+          tuple_out.pos = 0;
+          stream_tuple_out0[1].write(tuple_out);
+          stream_tuple_out1[1].write(tuple_out);
+        } else {
+          if(selch) {
+            //stream_tuple_out0[1].write(tuple_out); // must be removed when splitted
+            stream_tuple_out1[1].write(tuple_out); // must be keep when splitted
+          } else {
+            stream_tuple_out0[1].write(tuple_out); // must be keep when splitted
+            //stream_tuple_out1[1].write(tuple_out); // must be removed when splitted
+          }
+        }
+      }
     }
     
   }
