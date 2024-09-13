@@ -237,7 +237,7 @@ BLOOM_READ_TASK_LOOP:
                 bool write = (indexing_h != prev_indexing_h);
                 /* Writing edge of previous iteration */
                 if (valid && !first_it) {
-                  tuple_out.address = ntb * (1UL << (hash1_w-2)) + prev_indexing_h; //edited
+                  tuple_out.address = ntb * (1UL << (hash1_w-1)) + prev_indexing_h; //edited
                   tuple_out.last = false;
                   tuple_out.write = write;
                   tuple_out.indexed_h = prev_indexed_h;
@@ -256,7 +256,7 @@ BLOOM_READ_TASK_LOOP:
         /* Write explicitly the last bloom filter since
         the difference between prev_indexing_h and indexing_h
         does not work at the end of the table */
-        tuple_out.address = ntb * (1UL << (hash1_w-2)) + prev_indexing_h; //edited
+        tuple_out.address = ntb * (1UL << (hash1_w-1)) + prev_indexing_h; //edited
         tuple_out.indexed_h = prev_indexed_h;
         tuple_out.write = true;
         tuple_out.last = (ntb == (numTables - 1));
@@ -393,7 +393,7 @@ readEdgesPerBlock(row_t* edge_buf,
                   const unsigned long numDataEdges,
                   hls::stream<counter_tuple_t> stream_address[2])
 {
-    constexpr size_t COUNTERS_PER_BLOCK = 14;
+    constexpr size_t COUNTERS_PER_BLOCK = 13; // changed
     constexpr size_t SRC_NODE = 0;
     constexpr size_t DST_NODE = 32;
     constexpr size_t LABELSRC_NODE = 64;
@@ -436,11 +436,11 @@ READ_EDGES_PER_BLOCK_LOOP:
         also adjust the edge as indexing -> indexed, and also add the hash
         values */
         unsigned short address_intable0 =
-          hashsrc.range(hash1_w - 2, hash1_w - block_per_table);
+          hashsrc.range(hash1_w - 2, hash1_w -1 - block_per_table);
         ap_uint<1> sel0 = hashsrc.test(hash1_w-1);
         unsigned int address0 = ((index0 - 1) << block_per_table) + address_intable0;
         unsigned short address_intable1 =
-          hashdst.range(hash1_w - 2, hash1_w - block_per_table);
+          hashdst.range(hash1_w - 2, hash1_w-1 - block_per_table);
         ap_uint<1> sel1 = hashdst.test(hash1_w-1);
         unsigned int address1 = ((index1 - 1) << block_per_table) + address_intable1;
 
@@ -598,7 +598,7 @@ readAndStreamEdgesPerBlock(row_t* edge_buf,
                   const unsigned int numDataEdges,
                   hls::stream<store_tuple_t<row_t> > stream_edge[2])
 {
-    constexpr size_t COUNTERS_PER_BLOCK = 14;
+    constexpr size_t COUNTERS_PER_BLOCK = 13; // changed
     constexpr size_t SRC_NODE = 0;
     constexpr size_t DST_NODE = 32;
     constexpr size_t LABELSRC_NODE = 64;
@@ -640,12 +640,12 @@ STORE_EDGE_PER_BLOCK_LOOP:
         also adjust the edge as indexing -> indexed, and also add the hash
         values */
         unsigned short address_intable0 =
-          hashsrc.range(hash1_w - 2, hash1_w - block_per_table);
+          hashsrc.range(hash1_w - 2, hash1_w-1 - block_per_table);
         ap_uint<1> sel0 = hashsrc.test(hash1_w-1);
         unsigned int address0 =
           ((index0 - 1) << block_per_table) + address_intable0;
         unsigned short address_intable1 =
-          hashdst.range(hash1_w - 2, hash1_w - block_per_table);
+          hashdst.range(hash1_w - 2, hash1_w-1- block_per_table);
         ap_uint<1> sel1 = hashdst.test(hash1_w-1);
         unsigned int address1 =
           ((index1 - 1) << block_per_table) + address_intable1;
@@ -830,7 +830,7 @@ blockToHTB(row_t* edge_buf,
            const unsigned int numTables,
            const unsigned int block_n_edges[1024])
 {
-  constexpr size_t COUNTERS_PER_BLOCK = 14;
+  constexpr size_t COUNTERS_PER_BLOCK = 13; //changed 
   constexpr size_t IXG_NODE = 0;
   constexpr size_t IXD_NODE = 32;
   constexpr size_t IXG_HASH = 64;
@@ -1039,7 +1039,7 @@ storeEdgesHTB(row_t* edge_buf,
               const unsigned int numTables,
               const unsigned int block_n_edges[2048])
 {
-    constexpr size_t OFFSETS_PER_BLOCK = 14;
+    constexpr size_t OFFSETS_PER_BLOCK = 13; // changed
     constexpr size_t IXG_NODE = 0;
     constexpr size_t IXD_NODE = 32;
     constexpr size_t IXG_HASH = 64;
@@ -1287,7 +1287,7 @@ fillTablesURAM(row_t* edge_buf,
     * 1 << HASH1_W * HASH2_W is the number of counters needed
     * for each table, then it should be divided by the number
     * of counters stored in each row which is 1 << (ROW_LOG - CNT_LOG)*/
-  constexpr size_t COUNTERS_PER_BLOCK = 14;
+  constexpr size_t COUNTERS_PER_BLOCK = 13; // changed
   const unsigned long htb_size =
     (1UL << ((hash1_w-1) + hash2_w - (DDR_BIT - COUNTER_WIDTH))); // changed to h1-1!!!
   const unsigned int block_per_table =

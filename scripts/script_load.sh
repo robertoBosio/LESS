@@ -25,7 +25,6 @@ fi
 
 # Read paths from input file into an array
 readarray -t lines < <(grep -v "^#" "$input_file")
-
 # Create a set to store unique paths
 declare -A unique_paths
 
