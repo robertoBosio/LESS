@@ -279,9 +279,22 @@ int main()
         std::cout << "Allocation failed." << std::endl;
         return -1;
     }
+    row_t *htb_buf1 = (row_t *)calloc(HASHTABLES_SPACE, sizeof(row_t));
+    if (!htb_buf1)
+    {
+        std::cout << "Allocation failed." << std::endl;
+        return -1;
+    }
 
     bloom_t *bloom_p = (bloom_t *)calloc(BLOOM_SPACE, sizeof(bloom_t));
     if (!bloom_p)
+    {
+        std::cout << "Allocation failed." << std::endl;
+        return -1;
+    }
+
+    bloom_t *bloom_p_1 = (bloom_t *)calloc(BLOOM_SPACE, sizeof(bloom_t));
+    if (!bloom_p_1)
     {
         std::cout << "Allocation failed." << std::endl;
         return -1;
@@ -354,7 +367,9 @@ int main()
                        MAX_TABLES,
                        MAX_COLLISIONS>(res_buf,
                                        htb_buf,
+                                       htb_buf1,
                                        bloom_p,
+                                       bloom_p_1,
                                        qVertices,
                                        hTables0_0,
                                        hTables0_1,
@@ -371,14 +386,15 @@ int main()
 
             subgraphIsomorphism(
                 htb_buf,
+                htb_buf1,
                 htb_buf,
+                htb_buf1,
                 htb_buf,
+                htb_buf1,
                 htb_buf,
-                htb_buf,
-                htb_buf,
-                htb_buf,
-                htb_buf,
+                htb_buf1,
                 bloom_p,
+                bloom_p_1,
                 res_buf,
                 nQV,
                 h1,
@@ -429,14 +445,15 @@ int main()
 #else
             subgraphIsomorphism(
                 htb_buf,
+                htb_buf1,
                 htb_buf,
+                htb_buf1,
                 htb_buf,
+                htb_buf1,
                 htb_buf,
-                htb_buf,
-                htb_buf,
-                htb_buf,
-                htb_buf,
+                htb_buf1,
                 bloom_p,
+                bloom_p_1,
                 res_buf,
                 nQV,
                 nQE,
@@ -492,7 +509,11 @@ int main()
             flag &= (res_actual == res_expected);
             for (int g = 0; g < HASHTABLES_SPACE; htb_buf[g++] = 0)
                 ;
+            for (int g = 0; g < HASHTABLES_SPACE; htb_buf1[g++] = 0)
+                ;
             for (int g = 0; g < BLOOM_SPACE; bloom_p[g++] = 0)
+                ;
+            for (int g = 0; g < BLOOM_SPACE; bloom_p_1[g++] = 0)
                 ;
             std::cout << "\nCounters" << std::endl;
             for (int g = 0; g < 25; g++) {
@@ -505,7 +526,9 @@ int main()
         }
     }
     free(htb_buf);
+    free(htb_buf1);
     free(bloom_p);
+    free(bloom_p_1);
     free(res_buf);
     return !flag;
 }

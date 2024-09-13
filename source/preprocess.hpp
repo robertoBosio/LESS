@@ -44,6 +44,7 @@ struct bloom_update_tuple_t
 
 struct counter_tuple_t
 {
+  ap_uint<1> chsel;
   unsigned int address;
   bool stop;
 };
@@ -51,6 +52,7 @@ struct counter_tuple_t
 template<typename ROW_T>
 struct store_tuple_t
 {
+  ap_uint<1> chsel;
   unsigned int address;
   ROW_T edge;
   bool stop;
@@ -181,10 +183,10 @@ template<typename T_DDR,
          size_t FULL_HASH_W>
 void
 bloomRead(AdjHT* hTables,
-           T_DDR* htb_buf,
-           const unsigned short numTables,
-           const unsigned char hash1_w,
-           hls::stream<bloom_update_tuple_t<FULL_HASH_W> >& stream_tuple_out)
+          T_DDR* htb_buf,
+          const unsigned short numTables,
+          const unsigned char hash1_w,
+          hls::stream<bloom_update_tuple_t<FULL_HASH_W> >& stream_tuple_out)
 {
     constexpr size_t EDGE_W = 1UL << EDGE_LOG;
     hls::stream<ap_uint<NODE_W>, 4> hash_in0, hash_in1;
@@ -229,13 +231,13 @@ BLOOM_READ_TASK_LOOP:
                 xf::database::hashLookup3<NODE_W>(hash_in1, hash_out1);
                 indexed_h = hash_out0.read();
                 indexing_h = hash_out1.read();
-                indexing_h = indexing_h.range(hash1_w - 1, 0);
+                indexing_h = indexing_h.range(hash1_w - 2, 0); // edited
 
                 bool valid = (counter < hTables[ntb].n_edges);
                 bool write = (indexing_h != prev_indexing_h);
                 /* Writing edge of previous iteration */
                 if (valid && !first_it) {
-                  tuple_out.address = ntb * (1UL << hash1_w) + prev_indexing_h;
+                  tuple_out.address = ntb * (1UL << (hash1_w-2)) + prev_indexing_h; //edited
                   tuple_out.last = false;
                   tuple_out.write = write;
                   tuple_out.indexed_h = prev_indexed_h;
@@ -254,7 +256,7 @@ BLOOM_READ_TASK_LOOP:
         /* Write explicitly the last bloom filter since
         the difference between prev_indexing_h and indexing_h
         does not work at the end of the table */
-        tuple_out.address = ntb * (1UL << hash1_w) + prev_indexing_h;
+        tuple_out.address = ntb * (1UL << (hash1_w-2)) + prev_indexing_h; //edited
         tuple_out.indexed_h = prev_indexed_h;
         tuple_out.write = true;
         tuple_out.last = (ntb == (numTables - 1));
@@ -396,12 +398,12 @@ readEdgesPerBlock(row_t* edge_buf,
     constexpr size_t DST_NODE = 32;
     constexpr size_t LABELSRC_NODE = 64;
     constexpr size_t LABELDST_NODE = 96;
-    const unsigned int block_per_table = hash1_w + hash2_w - COUNTERS_PER_BLOCK;
+    const unsigned int block_per_table = (hash1_w-1) + hash2_w - COUNTERS_PER_BLOCK; // edited
     bool inverted = false;
 
 READ_EDGES_PER_BLOCK_LOOP:
     for (auto s = 0; s < numDataEdges; s++) {
-#pragma HLS pipeline II = 1
+      #pragma HLS pipeline II = 1
 
         row_t edge = edge_buf[s];
 
@@ -434,33 +436,35 @@ READ_EDGES_PER_BLOCK_LOOP:
         also adjust the edge as indexing -> indexed, and also add the hash
         values */
         unsigned short address_intable0 =
-          hashsrc.range(hash1_w - 1, hash1_w - block_per_table);
+          hashsrc.range(hash1_w - 2, hash1_w - block_per_table);
+        ap_uint<1> sel0 = hashsrc.test(hash1_w-1);
         unsigned int address0 = ((index0 - 1) << block_per_table) + address_intable0;
         unsigned short address_intable1 =
-          hashdst.range(hash1_w - 1, hash1_w - block_per_table);
+          hashdst.range(hash1_w - 2, hash1_w - block_per_table);
+        ap_uint<1> sel1 = hashdst.test(hash1_w-1);
         unsigned int address1 = ((index1 - 1) << block_per_table) + address_intable1;
 
         /* This useless if is to explain to Vitis HLS 2022.2 that two write in
          * the same stream cannot happen in one cycle */
         if (index0 != 0 && index1 != 0) {
           if (inverted){
-            stream_address[1].write({ address0, false });
-            stream_address[0].write({ address1, false });
+            stream_address[1].write({ sel0,address0, false });
+            stream_address[0].write({ sel1,address1, false });
           } else {
-            stream_address[0].write({ address0, false });
-            stream_address[1].write({ address1, false });
+            stream_address[0].write({ sel0,address0, false });
+            stream_address[1].write({ sel1,address1, false });
           }
         } else if (index0 != 0){
           if (inverted){
-            stream_address[1].write({ address0, false });
+            stream_address[1].write({ sel0,address0, false });
           } else {
-            stream_address[0].write({ address0, false });
+            stream_address[0].write({ sel0,address0, false });
           }
         } else if (index1 != 0){
           if (inverted){
-            stream_address[1].write({ address1, false });
+            stream_address[1].write({ sel1,address1, false });
           } else {
-            stream_address[0].write({ address1, false });
+            stream_address[0].write({ sel1,address1, false });
           }
         }
 
@@ -469,9 +473,9 @@ READ_EDGES_PER_BLOCK_LOOP:
         }
     }
     if (inverted){
-      stream_address[1].write({ 0, true });
+      stream_address[1].write({ 0,0, true });
     } else {
-      stream_address[0].write({ 0, true });
+      stream_address[0].write({ 0,0, true });
     }
 }
 
@@ -482,12 +486,13 @@ template<size_t NODE_W,
          size_t MAX_LABELS>
 void
 countEdgesPerBlock(hls::stream<counter_tuple_t> stream_address[2],
-                  unsigned int block_n_edges[2048])
+                  unsigned int block_n_edges[1024],
+                  unsigned int block_n_edges_1[1024])
 {
     const size_t BRAM_LAT = 3;
-    unsigned int local_cache_address[BRAM_LAT];
-    unsigned int local_cache_counter[BRAM_LAT];
-    ap_uint<BRAM_LAT> local_cache_valid = 0;
+    unsigned int local_cache_address[2][BRAM_LAT];
+    unsigned int local_cache_counter[2][BRAM_LAT];
+    ap_uint<BRAM_LAT> local_cache_valid[2] = {0,0};
     counter_tuple_t tuple_in;
     auto select = 0;
     
@@ -497,51 +502,60 @@ COUNT_EDGES_PER_BLOCK_LOOP:
     while (!tuple_in.stop) {
 #pragma HLS dependence variable = block_n_edges type = inter direction =       \
   RAW false
+#pragma HLS dependence variable = block_n_edges_1 type = inter direction =       \
+  RAW false
 #pragma HLS pipeline II = 1
 
         unsigned int address = tuple_in.address;
+        ap_uint<1> selch = tuple_in.chsel;
 
         bool hit = false;
-        unsigned int local_value_counter = 0;
+        unsigned int local_value_counter[2] = {0,0};
 
         /* Check if the counter has been used recently, by cycling backword to
          * catch the updated value */
         for (auto s = 0; s < BRAM_LAT; s++) {
 #pragma HLS unroll
             auto g = BRAM_LAT - s - 1;
-            if (local_cache_address[g] == address && local_cache_valid[g]) {
+            if (local_cache_address[selch][g] == address && local_cache_valid[selch][g]) {
                 hit = true;
-                local_value_counter = local_cache_counter[g];
+                local_value_counter[selch] = local_cache_counter[selch][g];
             }
         }
 
         /* Read from memory only if is not present in local cache, in this way
          * it is possible to remove the RAW dependency */
         if (hit){
-          local_value_counter++;
+          local_value_counter[selch]++;
         } else {
-          local_value_counter = block_n_edges[address];
-          local_value_counter++;
+          if(selch==1)
+            local_value_counter[selch] = block_n_edges_1[address];
+          else
+            local_value_counter[selch] = block_n_edges[address];
+          local_value_counter[selch]++;
         }
 
         /* Shift everything by one position and writes the last one in memory */
         for (auto s = 0; s < BRAM_LAT - 1; s++) {
 #pragma HLS unroll
           auto g = BRAM_LAT - s - 1;
-          local_cache_address[g] = local_cache_address[g - 1];
-          local_cache_counter[g] = local_cache_counter[g - 1];
-          local_cache_valid[g] = local_cache_valid[g - 1];
+          local_cache_address[selch][g] = local_cache_address[selch][g - 1];
+          local_cache_counter[selch][g] = local_cache_counter[selch][g - 1];
+          local_cache_valid[selch][g] = local_cache_valid[selch][g - 1];
         }
-        local_cache_address[0] = address;
-        local_cache_counter[0] = local_value_counter;
-        local_cache_valid[0] = true;
-        block_n_edges[address] = local_value_counter;
+        local_cache_address[selch][0] = address;
+        local_cache_counter[selch][0] = local_value_counter[selch];
+        local_cache_valid[selch][0] = true;
+        if(selch)
+          block_n_edges_1[address] = local_value_counter[1];
+        else
+          block_n_edges[address] = local_value_counter[0];
 
         tuple_in = stream_address[select].read();
         select = (select + 1) % 2;
 
 #ifndef __SYNTHESIS__
-        assert(local_value_counter < UINT32_MAX);
+        assert(local_value_counter[selch] < UINT32_MAX);
 #endif
     }
 }
@@ -558,16 +572,17 @@ countEdgesPerBlockWrap(row_t* edge_buf,
                 const unsigned char hash2_w,
                 const ap_uint<8> labelToTable[MAX_LABELS][MAX_LABELS],
                 const unsigned long numDataEdges,
-                unsigned int block_n_edges[2048])
+                unsigned int block_n_edges[1024],
+                unsigned int block_n_edges_1[1024])
 {
-#pragma HLS dataflow
-    hls::stream<counter_tuple_t, 32> stream_address[2];
+  #pragma HLS dataflow
+  hls::stream<counter_tuple_t, 32> stream_address[2];
 
-    readEdgesPerBlock<NODE_W, LAB_W, LKP3_HASH_W, MAX_HASH_W, MAX_LABELS>(
-      edge_buf, hash1_w, hash2_w, labelToTable, numDataEdges, stream_address);
+  readEdgesPerBlock<NODE_W, LAB_W, LKP3_HASH_W, MAX_HASH_W, MAX_LABELS>(
+    edge_buf, hash1_w, hash2_w, labelToTable, numDataEdges, stream_address);
 
-    countEdgesPerBlock<NODE_W, LAB_W, LKP3_HASH_W, MAX_HASH_W, MAX_LABELS>(
-      stream_address, block_n_edges);
+  countEdgesPerBlock<NODE_W, LAB_W, LKP3_HASH_W, MAX_HASH_W, MAX_LABELS>(
+    stream_address, block_n_edges,block_n_edges_1);
 }
 
 template<size_t NODE_W,
@@ -588,7 +603,7 @@ readAndStreamEdgesPerBlock(row_t* edge_buf,
     constexpr size_t DST_NODE = 32;
     constexpr size_t LABELSRC_NODE = 64;
     constexpr size_t LABELDST_NODE = 96;
-    const unsigned int block_per_table = hash1_w + hash2_w - COUNTERS_PER_BLOCK;
+    const unsigned int block_per_table = hash1_w-1 + hash2_w - COUNTERS_PER_BLOCK;
     bool inverted = false;
 
 STORE_EDGE_PER_BLOCK_LOOP:
@@ -625,11 +640,13 @@ STORE_EDGE_PER_BLOCK_LOOP:
         also adjust the edge as indexing -> indexed, and also add the hash
         values */
         unsigned short address_intable0 =
-          hashsrc.range(hash1_w - 1, hash1_w - block_per_table);
+          hashsrc.range(hash1_w - 2, hash1_w - block_per_table);
+        ap_uint<1> sel0 = hashsrc.test(hash1_w-1);
         unsigned int address0 =
           ((index0 - 1) << block_per_table) + address_intable0;
         unsigned short address_intable1 =
-          hashdst.range(hash1_w - 1, hash1_w - block_per_table);
+          hashdst.range(hash1_w - 2, hash1_w - block_per_table);
+        ap_uint<1> sel1 = hashdst.test(hash1_w-1);
         unsigned int address1 =
           ((index1 - 1) << block_per_table) + address_intable1;
 
@@ -649,23 +666,23 @@ STORE_EDGE_PER_BLOCK_LOOP:
          * the same stream cannot happen in one cycle */
         if (index0 != 0 && index1 != 0) {
           if (inverted) {
-                stream_edge[1].write({ address0, table_edge0, false });
-                stream_edge[0].write({ address1, table_edge1, false });
+                stream_edge[1].write({ sel0,address0, table_edge0, false });
+                stream_edge[0].write({ sel1,address1, table_edge1, false });
           } else {
-                stream_edge[0].write({ address0, table_edge0, false });
-                stream_edge[1].write({ address1, table_edge1, false });
+                stream_edge[0].write({ sel0,address0, table_edge0, false });
+                stream_edge[1].write({ sel1,address1, table_edge1, false });
           }
         } else if (index0 != 0) {
           if (inverted) {
-                stream_edge[1].write({ address0, table_edge0, false });
+                stream_edge[1].write({ sel0,address0, table_edge0, false });
           } else {
-                stream_edge[0].write({ address0, table_edge0, false });
+                stream_edge[0].write({ sel0,address0, table_edge0, false });
           }
         } else if (index1 != 0) {
           if (inverted) {
-                stream_edge[1].write({ address1, table_edge1, false });
+                stream_edge[1].write({ sel1,address1, table_edge1, false });
           } else {
-                stream_edge[0].write({ address1, table_edge1, false });
+                stream_edge[0].write({ sel1,address1, table_edge1, false });
           }
         }
 
@@ -674,9 +691,9 @@ STORE_EDGE_PER_BLOCK_LOOP:
         }
     }
     if (inverted) {
-        stream_edge[1].write({ 0, 0, true });
+        stream_edge[1].write({ 0,0, 0, true });
     } else {
-        stream_edge[0].write({ 0, 0, true });
+        stream_edge[0].write({ 0,0, 0, true });
     }
 }
 
@@ -688,12 +705,14 @@ template<size_t NODE_W,
 void
 storeEdgesPerBlock(hls::stream<store_tuple_t<row_t> > stream_edge[2],
                   row_t* m_axi,
-                  unsigned int block_n_edges[2048])
+                  row_t* m_axi_1,
+                  unsigned int block_n_edges[1024],
+                  unsigned int block_n_edges_1[1024])
 {
     const size_t BRAM_LAT = 3;
-    unsigned int local_cache_address[BRAM_LAT];
-    unsigned int local_cache_counter[BRAM_LAT];
-    ap_uint<BRAM_LAT> local_cache_valid = 0;
+    unsigned int local_cache_address[2][BRAM_LAT];
+    unsigned int local_cache_counter[2][BRAM_LAT];
+    ap_uint<BRAM_LAT> local_cache_valid[2] = {0,0};
     store_tuple_t<row_t> tuple_in;
     auto select = 0;
     
@@ -703,48 +722,60 @@ STORE_EDGES_PER_BLOCK_LOOP:
     while (!tuple_in.stop) {
 #pragma HLS dependence variable = block_n_edges type = inter direction =       \
   RAW false
+#pragma HLS dependence variable = block_n_edges_1 type = inter direction =       \
+  RAW false
 #pragma HLS pipeline II = 1
 
         unsigned int address = tuple_in.address;
+        ap_uint<1> chsel = tuple_in.chsel;
 
         bool hit = false;
-        unsigned int local_value_counter = 0;
+        unsigned int local_value_counter[2] = {0,0};
 
         /* Check if the counter has been used recently, by cycling backword to
          * catch the updated value */
         for (auto s = 0; s < BRAM_LAT; s++) {
 #pragma HLS unroll
             auto g = BRAM_LAT - s - 1;
-            if (local_cache_address[g] == address && local_cache_valid[g]) {
+            if (local_cache_address[chsel][g] == address && local_cache_valid[chsel][g]) {
                 hit = true;
-                local_value_counter = local_cache_counter[g];
+                local_value_counter[chsel] = local_cache_counter[chsel][g];
             }
         }
 
         /* Read from memory only if is not present in local cache, in this way
          * it is possible to remove the RAW dependency */
         if (!hit){
-          local_value_counter = block_n_edges[address];
+          if(chsel)
+            local_value_counter[chsel] = block_n_edges_1[address];
+          else
+            local_value_counter[chsel] = block_n_edges[address];
         }
 
         /* Shift everything by one position and writes the last one in memory */
         for (auto s = 0; s < BRAM_LAT - 1; s++) {
 #pragma HLS unroll
           auto g = BRAM_LAT - s - 1;
-          local_cache_address[g] = local_cache_address[g - 1];
-          local_cache_counter[g] = local_cache_counter[g - 1];
-          local_cache_valid[g] = local_cache_valid[g - 1];
+          local_cache_address[chsel][g] = local_cache_address[chsel][g - 1];
+          local_cache_counter[chsel][g] = local_cache_counter[chsel][g - 1];
+          local_cache_valid[chsel][g] = local_cache_valid[chsel][g - 1];
         }
-        local_cache_address[0] = address;
-        local_cache_counter[0] = local_value_counter + 1;
-        local_cache_valid[0] = true;
-        block_n_edges[address] = local_value_counter + 1;
-        m_axi[local_value_counter] = tuple_in.edge;
+        local_cache_address[chsel][0] = address;
+        local_cache_counter[chsel][0] = local_value_counter[chsel] + 1;
+        local_cache_valid[chsel][0] = true;
+        if(chsel)
+          block_n_edges_1[address] = local_value_counter[chsel] + 1;
+        else
+          block_n_edges[address] = local_value_counter[chsel] + 1;
+        if(chsel)
+          m_axi_1[local_value_counter[chsel]] = tuple_in.edge;
+        else
+          m_axi[local_value_counter[chsel]] = tuple_in.edge;
         tuple_in = stream_edge[select].read();
         select = (select + 1) % 2;
 
 #ifndef __SYNTHESIS__
-        assert(local_value_counter < UINT32_MAX);
+        assert(local_value_counter[chsel] < UINT32_MAX);
 #endif
     }
 }
@@ -757,11 +788,13 @@ template<size_t NODE_W,
 void
 storeEdgePerBlockWrap(row_t* edge_buf,
                       row_t* block_buf,
+                      row_t* block_buf_1,
                       const unsigned char hash1_w,
                       const unsigned char hash2_w,
                       const ap_uint<8> labelToTable[MAX_LABELS][MAX_LABELS],
                       const unsigned int numDataEdges,
-                      unsigned int block_n_edges[2048])
+                      unsigned int block_n_edges[1024],
+                      unsigned int block_n_edges_1[1024])
 {
 #pragma HLS dataflow
     hls::stream<store_tuple_t<row_t>, 30> stream_edge[2];
@@ -778,7 +811,7 @@ storeEdgePerBlockWrap(row_t* edge_buf,
                                            stream_edge);
 
     storeEdgesPerBlock<NODE_W, LAB_W, LKP3_HASH_W, MAX_HASH_W, MAX_LABELS>(
-      stream_edge, block_buf, block_n_edges);
+      stream_edge, block_buf, block_buf_1, block_n_edges, block_n_edges_1);
 }
 
 template<size_t NODE_W,
@@ -795,43 +828,49 @@ blockToHTB(row_t* edge_buf,
            const unsigned char hash1_w,
            const unsigned char hash2_w,
            const unsigned int numTables,
-           const unsigned int block_n_edges[2048])
+           const unsigned int block_n_edges[1024])
 {
-    constexpr size_t COUNTERS_PER_BLOCK = 14;
-    constexpr size_t IXG_NODE = 0;
-    constexpr size_t IXD_NODE = 32;
-    constexpr size_t IXG_HASH = 64;
-    constexpr size_t IXD_HASH = 96;
-    const unsigned int block_per_table =
-      (1UL << (hash1_w + hash2_w - COUNTERS_PER_BLOCK));
-    ap_uint<64> block_counter0[4096];
-    ap_uint<64> block_counter1[4096];
-#pragma HLS bind_storage variable=block_counter0 type=RAM_2P impl=URAM
-#pragma HLS bind_storage variable=block_counter1 type=RAM_2P impl=URAM
+  constexpr size_t COUNTERS_PER_BLOCK = 14;
+  constexpr size_t IXG_NODE = 0;
+  constexpr size_t IXD_NODE = 32;
+  constexpr size_t IXG_HASH = 64;
+  constexpr size_t IXD_HASH = 96;
+  const unsigned int block_per_table =
+    (1UL << (hash1_w-1 + hash2_w - COUNTERS_PER_BLOCK));
+  ap_uint<64> block_counter0[4096];
+  ap_uint<64> block_counter1[4096];
+  #pragma HLS bind_storage variable=block_counter0 type=RAM_2P impl=URAM
+  #pragma HLS bind_storage variable=block_counter1 type=RAM_2P impl=URAM
 
-/* Loop 2^(COUNTERS_PER_BLOCK - 2) since one block is split in two memories and
- * every memroy keep two counters per line*/
-INITIALIZE_URAM_LOOP:
-    for (auto g = 0; g < (1UL << (COUNTERS_PER_BLOCK - 2)); g++) {
-#pragma HLS pipeline II = 1
-        block_counter0[g] = 0;
-        block_counter1[g] = 0;
+  /* Loop 2^(COUNTERS_PER_BLOCK - 2) since one block is split in two memories and
+  * every memroy keep two counters per line*/
+  INITIALIZE_URAM_LOOP:
+  for (auto g = 0; g < (1UL << (COUNTERS_PER_BLOCK - 2)); g++) {
+    #pragma HLS pipeline II = 1
+    block_counter0[g] = 0;
+    block_counter1[g] = 0;
+  }
+
+  auto prev_offset = 0;
+  auto prev_ntb = 0;
+  unsigned int base_address = 0;
+  
+  BLOCK_HTB_TOP_LOOP:
+  for (auto s = 0; s < block_per_table * numTables; s++) {
+    auto block_edges = block_n_edges[s] - prev_offset;
+    auto ntb = s >> (hash1_w-1 + hash2_w - COUNTERS_PER_BLOCK);
+    if (prev_ntb != ntb){
+        base_address = 0;
     }
 
-    auto prev_offset = 0;
-    auto prev_ntb = 0;
-    unsigned int base_address = 0;
-BLOCK_HTB_TOP_LOOP:
-    for (auto s = 0; s < block_per_table * numTables; s++) {
-        auto block_edges = block_n_edges[s] - prev_offset;
-        auto ntb = s >> (hash1_w + hash2_w - COUNTERS_PER_BLOCK);
-        if (prev_ntb != ntb){
-            base_address = 0;
-        }
+    std::cout << "processing table block: " << (int)s << std::endl;
+    std::cout << "block edges: " << (int)block_edges << std::endl;
 
-COUNT_EDGES_INSIDE_BLOCK_LOOP:
-        for (auto g = 0; g < block_edges; g++) {
-#pragma HLS pipeline II = 2
+    COUNT_EDGES_INSIDE_BLOCK_LOOP:
+    for (auto g = 0; g < block_edges; g++) {
+      #pragma HLS pipeline II = 2
+
+      
             row_t edge = edge_buf[g + prev_offset];
 
             ap_uint<NODE_W> indexing_hash =
@@ -1005,7 +1044,7 @@ storeEdgesHTB(row_t* edge_buf,
     constexpr size_t IXD_NODE = 32;
     constexpr size_t IXG_HASH = 64;
     constexpr size_t IXD_HASH = 96;
-    const unsigned int block_per_table = (1UL << (hash1_w + hash2_w - OFFSETS_PER_BLOCK));
+    const unsigned int block_per_table = (1UL << (hash1_w-1 + hash2_w - OFFSETS_PER_BLOCK));
     ap_uint<64> block_offset0[4096];
     ap_uint<64> block_offset1[4096];
 #pragma HLS bind_storage variable=block_offset0 type=RAM_2P impl=URAM
@@ -1015,7 +1054,7 @@ storeEdgesHTB(row_t* edge_buf,
 STORE_EDGES_TOP_LOOP:
     for (auto s = 0; s < block_per_table * numTables; s++) {
         auto block_edges = block_n_edges[s] - prev_offset;
-        auto ntb = s >> (hash1_w + hash2_w - OFFSETS_PER_BLOCK);
+        auto ntb = s >> (hash1_w-1 + hash2_w - OFFSETS_PER_BLOCK);
         
         row_t row;
 LOAD_URAM_OFFSETS_LOOP:
@@ -1165,7 +1204,7 @@ PROPOSE_READ_MIN_INDEXING_LOOP:
         ap_uint<LKP3_HASH_W> hash_out;
         xf::database::details::hashlookup3_core<NODE_W>(vertex, hash_out);
         hash_new = hash_out.range(MAX_HASH_W - 1, 0);
-        hash_new = hash_new.range(hash1_w - 1, 0);
+        hash_new = hash_new.range(hash1_w - 2, 0);
 
         if (flag_buff && hash_buff == hash_new) {
           flag_new = true;
@@ -1226,7 +1265,9 @@ template<typename T_DDR,
 void
 fillTablesURAM(row_t* edge_buf,
                T_DDR* htb_buf,
+               T_DDR* htb_buf1,
                T_DDR* bloom_p,
+               T_DDR* bloom_p_1,
                QueryVertex* qVertices,
                AdjHT* hTables0,
                AdjHT* hTables0_1,
@@ -1242,122 +1283,212 @@ fillTablesURAM(row_t* edge_buf,
                const unsigned char hash2_w)
 {
 
-    /* Resetting portion of memory dedicated to counters
-     * 1 << HASH1_W * HASH2_W is the number of counters needed
-     * for each table, then it should be divided by the number
-     * of counters stored in each row which is 1 << (ROW_LOG - CNT_LOG)*/
-    constexpr size_t COUNTERS_PER_BLOCK = 14;
-    const unsigned long htb_size =
-      (1UL << (hash1_w + hash2_w - (DDR_BIT - COUNTER_WIDTH)));
-    const unsigned int block_per_table =
-      (1UL << (hash1_w + hash2_w - COUNTERS_PER_BLOCK));
-    unsigned long start_addr = 0;
-    unsigned int block_n_edges[2048];
-#pragma HLS bind_storage variable = block_n_edges type = RAM_T2P impl = BRAM
+  /* Resetting portion of memory dedicated to counters
+    * 1 << HASH1_W * HASH2_W is the number of counters needed
+    * for each table, then it should be divided by the number
+    * of counters stored in each row which is 1 << (ROW_LOG - CNT_LOG)*/
+  constexpr size_t COUNTERS_PER_BLOCK = 14;
+  const unsigned long htb_size =
+    (1UL << ((hash1_w-1) + hash2_w - (DDR_BIT - COUNTER_WIDTH))); // changed to h1-1!!!
+  const unsigned int block_per_table =
+    (1UL << ((hash1_w-1) + hash2_w - COUNTERS_PER_BLOCK)); // changed to h1-1!!!
+  unsigned long start_addr = 0;
+  unsigned int block_n_edges[2048]; // size halfed
+  unsigned int block_n_edges_1[2048]; // size halfed
+  #pragma HLS bind_storage variable = block_n_edges type = RAM_T2P impl = BRAM
+  #pragma HLS bind_storage variable = block_n_edges_1 type = RAM_T2P impl = BRAM
 
-#ifndef __SYNTHESIS__
-    unsigned long end_addr = numTables * htb_size;
-#endif
+  #ifndef __SYNTHESIS__
+  unsigned long end_addr = numTables * htb_size;
+  #endif
 
-STORE_HASHTABLES_POINTER_LOOP:
-    for (unsigned int ntb = 0; ntb < numTables; ntb++){
-        hTables0[ntb].start_offset = start_addr;
-        start_addr += htb_size;
-    }
+  STORE_HASHTABLES_POINTER_LOOP_0:
+  for (unsigned int ntb = 0; ntb < numTables; ntb++){
+      hTables0[ntb].start_offset = start_addr;
+      start_addr += htb_size;
+  }
+  start_addr = 0;
+  STORE_HASHTABLES_POINTER_LOOP_1:
+  for (unsigned int ntb = 0; ntb < numTables; ntb++){
+      hTables0_1[ntb].start_offset = start_addr;
+      start_addr += htb_size;
+  }
+
+  unsigned long start_addr2 = start_addr;
     
-INITIALIZE_BRAM_LOOP:
-    for (auto g = 0; g < numTables * block_per_table; g++) {
-#pragma HLS pipeline II = 1
-        block_n_edges[g] = 0;
-    }
+  INITIALIZE_BRAM_LOOP_0:
+  for (auto g = 0; g < numTables * block_per_table; g++) {
+      #pragma HLS pipeline II = 1
+      block_n_edges[g] = 0;
+  }
+  INITIALIZE_BRAM_LOOP_1:
+  for (auto g = 0; g < numTables * block_per_table; g++) {
+      #pragma HLS pipeline II = 1
+      block_n_edges_1[g] = 0;
+  }
 
-    countEdgesPerBlockWrap<NODE_W, LAB_W, LKP3_HASH_W, MAX_HASH_W, MAX_LABELS>(
-      &edge_buf[dynfifo_space],
-      hash1_w,
-      hash2_w,
-      labelToTable,
-      numDataEdges,
-      block_n_edges);
+  countEdgesPerBlockWrap<NODE_W, LAB_W, LKP3_HASH_W, MAX_HASH_W, MAX_LABELS>(
+    &edge_buf[dynfifo_space],
+    hash1_w,
+    hash2_w,
+    labelToTable,
+    numDataEdges,
+    block_n_edges,
+    block_n_edges_1);
 
-    auto base_addr = 0;
-COUNTER_TO_OFFSET_BLOCK_LOOP:
-    for (auto g = 0; g < numTables * block_per_table; g++) {
-#pragma HLS pipeline II = 1
-        auto data = block_n_edges[g];
-        block_n_edges[g] = base_addr;
-        base_addr += data;
-    }
+  // convert block counters to block data offsets
+  auto base_addr = 0;
+  COUNTER_TO_OFFSET_BLOCK_LOOP_0:
+  for (auto g = 0; g < numTables * block_per_table; g++) {
+    #pragma HLS pipeline II = 1
+    auto data = block_n_edges[g];
+    block_n_edges[g] = base_addr;
+    base_addr += data;
+  }
+  base_addr = 0;
+  COUNTER_TO_OFFSET_BLOCK_LOOP_1:
+  for (auto g = 0; g < numTables * block_per_table; g++) {
+    #pragma HLS pipeline II = 1
+    auto data = block_n_edges_1[g];
+    block_n_edges_1[g] = base_addr;
+    base_addr += data;
+  }
 
-    storeEdgePerBlockWrap<NODE_W, LAB_W, LKP3_HASH_W, MAX_HASH_W, MAX_LABELS>(
-      &edge_buf[dynfifo_space],
-      bloom_p,
-      hash1_w,
-      hash2_w,
-      labelToTable,
-      numDataEdges,
-      block_n_edges);
+  storeEdgePerBlockWrap<NODE_W, LAB_W, LKP3_HASH_W, MAX_HASH_W, MAX_LABELS>(
+    &edge_buf[dynfifo_space],
+    bloom_p,
+    bloom_p_1,
+    hash1_w,
+    hash2_w,
+    labelToTable,
+    numDataEdges,
+    block_n_edges,
+    block_n_edges_1);
     
+  start_addr = (start_addr2 + (1UL << CACHE_WORDS_PER_LINE)) &
+                ~((1UL << CACHE_WORDS_PER_LINE) - 1);
+  unsigned int prev_offset = 0;
+
+  STORE_EDGES_POINTER_LOOP:
+  for (unsigned short ntb = 0; ntb < numTables; ntb++) {
+    hTables0[ntb].start_edges = start_addr;
+    unsigned int offset = block_n_edges[((ntb + 1) * block_per_table) - 1];
+    hTables0[ntb].n_edges = offset - prev_offset;
+    prev_offset = offset;
+    start_addr += (hTables0[ntb].n_edges >> (ROW_LOG - EDGE_LOG)) + 1;
     start_addr = (start_addr + (1UL << CACHE_WORDS_PER_LINE)) &
-                 ~((1UL << CACHE_WORDS_PER_LINE) - 1);
-    unsigned int prev_offset = 0;
-STORE_EDGES_POINTER_LOOP:
-    for (unsigned short ntb = 0; ntb < numTables; ntb++) {
-        hTables0[ntb].start_edges = start_addr;
-        unsigned int offset = block_n_edges[((ntb + 1) * block_per_table) - 1];
-        hTables0[ntb].n_edges = offset - prev_offset;
-        prev_offset = offset;
-        start_addr += (hTables0[ntb].n_edges >> (ROW_LOG - EDGE_LOG)) + 1;
-        start_addr = (start_addr + (1UL << CACHE_WORDS_PER_LINE)) &
-                     ~((1UL << CACHE_WORDS_PER_LINE) - 1);
-#ifndef __SYNTHESIS__
-        assert(start_addr < HTB_SPACE);
-#endif
-        hTables1[ntb].start_offset = hTables0[ntb].start_offset;
-        hTables1[ntb].start_edges = hTables0[ntb].start_edges;
-        hTables1[ntb].n_edges = hTables0[ntb].n_edges;
-    }
-STORE_EDGES_POINTER_LOOP_P2:
-    for (unsigned short ntb = 0; ntb < numTables; ntb++) {
-        hTables0_1[ntb].start_offset = hTables0[ntb].start_offset;
-        hTables1_1[ntb].start_offset = hTables1[ntb].start_offset;
-        hTables0_1[ntb].start_edges = hTables0[ntb].start_edges;
-        hTables1_1[ntb].start_edges = hTables1[ntb].start_edges;
-        hTables0_1[ntb].n_edges = hTables0[ntb].n_edges;
-        hTables1_1[ntb].n_edges = hTables1[ntb].n_edges;
-    }
+                  ~((1UL << CACHE_WORDS_PER_LINE) - 1);
+    #ifndef __SYNTHESIS__
+      assert(start_addr < HTB_SPACE);
+    #endif
+    hTables1[ntb].start_offset = hTables0[ntb].start_offset;
+    hTables1[ntb].start_edges = hTables0[ntb].start_edges;
+    hTables1[ntb].n_edges = hTables0[ntb].n_edges;
+  }
+  unsigned long start_addr3_0 = start_addr;
 
-    blockToHTB<NODE_W,
-               ROW_LOG,
-               EDGE_LOG,
-               LAB_W,
-               LKP3_HASH_W,
-               MAX_HASH_W,
-               MAX_LABELS>(
-      bloom_p, htb_buf, hTables0, hash1_w, hash2_w, numTables, block_n_edges);
 
-    writeBloom<T_DDR,
-               T_BLOOM,
-               CNT_LOG,
-               ROW_LOG,
-               NODE_W,
-               EDGE_LOG,
-               LKP3_HASH_W,
-               MAX_HASH_W,
-               FULL_HASH_W,
-               BLOOM_LOG,
-               K_FUN_LOG,
-               STREAM_D>(bloom_p, htb_buf, hTables0, numTables, hash1_w);
+  start_addr = (start_addr2 + (1UL << CACHE_WORDS_PER_LINE)) &
+                  ~((1UL << CACHE_WORDS_PER_LINE) - 1);
+  prev_offset = 0;
 
-    mwj_batch<LKP3_HASH_W,
-              MAX_HASH_W,
-              FULL_HASH_W,
+  STORE_EDGES_POINTER_LOOP_P2:
+  for (unsigned short ntb = 0; ntb < numTables; ntb++) {
+    hTables0_1[ntb].start_edges = start_addr;
+    unsigned int offset = block_n_edges[((ntb + 1) * block_per_table) - 1];
+    hTables0_1[ntb].n_edges = offset - prev_offset;
+    prev_offset = offset;
+    start_addr += (hTables0_1[ntb].n_edges >> (ROW_LOG - EDGE_LOG)) + 1;
+    start_addr = (start_addr + (1UL << CACHE_WORDS_PER_LINE)) &
+                  ~((1UL << CACHE_WORDS_PER_LINE) - 1);
+    #ifndef __SYNTHESIS__
+      assert(start_addr < HTB_SPACE);
+    #endif
+    hTables1_1[ntb].start_offset = hTables0_1[ntb].start_offset;
+    hTables1_1[ntb].start_edges = hTables0_1[ntb].start_edges;
+    hTables1_1[ntb].n_edges = hTables0_1[ntb].n_edges;
+  }
+  std::cout << "fino a qua ci arrivo" << std::endl;
+
+/*
+for (unsigned short ntb = 0; ntb < numTables; ntb++) {
+    hTables0_1[ntb].start_offset = hTables0[ntb].start_offset;
+    hTables1_1[ntb].start_offset = hTables1[ntb].start_offset;
+    hTables0_1[ntb].start_edges = hTables0[ntb].start_edges;
+    hTables1_1[ntb].start_edges = hTables1[ntb].start_edges;
+    hTables0_1[ntb].n_edges = hTables0[ntb].n_edges;
+    hTables1_1[ntb].n_edges = hTables1[ntb].n_edges;
+}
+*/
+
+blockToHTB<NODE_W,
+            ROW_LOG,
+            EDGE_LOG,
+            LAB_W,
+            LKP3_HASH_W,
+            MAX_HASH_W,
+            MAX_LABELS>(
+  bloom_p, htb_buf, hTables0, hash1_w, hash2_w, numTables, block_n_edges);
+
+
+blockToHTB<NODE_W,
+            ROW_LOG,
+            EDGE_LOG,
+            LAB_W,
+            LKP3_HASH_W,
+            MAX_HASH_W,
+            MAX_LABELS>(
+  bloom_p_1, htb_buf1, hTables0_1, hash1_w, hash2_w, numTables, block_n_edges_1);
+  std::cout << "BLOCKTOHTB passed!" << std::endl;
+
+writeBloom<T_DDR,
+              T_BLOOM,
+              CNT_LOG,
+              ROW_LOG,
               NODE_W,
               EDGE_LOG,
+              LKP3_HASH_W,
+              MAX_HASH_W,
+              FULL_HASH_W,
+              BLOOM_LOG,
+              K_FUN_LOG,
+              STREAM_D>(bloom_p, htb_buf, hTables0, numTables, hash1_w);
+writeBloom<T_DDR,
+              T_BLOOM,
+              CNT_LOG,
               ROW_LOG,
-              MAX_CL>(
-      hash1_w, n_candidate, start_addr, hTables0, qVertices, htb_buf);
+              NODE_W,
+              EDGE_LOG,
+              LKP3_HASH_W,
+              MAX_HASH_W,
+              FULL_HASH_W,
+              BLOOM_LOG,
+              K_FUN_LOG,
+              STREAM_D>(bloom_p_1, htb_buf1, hTables0_1, numTables, hash1_w);
+std::cout << "bloom write succ!" << std::endl;
+mwj_batch<LKP3_HASH_W,
+          MAX_HASH_W,
+          FULL_HASH_W,
+          NODE_W,
+          EDGE_LOG,
+          ROW_LOG,
+          MAX_CL>(
+  hash1_w, n_candidate, start_addr3_0, hTables0, qVertices, htb_buf);
+unsigned int prec_ncand = n_candidate;
+unsigned int start_addr3_1 = start_addr3_0 + n_candidate;
 
-    start_candidate = start_addr;
+mwj_batch<LKP3_HASH_W,
+          MAX_HASH_W,
+          FULL_HASH_W,
+          NODE_W,
+          EDGE_LOG,
+          ROW_LOG,
+          MAX_CL>(
+  hash1_w, n_candidate, start_addr3_1, hTables0_1, qVertices, htb_buf1);
+
+n_candidate = n_candidate + prec_ncand;
+start_candidate = start_addr3_0;
+
 #ifndef __SYNTHESIS__
     end_addr = start_addr * (1UL << (ROW_LOG - 3)) + ((numTables * ((1 << hash1_w) + 1)) << (BLOOM_LOG - 3));
     std::cout << "Occupied " << end_addr << " bytes, " << 
@@ -1389,7 +1520,9 @@ template<typename T_DDR,
 void
 preprocess(row_t* edge_buf,
            T_DDR* htb_buf,
+           T_DDR* htb_buf1,
            T_DDR* bloom_p,
+           T_DDR* bloom_p_1,
            QueryVertex* qVertices,
            AdjHT* hTables0,
            AdjHT* hTables0_1,
@@ -1441,7 +1574,9 @@ INITIALIZE_LABELTOTABLE_LOOP:
                    MAX_LABELS,
                    MAX_CL>(edge_buf,
                                htb_buf,
+                               htb_buf1,
                                bloom_p,
+                               bloom_p_1,
                                qVertices,
                                hTables0,
                                hTables0_1,
@@ -1455,6 +1590,9 @@ INITIALIZE_LABELTOTABLE_LOOP:
                                numTables,
                                hash1_w,
                                hash2_w);
+    #ifndef __SYNTHESIS__
+    std::cout << "debug: Preprocess DONE" << std::endl;
+    #endif
 
 }
 

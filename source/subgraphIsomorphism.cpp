@@ -397,7 +397,7 @@ EDGEBUILD_TASK_LOOP:
         curEmb[iv_pos], hash_out);
       hash_trimmed = hash_out;
       hash_trimmed = hash_trimmed.range(hash1_w - 1, 0);
-      unsigned int address = (tb_index * (1UL << hash1_w)) + hash_trimmed;
+      unsigned int address = (tb_index * (1UL << (hash1_w-1) )) + hash_trimmed;
       tuple_out.indexing_v = curEmb[iv_pos];
       tuple_out.iv_pos = iv_pos;
       tuple_out.tb_index = tb_index;
@@ -445,10 +445,11 @@ bloom_intersect(T_BLOOM& filter, T_BLOOM set_bloom)
 }
 
 /*** FINDMIN & SOL BYPASS ***/
-template<typename T_BLOOM, size_t BLOOM_LOG, size_t K_FUN_LOG>
+template<typename T_BLOOM, size_t BLOOM_LOG, size_t K_FUN_LOG, size_t LKP3_HASH_W>
 void
 mwj_findmin(const unsigned char hash1_w,
             bloom_t* bloom_p,
+            bloom_t* bloom_p_1,
             hls::stream<sol_node_t<vertex_t>>& stream_sol_in,
             hls::stream<findmin_tuple_t>& stream_tuple_in,
             hls::stream<sol_node_t<vertex_t>>& stream_sol_out,
@@ -497,11 +498,18 @@ FINDMIN_TASK_LOOP:
       address <<= K_FUN_LOG;
       unsigned short bloom_s = 0;
       
-      
+      ap_uint<LKP3_HASH_W> hash_out;
+      xf::database::details::hashlookup3_core<V_ID_W>(tuple_in.indexing_v, hash_out);
+			bool selch_bit = hash_out.test(hash1_w-1);
+
       /* set blooms */
       for (int s = 0; s < K_FUN; s++) {
         #pragma HLS unroll
-        T_BLOOM set_bloom = bloom_p[address + s];
+        T_BLOOM set_bloom = 0;
+        if(selch_bit)
+          set_bloom = bloom_p_1[address + s];
+        else
+          set_bloom = bloom_p[address + s];
         bloom_s += bloom_intersect<T_BLOOM, BLOOM_LOG>(filter[s], set_bloom);
       }  
       reqs_findmin++;
@@ -650,7 +658,7 @@ READMIN_COUNTER_TASK_LOOP:
     unsigned long addr_row;
     ap_uint<64> addr_counter;
     hash_trimmed = hash_out;
-    hash_trimmed = hash_trimmed.range(hash1_w - 1, 0);
+    hash_trimmed = hash_trimmed.range(hash1_w - 2, 0); // changed!
     
     if (hash_trimmed != 0) {
       addr_counter = hash_trimmed - 1;
@@ -926,8 +934,6 @@ mwj_homomorphism(
     } while (!set_in.last);
   }
 
-//std::cout << "HOMOMORPHISM stopped" << std::endl << std::flush;
-
 }
 
 void
@@ -945,56 +951,45 @@ mwj_merge_h(hls::stream<sequencebuild_set_t<ap_uint<V_ID_W>>>& stream_sol0_in,
                 /* read stream0 */
                 if(!stop0) {
                   if(stream_sol0_in.read_nb(h_sol)) { // non-blocking since this stream maybe empty
-                    //std::cout << "stream 0 : sol " << std::endl;
                     if(!h_sol.stop) stream_sol_out.write(h_sol);
                     while ((!h_sol.last)&&(!h_sol.stop)) {
                         h_sol = stream_sol0_in.read(); //blocking read until last is reached
                         stream_sol_out.write(h_sol);
-                        //std::cout << "stream 0 : sol " << std::endl;
                     }
                     if(!h_sol.stop) {
                       h_sol=stream_sol0_in.read();
                       stream_sol_out.write(h_sol);
-                      //std::cout << "stream 0 : min " << std::endl;
                     }
                     while ((!h_sol.last)&&(!h_sol.stop)) {
                         h_sol = stream_sol0_in.read(); //blocking read until last is reached
                         stream_sol_out.write(h_sol);
-                        //std::cout << "stream 0 : set " << std::endl;
                     }
                     stop0=h_sol.stop;
-                    //std::cout << "finish stream 0 " << h_sol.stop << std::endl;
                   }
                 }
                 
                 /* read stream1 */
                 if(!stop1) {
                   if(stream_sol1_in.read_nb(h_sol)) { // non-blocking since this stream maybe empty
-                    //std::cout << "stream 1 : sol " << std::endl;
                     if(!h_sol.stop) stream_sol_out.write(h_sol);
                     while ((!h_sol.last)&&(!h_sol.stop)) {
                         h_sol = stream_sol1_in.read(); //blocking read until last is reached
                         stream_sol_out.write(h_sol);
-                        //std::cout << "stream 1 : sol " << std::endl;
                     }
                     if(!h_sol.stop) {
                       h_sol=stream_sol1_in.read();
                       stream_sol_out.write(h_sol);
-                      //std::cout << "stream 1 : min " << std::endl;
                     }
                     while ((!h_sol.last)&&(!h_sol.stop)) {
                         h_sol = stream_sol1_in.read(); //blocking read until last is reached
                         stream_sol_out.write(h_sol);
-                        //std::cout << "stream 1 : set " << std::endl;
                     }
                     stop1=h_sol.stop;
-                    //std::cout << "finish stream 1 " << h_sol.stop << std::endl;
                   }
                 }
                 
                 /* end task for both stop node at input */
                 if(stop0&&stop1) {
-                //if(stop1) {
                   break;
                 }
               }
@@ -1188,7 +1183,7 @@ mwj_tuplebuild(
         ap_uint<MAX_HASH_W> indexed_h = hash_out0.read();
         ap_uint<MAX_HASH_W> indexing_h = hash_out1.read();
 
-        addr_counter = indexing_h.range(hash1_w - 1, 0);
+        addr_counter = indexing_h.range(hash1_w - 2, 0); // changed
         addr_counter <<= hash2_w;
         addr_counter += indexed_h.range(hash2_w - 1, 0);
 
@@ -1790,6 +1785,8 @@ mwj_assembly(row_t* m_axi,
   ap_uint<32> nodes_read = 0;
   bool stop = false;
 
+  std::cout << "n candidates : " << (int)n_candidate << std::endl;
+
 ASSEMBLY_TASK_LOOP:
   do {
     // Test if there are some node from start batch
@@ -1907,6 +1904,7 @@ multiwayJoin(ap_uint<DDR_W>* htb_buf0_0,
              ap_uint<DDR_W>* htb_buf3_0,
              ap_uint<DDR_W>* htb_buf3_1,
              T_BLOOM* bloom_p,
+             T_BLOOM* bloom_p_1,
              row_t* res_buf,
              AdjHT* hTables0_0,
              AdjHT* hTables0_1,
@@ -1931,6 +1929,7 @@ multiwayJoin(ap_uint<DDR_W>* htb_buf0_0,
 #pragma HLS STABLE variable=htb_buf3_0
 #pragma HLS STABLE variable=htb_buf3_1
 #pragma HLS STABLE variable=bloom_p
+#pragma HLS STABLE variable=bloom_p_1
 #pragma HLS STABLE variable=hTables0_0
 #pragma HLS STABLE variable=hTables0_1
 #pragma HLS STABLE variable=hTables1_0
@@ -2171,8 +2170,9 @@ multiwayJoin(ap_uint<DDR_W>* htb_buf0_0,
                                        e_stream_tuple,
                                        e_stream_sol);
 
-    mwj_findmin<T_BLOOM, BLOOM_LOG, K_FUN_LOG>(hash1_w,
+    mwj_findmin<T_BLOOM, BLOOM_LOG, K_FUN_LOG,LKP3_HASH_W>(hash1_w,
                                                bloom_p,
+                                               bloom_p_1,
                                                e_stream_sol,
                                                e_stream_tuple,
                                                fch_stream_sol,
@@ -2291,9 +2291,10 @@ multiwayJoin(ap_uint<DDR_W>* htb_buf0_0,
                                 std::ref(e_stream_tuple),
                                 std::ref(e_stream_sol));
 
-    std::thread mwj_findmin_t(mwj_findmin<T_BLOOM, BLOOM_LOG, K_FUN_LOG>,
+    std::thread mwj_findmin_t(mwj_findmin<T_BLOOM, BLOOM_LOG, K_FUN_LOG, LKP3_HASH_W>,
                               hash1_w,
                               bloom_p,
+                              bloom_p_1,
                               std::ref(e_stream_sol),
                               std::ref(e_stream_tuple),
                               std::ref(fch_stream_sol),
@@ -2440,6 +2441,7 @@ void subgraphIsomorphism(row_t htb_buf0_0[HASHTABLES_SPACE],
                          row_t htb_buf3_0[HASHTABLES_SPACE],
                          row_t htb_buf3_1[HASHTABLES_SPACE],
                          row_t bloom_p[BLOOM_SPACE],
+                         row_t bloom_p_1[BLOOM_SPACE],
                          row_t res_buf[RESULTS_SPACE],
                          const unsigned short numQueryVert,
                          const unsigned char hash1_w,
@@ -2519,6 +2521,8 @@ void subgraphIsomorphism(row_t htb_buf0_0[HASHTABLES_SPACE],
     latency=1
 #pragma HLS INTERFACE mode=m_axi port=bloom_p bundle=bloom \
     max_widen_bitwidth=128 latency=20
+#pragma HLS INTERFACE mode=m_axi port=bloom_p_1 bundle=bloom_1 \
+    max_widen_bitwidth=128 latency=20
 
 #pragma HLS alias ports = htb_buf0_0,htb_buf0_1,htb_buf1_0,htb_buf1_1,htb_buf2_0,htb_buf2_1,htb_buf3_0,htb_buf3_1 distance = 0
 
@@ -2591,6 +2595,7 @@ void subgraphIsomorphism(row_t htb_buf0_0[HASHTABLES_SPACE],
                    htb_buf3_0,
                    htb_buf3_1,
                    bloom_p,
+                   bloom_p_1,
                    res_buf,
                    hTables0_0,
                    hTables0_1,
@@ -2653,6 +2658,7 @@ void subgraphIsomorphism(row_t htb_buf0_0[HASHTABLES_SPACE],
                          row_t htb_buf3_0[HASHTABLES_SPACE],
                          row_t htb_buf3_1[HASHTABLES_SPACE],
                          row_t bloom_p[BLOOM_SPACE],
+                         row_t bloom_p_1[BLOOM_SPACE],
                          row_t res_buf[RESULTS_SPACE],
                          const unsigned short numQueryVert,
                          const unsigned short numQueryEdges,
@@ -2723,6 +2729,8 @@ void subgraphIsomorphism(row_t htb_buf0_0[HASHTABLES_SPACE],
     max_widen_bitwidth=128 max_read_burst_length=32 max_write_burst_length=32 \
     latency=0
 #pragma HLS INTERFACE mode=m_axi port=bloom_p bundle=bloom \
+    max_widen_bitwidth=128 latency=20
+#pragma HLS INTERFACE mode=m_axi port=bloom_p_1 bundle=bloom_1 \
     max_widen_bitwidth=128 latency=20
 
 #pragma HLS alias ports=htb_buf0_0,htb_buf0_1,htb_buf1_0,htb_buf1_1,htb_buf2_0,htb_buf2_1,htb_buf3_0,htb_buf3_1 distance=0
@@ -2803,7 +2811,9 @@ void subgraphIsomorphism(row_t htb_buf0_0[HASHTABLES_SPACE],
                MAX_TABLES,
                MAX_COLLISIONS>(res_buf,
                                htb_buf0_0,
+                               htb_buf0_1,
                                bloom_p,
+                               bloom_p_1,
                                qVertices,
                                hTables0_0,
                                hTables0_1,
@@ -2838,6 +2848,7 @@ void subgraphIsomorphism(row_t htb_buf0_0[HASHTABLES_SPACE],
                      htb_buf3_0,
                      htb_buf3_1,
                      bloom_p,
+                     bloom_p_1,
                      res_buf,
                      hTables0_0,
                      hTables0_1,
