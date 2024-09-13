@@ -396,7 +396,7 @@ EDGEBUILD_TASK_LOOP:
       xf::database::details::hashlookup3_core<V_ID_W>(
         curEmb[iv_pos], hash_out);
       hash_trimmed = hash_out;
-      hash_trimmed = hash_trimmed.range(hash1_w - 1, 0);
+      hash_trimmed = hash_trimmed.range(hash1_w - 2, 0); // edited
       unsigned int address = (tb_index * (1UL << (hash1_w-1) )) + hash_trimmed;
       tuple_out.indexing_v = curEmb[iv_pos];
       tuple_out.iv_pos = iv_pos;

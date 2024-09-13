@@ -1305,15 +1305,17 @@ fillTablesURAM(row_t* edge_buf,
   STORE_HASHTABLES_POINTER_LOOP_0:
   for (unsigned int ntb = 0; ntb < numTables; ntb++){
       hTables0[ntb].start_offset = start_addr;
+      hTables0_1[ntb].start_offset = start_addr;
       start_addr += htb_size;
   }
+  /*
   start_addr = 0;
   STORE_HASHTABLES_POINTER_LOOP_1:
   for (unsigned int ntb = 0; ntb < numTables; ntb++){
       hTables0_1[ntb].start_offset = start_addr;
       start_addr += htb_size;
   }
-
+  */
   unsigned long start_addr2 = start_addr;
     
   INITIALIZE_BRAM_LOOP_0:
@@ -1408,18 +1410,6 @@ fillTablesURAM(row_t* edge_buf,
     hTables1_1[ntb].start_edges = hTables0_1[ntb].start_edges;
     hTables1_1[ntb].n_edges = hTables0_1[ntb].n_edges;
   }
-  std::cout << "fino a qua ci arrivo" << std::endl;
-
-/*
-for (unsigned short ntb = 0; ntb < numTables; ntb++) {
-    hTables0_1[ntb].start_offset = hTables0[ntb].start_offset;
-    hTables1_1[ntb].start_offset = hTables1[ntb].start_offset;
-    hTables0_1[ntb].start_edges = hTables0[ntb].start_edges;
-    hTables1_1[ntb].start_edges = hTables1[ntb].start_edges;
-    hTables0_1[ntb].n_edges = hTables0[ntb].n_edges;
-    hTables1_1[ntb].n_edges = hTables1[ntb].n_edges;
-}
-*/
 
 blockToHTB<NODE_W,
             ROW_LOG,
