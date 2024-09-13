@@ -529,9 +529,9 @@ COUNT_EDGES_PER_BLOCK_LOOP:
           local_value_counter[selch]++;
         } else {
           if(selch==1)
-            local_value_counter[selch] = block_n_edges_1[address];
+            local_value_counter[1] = block_n_edges_1[address];
           else
-            local_value_counter[selch] = block_n_edges[address];
+            local_value_counter[0] = block_n_edges[address];
           local_value_counter[selch]++;
         }
 
@@ -653,13 +653,13 @@ STORE_EDGE_PER_BLOCK_LOOP:
         row_t table_edge0;
         table_edge0.range(31, 0) = nodesrc;
         table_edge0.range(63, 32) = nodedst;
-        table_edge0.range(95, 64) = hashsrc;
+        table_edge0.range(95, 64) = hashsrc.range(hash1_w - 2, 0); // edited
         table_edge0.range(127, 96) = hashdst.range(hash2_w - 1, 0);
 
         row_t table_edge1;
         table_edge1.range(31, 0) = nodedst;
         table_edge1.range(63, 32) = nodesrc;
-        table_edge1.range(95, 64) = hashdst;
+        table_edge1.range(95, 64) = hashdst.range(hash1_w - 2, 0); // edited
         table_edge1.range(127, 96) = hashsrc.range(hash2_w - 1, 0);
 
         /* This useless if is to explain to Vitis HLS 2022.2 that two write in
@@ -1160,7 +1160,8 @@ mwj_batch(const unsigned char hash1_w,
           const unsigned int start_address,
           AdjHT* hTables,
           QueryVertex* qVertices,
-          row_t* htb_buf)
+          row_t* htb_buf_r,
+          row_t* htb_buf_w)
 {
   ap_uint<8> tableIndex = 0;
   ap_uint<32> minSize = (1UL << 32) - 1;
@@ -1195,7 +1196,7 @@ PROPOSE_TBINDEXING_LOOP:
 
 PROPOSE_READ_MIN_INDEXING_LOOP:
   for (unsigned int g = 0; g <= rowend - rowstart; g++) {
-    row_t row = htb_buf[rowstart + g];
+    row_t row = htb_buf_r[rowstart + g];
     for (unsigned int i = 0; i < EDGE_ROW; i++, cnt++) {
 #pragma HLS unroll
       if (cnt < window_right) {
@@ -1228,7 +1229,7 @@ PROPOSE_READ_MIN_INDEXING_LOOP:
 #if DEBUG_STATS
           debug::start_set++;
 #endif
-          htb_buf[address++] = vertex;
+          htb_buf_w[address++] = vertex;
           n_candidate++;
         }
 
@@ -1456,6 +1457,9 @@ writeBloom<T_DDR,
               K_FUN_LOG,
               STREAM_D>(bloom_p_1, htb_buf1, hTables0_1, numTables, hash1_w);
 std::cout << "bloom write succ!" << std::endl;
+
+// store starting candidates part 0
+unsigned int n_candidate0 = 0;
 mwj_batch<LKP3_HASH_W,
           MAX_HASH_W,
           FULL_HASH_W,
@@ -1463,10 +1467,10 @@ mwj_batch<LKP3_HASH_W,
           EDGE_LOG,
           ROW_LOG,
           MAX_CL>(
-  hash1_w, n_candidate, start_addr3_0, hTables0, qVertices, htb_buf);
-unsigned int prec_ncand = n_candidate;
-unsigned int start_addr3_1 = start_addr3_0 + n_candidate;
-
+  hash1_w, n_candidate0, start_addr3_0, hTables0, qVertices, htb_buf, htb_buf);
+// store starting candidates part 0
+unsigned int start_addr3_1 = start_addr3_0 + n_candidate0;
+unsigned int n_candidate1 = 0;
 mwj_batch<LKP3_HASH_W,
           MAX_HASH_W,
           FULL_HASH_W,
@@ -1474,9 +1478,9 @@ mwj_batch<LKP3_HASH_W,
           EDGE_LOG,
           ROW_LOG,
           MAX_CL>(
-  hash1_w, n_candidate, start_addr3_1, hTables0_1, qVertices, htb_buf1);
-
-n_candidate = n_candidate + prec_ncand;
+  hash1_w, n_candidate1, start_addr3_1, hTables0_1, qVertices, htb_buf1, htb_buf);
+// store starting candidates join
+n_candidate = n_candidate0 + n_candidate1;
 start_candidate = start_addr3_0;
 
 #ifndef __SYNTHESIS__
