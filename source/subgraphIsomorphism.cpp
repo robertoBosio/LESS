@@ -1200,7 +1200,11 @@ mwj_tuplebuild(
 
         // HASH DIVIDING!!!
         bool selch = indexing_h.range(hash1_w-1,hash1_w-2);
-        
+
+        // DEBUG COUNTERS h3 h4
+        if(selch) hmsb3++;
+        else hmsb2++;
+
         // FIST TUPLE
         if(tuple_out.last_set) {
           tuple_out.pos = 0;
@@ -2524,7 +2528,8 @@ void subgraphIsomorphism(row_t htb_buf0_0[HASHTABLES_SPACE],
 #pragma HLS INTERFACE mode=m_axi port=bloom_p_1 bundle=bloom_1 \
     max_widen_bitwidth=128 latency=20
 
-#pragma HLS alias ports = htb_buf0_0,htb_buf0_1,htb_buf1_0,htb_buf1_1,htb_buf2_0,htb_buf2_1,htb_buf3_0,htb_buf3_1 distance = 0
+#pragma HLS alias ports = htb_buf0_0,htb_buf1_0,htb_buf2_0,htb_buf3_0 distance = 0
+#pragma HLS alias ports = htb_buf0_1,htb_buf1_1,htb_buf2_1,htb_buf3_1 distance = 0
 
 #pragma HLS INTERFACE mode = s_axilite port = numQueryVert
 #pragma HLS INTERFACE mode = s_axilite port = hash1_w

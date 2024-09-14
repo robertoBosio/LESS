@@ -837,8 +837,8 @@ blockToHTB(row_t* edge_buf,
   constexpr size_t IXD_HASH = 96;
   const unsigned int block_per_table =
     (1UL << (hash1_w-1 + hash2_w - COUNTERS_PER_BLOCK));
-  ap_uint<64> block_counter0[4096];
-  ap_uint<64> block_counter1[4096];
+  ap_uint<64> block_counter0[2048];
+  ap_uint<64> block_counter1[2048];
   #pragma HLS bind_storage variable=block_counter0 type=RAM_2P impl=URAM
   #pragma HLS bind_storage variable=block_counter1 type=RAM_2P impl=URAM
 
@@ -1037,7 +1037,7 @@ storeEdgesHTB(row_t* edge_buf,
               const unsigned char hash1_w,
               const unsigned char hash2_w,
               const unsigned int numTables,
-              const unsigned int block_n_edges[2048])
+              const unsigned int block_n_edges[1024]) // changed
 {
     constexpr size_t OFFSETS_PER_BLOCK = 13; // changed
     constexpr size_t IXG_NODE = 0;
@@ -1045,8 +1045,8 @@ storeEdgesHTB(row_t* edge_buf,
     constexpr size_t IXG_HASH = 64;
     constexpr size_t IXD_HASH = 96;
     const unsigned int block_per_table = (1UL << (hash1_w-1 + hash2_w - OFFSETS_PER_BLOCK));
-    ap_uint<64> block_offset0[4096];
-    ap_uint<64> block_offset1[4096];
+    ap_uint<64> block_offset0[2048];
+    ap_uint<64> block_offset1[2048];
 #pragma HLS bind_storage variable=block_offset0 type=RAM_2P impl=URAM
 #pragma HLS bind_storage variable=block_offset1 type=RAM_2P impl=URAM
 
@@ -1205,7 +1205,7 @@ PROPOSE_READ_MIN_INDEXING_LOOP:
         ap_uint<LKP3_HASH_W> hash_out;
         xf::database::details::hashlookup3_core<NODE_W>(vertex, hash_out);
         hash_new = hash_out.range(MAX_HASH_W - 1, 0);
-        hash_new = hash_new.range(hash1_w - 2, 0);
+        hash_new = hash_new.range(hash1_w - 2, 0); // changed
 
         if (flag_buff && hash_buff == hash_new) {
           flag_new = true;
@@ -1294,8 +1294,8 @@ fillTablesURAM(row_t* edge_buf,
   const unsigned int block_per_table =
     (1UL << ((hash1_w-1) + hash2_w - COUNTERS_PER_BLOCK)); // changed to h1-1!!!
   unsigned long start_addr = 0;
-  unsigned int block_n_edges[2048]; // size halfed
-  unsigned int block_n_edges_1[2048]; // size halfed
+  unsigned int block_n_edges[1024]; // size halfed
+  unsigned int block_n_edges_1[1024]; // size halfed
   #pragma HLS bind_storage variable = block_n_edges type = RAM_T2P impl = BRAM
   #pragma HLS bind_storage variable = block_n_edges_1 type = RAM_T2P impl = BRAM
 
@@ -1303,30 +1303,17 @@ fillTablesURAM(row_t* edge_buf,
   unsigned long end_addr = numTables * htb_size;
   #endif
 
-  STORE_HASHTABLES_POINTER_LOOP_0:
+  STORE_HASHTABLES_POINTER_LOOP:
   for (unsigned int ntb = 0; ntb < numTables; ntb++){
       hTables0[ntb].start_offset = start_addr;
       hTables0_1[ntb].start_offset = start_addr;
       start_addr += htb_size;
   }
-  /*
-  start_addr = 0;
-  STORE_HASHTABLES_POINTER_LOOP_1:
-  for (unsigned int ntb = 0; ntb < numTables; ntb++){
-      hTables0_1[ntb].start_offset = start_addr;
-      start_addr += htb_size;
-  }
-  */
-  unsigned long start_addr2 = start_addr;
     
-  INITIALIZE_BRAM_LOOP_0:
+  INITIALIZE_BRAM_LOOP:
   for (auto g = 0; g < numTables * block_per_table; g++) {
       #pragma HLS pipeline II = 1
       block_n_edges[g] = 0;
-  }
-  INITIALIZE_BRAM_LOOP_1:
-  for (auto g = 0; g < numTables * block_per_table; g++) {
-      #pragma HLS pipeline II = 1
       block_n_edges_1[g] = 0;
   }
 
@@ -1368,6 +1355,8 @@ fillTablesURAM(row_t* edge_buf,
     block_n_edges,
     block_n_edges_1);
     
+  unsigned long start_addr2 = start_addr;
+  
   start_addr = (start_addr2 + (1UL << CACHE_WORDS_PER_LINE)) &
                 ~((1UL << CACHE_WORDS_PER_LINE) - 1);
   unsigned int prev_offset = 0;
@@ -1412,86 +1401,87 @@ fillTablesURAM(row_t* edge_buf,
     hTables1_1[ntb].n_edges = hTables0_1[ntb].n_edges;
   }
 
-blockToHTB<NODE_W,
-            ROW_LOG,
-            EDGE_LOG,
-            LAB_W,
-            LKP3_HASH_W,
-            MAX_HASH_W,
-            MAX_LABELS>(
-  bloom_p, htb_buf, hTables0, hash1_w, hash2_w, numTables, block_n_edges);
-
-
-blockToHTB<NODE_W,
-            ROW_LOG,
-            EDGE_LOG,
-            LAB_W,
-            LKP3_HASH_W,
-            MAX_HASH_W,
-            MAX_LABELS>(
-  bloom_p_1, htb_buf1, hTables0_1, hash1_w, hash2_w, numTables, block_n_edges_1);
-  std::cout << "BLOCKTOHTB passed!" << std::endl;
-
-writeBloom<T_DDR,
-              T_BLOOM,
-              CNT_LOG,
+  blockToHTB<NODE_W,
               ROW_LOG,
-              NODE_W,
               EDGE_LOG,
+              LAB_W,
               LKP3_HASH_W,
               MAX_HASH_W,
-              FULL_HASH_W,
-              BLOOM_LOG,
-              K_FUN_LOG,
-              STREAM_D>(bloom_p, htb_buf, hTables0, numTables, hash1_w);
-writeBloom<T_DDR,
-              T_BLOOM,
-              CNT_LOG,
+              MAX_LABELS>(
+    bloom_p, htb_buf, hTables0, hash1_w, hash2_w, numTables, block_n_edges);
+
+
+  blockToHTB<NODE_W,
               ROW_LOG,
-              NODE_W,
               EDGE_LOG,
+              LAB_W,
               LKP3_HASH_W,
               MAX_HASH_W,
-              FULL_HASH_W,
-              BLOOM_LOG,
-              K_FUN_LOG,
-              STREAM_D>(bloom_p_1, htb_buf1, hTables0_1, numTables, hash1_w);
-std::cout << "bloom write succ!" << std::endl;
+              MAX_LABELS>(
+    bloom_p_1, htb_buf1, hTables0_1, hash1_w, hash2_w, numTables, block_n_edges_1);
 
-// store starting candidates part 0
-unsigned int n_candidate0 = 0;
-mwj_batch<LKP3_HASH_W,
-          MAX_HASH_W,
-          FULL_HASH_W,
-          NODE_W,
-          EDGE_LOG,
-          ROW_LOG,
-          MAX_CL>(
-  hash1_w, n_candidate0, start_addr3_0, hTables0, qVertices, htb_buf, htb_buf);
-// store starting candidates part 0
-unsigned int start_addr3_1 = start_addr3_0 + n_candidate0;
-unsigned int n_candidate1 = 0;
-mwj_batch<LKP3_HASH_W,
-          MAX_HASH_W,
-          FULL_HASH_W,
-          NODE_W,
-          EDGE_LOG,
-          ROW_LOG,
-          MAX_CL>(
-  hash1_w, n_candidate1, start_addr3_1, hTables0_1, qVertices, htb_buf1, htb_buf);
-// store starting candidates join
-n_candidate = n_candidate0 + n_candidate1;
-start_candidate = start_addr3_0;
+  writeBloom<T_DDR,
+                T_BLOOM,
+                CNT_LOG,
+                ROW_LOG,
+                NODE_W,
+                EDGE_LOG,
+                LKP3_HASH_W,
+                MAX_HASH_W,
+                FULL_HASH_W,
+                BLOOM_LOG,
+                K_FUN_LOG,
+                STREAM_D>(bloom_p, htb_buf, hTables0, numTables, hash1_w);
+  writeBloom<T_DDR,
+                T_BLOOM,
+                CNT_LOG,
+                ROW_LOG,
+                NODE_W,
+                EDGE_LOG,
+                LKP3_HASH_W,
+                MAX_HASH_W,
+                FULL_HASH_W,
+                BLOOM_LOG,
+                K_FUN_LOG,
+                STREAM_D>(bloom_p_1, htb_buf1, hTables0_1, numTables, hash1_w);
 
-#ifndef __SYNTHESIS__
-    end_addr = start_addr * (1UL << (ROW_LOG - 3)) + ((numTables * ((1 << hash1_w) + 1)) << (BLOOM_LOG - 3));
-    std::cout << "Occupied " << end_addr << " bytes, " << 
-        end_addr / (float)(1UL << 20) << " MB. " << std::endl;
-#endif
+  // store starting candidates part 0
+  unsigned int n_candidate0 = 0;
+  mwj_batch<LKP3_HASH_W,
+            MAX_HASH_W,
+            FULL_HASH_W,
+            NODE_W,
+            EDGE_LOG,
+            ROW_LOG,
+            MAX_CL>(
+    hash1_w, n_candidate0, start_addr3_0, hTables0, qVertices, htb_buf, htb_buf);
 
-#if DEBUG_STATS
-    debug::bloom_fullness /= numTables * (1UL << hash1_w) * (1UL << BLOOM_LOG) * (1UL << K_FUN_LOG);
-#endif /* DEBUG_STATS */
+  // store starting candidates part 1
+  unsigned int start_addr3_1 = start_addr3_0 + n_candidate0;
+  unsigned int n_candidate1 = 0;
+  mwj_batch<LKP3_HASH_W,
+            MAX_HASH_W,
+            FULL_HASH_W,
+            NODE_W,
+            EDGE_LOG,
+            ROW_LOG,
+            MAX_CL>(
+    hash1_w, n_candidate1, start_addr3_1, hTables0_1, qVertices, htb_buf1, htb_buf);
+  // store starting candidates join
+  n_candidate = n_candidate0 + n_candidate1;
+  start_candidate = start_addr3_0;
+
+
+  // #ifndef __SYNTHESIS__
+  //     end_addr = start_addr * (1UL << (ROW_LOG - 3)) + ((numTables * ((1 << hash1_w) + 1)) << (BLOOM_LOG - 3));
+  //     std::cout << "Occupied " << end_addr << " bytes, " << 
+  //         end_addr / (float)(1UL << 20) << " MB. " << std::endl;
+  // #endif
+
+  // #if DEBUG_STATS
+  //     debug::bloom_fullness /= numTables * (1UL << hash1_w) * (1UL << BLOOM_LOG) * (1UL << K_FUN_LOG);
+  // #endif /* DEBUG_STATS */
+
 }
 
 template<typename T_DDR,
