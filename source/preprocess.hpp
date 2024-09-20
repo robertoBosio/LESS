@@ -422,26 +422,26 @@ READ_EDGES_PER_BLOCK_LOOP:
         /* Compute indices for hash table */
         ap_uint<LKP3_HASH_W> hash_out0;
         ap_uint<LKP3_HASH_W> hash_out1;
+        
         xf::database::details::hashlookup3_core<NODE_W>(nodesrc, hash_out0);
-
         ap_uint<MAX_HASH_W> hashsrc = hash_out0.range(MAX_HASH_W - 1, 0);
-        hashsrc = hashsrc.range(hash1_w - 1, 0);
+        ap_uint<1> sel0 = hashsrc.test(hash1_w-1);
+        hashsrc = hashsrc.range(hash1_w - 2, 0);
 
         xf::database::details::hashlookup3_core<NODE_W>(nodedst, hash_out1);
-
         ap_uint<MAX_HASH_W> hashdst = hash_out1.range(MAX_HASH_W - 1, 0);
-        hashdst = hashdst.range(hash1_w - 1, 0);
+        ap_uint<1> sel1 = hashdst.test(hash1_w-1);
+        hashdst = hashdst.range(hash1_w - 2, 0);
+        
 
         /* Compute inside which block the edge will finish, in the meanwhile
         also adjust the edge as indexing -> indexed, and also add the hash
         values */
         unsigned short address_intable0 =
           hashsrc.range(hash1_w - 2, hash1_w -1 - block_per_table);
-        ap_uint<1> sel0 = hashsrc.test(hash1_w-1);
         unsigned int address0 = ((index0 - 1) << block_per_table) + address_intable0;
         unsigned short address_intable1 =
           hashdst.range(hash1_w - 2, hash1_w-1 - block_per_table);
-        ap_uint<1> sel1 = hashdst.test(hash1_w-1);
         unsigned int address1 = ((index1 - 1) << block_per_table) + address_intable1;
 
         /* This useless if is to explain to Vitis HLS 2022.2 that two write in
@@ -626,27 +626,26 @@ STORE_EDGE_PER_BLOCK_LOOP:
         /* Compute indices for hash table */
         ap_uint<LKP3_HASH_W> hash_out0;
         ap_uint<LKP3_HASH_W> hash_out1;
-        xf::database::details::hashlookup3_core<NODE_W>(nodesrc, hash_out0);
 
+        xf::database::details::hashlookup3_core<NODE_W>(nodesrc, hash_out0);
         ap_uint<MAX_HASH_W> hashsrc = hash_out0.range(MAX_HASH_W - 1, 0);
-        hashsrc = hashsrc.range(hash1_w - 1, 0);
+        ap_uint<1> sel0 = hashsrc.test(hash1_w-1);
+        hashsrc = hashsrc.range(hash1_w - 2, 0);
 
         xf::database::details::hashlookup3_core<NODE_W>(nodedst, hash_out1);
-
         ap_uint<MAX_HASH_W> hashdst = hash_out1.range(MAX_HASH_W - 1, 0);
-        hashdst = hashdst.range(hash1_w - 1, 0);
+        ap_uint<1> sel1 = hashdst.test(hash1_w-1);
+        hashdst = hashdst.range(hash1_w - 2, 0);
 
         /* Compute inside which block the edge will finish, in the meanwhile
         also adjust the edge as indexing -> indexed, and also add the hash
         values */
         unsigned short address_intable0 =
           hashsrc.range(hash1_w - 2, hash1_w-1 - block_per_table);
-        ap_uint<1> sel0 = hashsrc.test(hash1_w-1);
         unsigned int address0 =
           ((index0 - 1) << block_per_table) + address_intable0;
         unsigned short address_intable1 =
           hashdst.range(hash1_w - 2, hash1_w-1- block_per_table);
-        ap_uint<1> sel1 = hashdst.test(hash1_w-1);
         unsigned int address1 =
           ((index1 - 1) << block_per_table) + address_intable1;
 
@@ -863,8 +862,8 @@ blockToHTB(row_t* edge_buf,
         base_address = 0;
     }
 
-    std::cout << "processing table block: " << (int)s << std::endl;
-    std::cout << "block edges: " << (int)block_edges << std::endl;
+    //std::cout << "processing table block: " << (int)s << std::endl;
+    //std::cout << "block edges: " << (int)block_edges << std::endl;
 
     COUNT_EDGES_INSIDE_BLOCK_LOOP:
     for (auto g = 0; g < block_edges; g++) {
@@ -1332,6 +1331,8 @@ fillTablesURAM(row_t* edge_buf,
   for (auto g = 0; g < numTables * block_per_table; g++) {
     #pragma HLS pipeline II = 1
     auto data = block_n_edges[g];
+    std::cout << "P1 processing table block: " << (int)g << std::endl;
+    std::cout << "P1 block edges: " << (int)data << std::endl;
     block_n_edges[g] = base_addr;
     base_addr += data;
   }
@@ -1340,6 +1341,8 @@ fillTablesURAM(row_t* edge_buf,
   for (auto g = 0; g < numTables * block_per_table; g++) {
     #pragma HLS pipeline II = 1
     auto data = block_n_edges_1[g];
+    std::cout << "P2 processing table block: " << (int)g << std::endl;
+    std::cout << "P2 block edges: " << (int)data << std::endl;
     block_n_edges_1[g] = base_addr;
     base_addr += data;
   }
