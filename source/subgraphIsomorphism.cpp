@@ -818,7 +818,7 @@ READMIN_EDGE_TASK_LOOP:
         hash_wrapper<V_ID_W>(indexed_v, hash_out);
         bool test = true;
         bloom_test<T_BLOOM, BLOOM_LOG, K_FUN, FULL_HASH_W>(
-            filter, hash_out, test);
+                filter, hash_out, test);
 
         set_out.node = indexed_v;
         set_out.last = false;
@@ -1199,7 +1199,7 @@ mwj_tuplebuild(
         tuple_out.last_batch = tuple_in.last_batch;
 
         // HASH DIVIDING!!!
-        bool selch = indexing_h.range(hash1_w-1,hash1_w-2);
+        bool selch = indexing_h[hash1_w - 1];
 
         // DEBUG COUNTERS h3 h4
         if(selch) hmsb3++;
@@ -1673,6 +1673,9 @@ mwj_filter(hls::stream<assembly_tuple_t>& stream_tuple_in,
     if (tuple_in.bit_last_edge && bits.test(p)) {
       stream_set_out.write(tuple_out);
     }
+/* if (tuple_in.bit_last_edge && !bits.test(p)) { */
+/* std::cout << "no " << (int)tuple_out.node << std::endl; */
+/* } */
     if (tuple_in.last_batch && tuple_in.bit_last_edge) {
       bits = ~0;
     }
@@ -1757,7 +1760,12 @@ mwj_merge_solandset(hls::stream<sol_node_t<vertex_t>>& stream_sol_in,
     node = set_vertex.node;
     sol = false;
     stop = false;
-    stream_sol_out.write({ node, pos, last, sol, stop});
+    
+/* if (last) { */
+/* std::cout << "]" << std::endl; */
+/* } else { */
+/* std::cout << node << ", "; */
+/* } */
   } else {
     sol_vertex = stream_sol_in.read();
     select = sol_vertex.last;
@@ -1766,8 +1774,13 @@ mwj_merge_solandset(hls::stream<sol_node_t<vertex_t>>& stream_sol_in,
     node = sol_vertex.node;
     sol = true;
     stop = sol_vertex.stop;
-    stream_sol_out.write({ node, pos, last, sol, stop});
+   
+/* std::cout << sol_vertex.node << " "; */
+/* if (sol_vertex.last){ */
+/* std::cout << "| "; */
+/* } */
   }
+  stream_sol_out.write({ node, pos, last, sol, stop});
 }
 
 void
@@ -1789,7 +1802,7 @@ mwj_assembly(row_t* m_axi,
   ap_uint<32> nodes_read = 0;
   bool stop = false;
 
-  std::cout << "n candidates : " << (int)n_candidate << std::endl;
+/* std::cout << "n candidates : " << (int)n_candidate << std::endl; */
 
 ASSEMBLY_TASK_LOOP:
   do {
@@ -1804,6 +1817,7 @@ ASSEMBLY_TASK_LOOP:
 
       partial_sol = 1;
       nodes_read++;
+/* std::cout << (int)node << std::endl; */
     } else {
       stream_partial_out.write(STOP_NODE);
     }
@@ -2201,6 +2215,7 @@ multiwayJoin(ap_uint<DDR_W>* htb_buf0_0,
                                                               htb_buf1_0,
                                                               p_stream_tuple0,
                                                               rc_stream_tuple0);
+
     mwj_readmin_counter<LKP3_HASH_W, MAX_HASH_W, FULL_HASH_W>(hash1_w,
                                                               hash2_w,
                                                               hTables0_1,

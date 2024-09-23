@@ -1190,8 +1190,7 @@ PROPOSE_TBINDEXING_LOOP:
   unsigned int window_right =
     minSize.range((ROW_LOG - EDGE_LOG) - 1, 0) + ((rowend - rowstart) << (ROW_LOG - EDGE_LOG));
   unsigned int cnt = 0;
-  unsigned int address = start_address;
-  n_candidate = 0;
+  unsigned int address = start_address + n_candidate;
 
 PROPOSE_READ_MIN_INDEXING_LOOP:
   for (unsigned int g = 0; g <= rowend - rowstart; g++) {
@@ -1289,9 +1288,9 @@ fillTablesURAM(row_t* edge_buf,
     * of counters stored in each row which is 1 << (ROW_LOG - CNT_LOG)*/
   constexpr size_t COUNTERS_PER_BLOCK = 13; // changed
   const unsigned long htb_size =
-    (1UL << ((hash1_w-1) + hash2_w - (DDR_BIT - COUNTER_WIDTH))); // changed to h1-1!!!
+    (1UL << ((hash1_w - 1) + hash2_w - (DDR_BIT - COUNTER_WIDTH))); // changed to h1-1!!!
   const unsigned int block_per_table =
-    (1UL << ((hash1_w-1) + hash2_w - COUNTERS_PER_BLOCK)); // changed to h1-1!!!
+    (1UL << ((hash1_w - 1) + hash2_w - COUNTERS_PER_BLOCK)); // changed to h1-1!!!
   unsigned long start_addr = 0;
   unsigned int block_n_edges[1024]; // size halfed
   unsigned int block_n_edges_1[1024]; // size halfed
@@ -1341,8 +1340,6 @@ fillTablesURAM(row_t* edge_buf,
   for (auto g = 0; g < numTables * block_per_table; g++) {
     #pragma HLS pipeline II = 1
     auto data = block_n_edges_1[g];
-    std::cout << "P2 processing table block: " << (int)g << std::endl;
-    std::cout << "P2 block edges: " << (int)data << std::endl;
     block_n_edges_1[g] = base_addr;
     base_addr += data;
   }
@@ -1360,16 +1357,18 @@ fillTablesURAM(row_t* edge_buf,
     
   unsigned long start_addr2 = start_addr;
   
-  start_addr = (start_addr2 + (1UL << CACHE_WORDS_PER_LINE)) &
+  start_addr = (start_addr + (1UL << CACHE_WORDS_PER_LINE)) &
                 ~((1UL << CACHE_WORDS_PER_LINE) - 1);
-  unsigned int prev_offset = 0;
-
-  STORE_EDGES_POINTER_LOOP:
+  start_addr2 = (start_addr2 + (1UL << CACHE_WORDS_PER_LINE)) &
+                  ~((1UL << CACHE_WORDS_PER_LINE) - 1);
+  unsigned int prev_offset0 = 0;
+  unsigned int prev_offset1 = 0;
+STORE_EDGES_POINTER_LOOP:
   for (unsigned short ntb = 0; ntb < numTables; ntb++) {
     hTables0[ntb].start_edges = start_addr;
-    unsigned int offset = block_n_edges[((ntb + 1) * block_per_table) - 1];
-    hTables0[ntb].n_edges = offset - prev_offset;
-    prev_offset = offset;
+    unsigned int offset0 = block_n_edges[((ntb + 1) * block_per_table) - 1];
+    hTables0[ntb].n_edges = offset0 - prev_offset0;
+    prev_offset0 = offset0;
     start_addr += (hTables0[ntb].n_edges >> (ROW_LOG - EDGE_LOG)) + 1;
     start_addr = (start_addr + (1UL << CACHE_WORDS_PER_LINE)) &
                   ~((1UL << CACHE_WORDS_PER_LINE) - 1);
@@ -1379,29 +1378,22 @@ fillTablesURAM(row_t* edge_buf,
     hTables1[ntb].start_offset = hTables0[ntb].start_offset;
     hTables1[ntb].start_edges = hTables0[ntb].start_edges;
     hTables1[ntb].n_edges = hTables0[ntb].n_edges;
-  }
-  unsigned long start_addr3_0 = start_addr;
-
-
-  start_addr = (start_addr2 + (1UL << CACHE_WORDS_PER_LINE)) &
-                  ~((1UL << CACHE_WORDS_PER_LINE) - 1);
-  prev_offset = 0;
-
-  STORE_EDGES_POINTER_LOOP_P2:
-  for (unsigned short ntb = 0; ntb < numTables; ntb++) {
-    hTables0_1[ntb].start_edges = start_addr;
-    unsigned int offset = block_n_edges[((ntb + 1) * block_per_table) - 1];
-    hTables0_1[ntb].n_edges = offset - prev_offset;
-    prev_offset = offset;
-    start_addr += (hTables0_1[ntb].n_edges >> (ROW_LOG - EDGE_LOG)) + 1;
-    start_addr = (start_addr + (1UL << CACHE_WORDS_PER_LINE)) &
+    
+    hTables0_1[ntb].start_edges = start_addr2;
+    unsigned int offset1 = block_n_edges_1[((ntb + 1) * block_per_table) - 1];
+    hTables0_1[ntb].n_edges = offset1 - prev_offset1;
+    prev_offset1 = offset1;
+    start_addr2 += (hTables0_1[ntb].n_edges >> (ROW_LOG - EDGE_LOG)) + 1;
+    start_addr2 = (start_addr2 + (1UL << CACHE_WORDS_PER_LINE)) &
                   ~((1UL << CACHE_WORDS_PER_LINE) - 1);
     #ifndef __SYNTHESIS__
-      assert(start_addr < HTB_SPACE);
+      assert(start_addr2 < HTB_SPACE);
     #endif
     hTables1_1[ntb].start_offset = hTables0_1[ntb].start_offset;
     hTables1_1[ntb].start_edges = hTables0_1[ntb].start_edges;
     hTables1_1[ntb].n_edges = hTables0_1[ntb].n_edges;
+
+    std::cout << "Edges " << ntb << " table: " << hTables0_1[ntb].n_edges + hTables0[ntb].n_edges << std::endl;
   }
 
   blockToHTB<NODE_W,
@@ -1435,6 +1427,7 @@ fillTablesURAM(row_t* edge_buf,
                 BLOOM_LOG,
                 K_FUN_LOG,
                 STREAM_D>(bloom_p, htb_buf, hTables0, numTables, hash1_w);
+
   writeBloom<T_DDR,
                 T_BLOOM,
                 CNT_LOG,
@@ -1449,7 +1442,6 @@ fillTablesURAM(row_t* edge_buf,
                 STREAM_D>(bloom_p_1, htb_buf1, hTables0_1, numTables, hash1_w);
 
   // store starting candidates part 0
-  unsigned int n_candidate0 = 0;
   mwj_batch<LKP3_HASH_W,
             MAX_HASH_W,
             FULL_HASH_W,
@@ -1457,11 +1449,8 @@ fillTablesURAM(row_t* edge_buf,
             EDGE_LOG,
             ROW_LOG,
             MAX_CL>(
-    hash1_w, n_candidate0, start_addr3_0, hTables0, qVertices, htb_buf, htb_buf);
-
-  // store starting candidates part 1
-  unsigned int start_addr3_1 = start_addr3_0 + n_candidate0;
-  unsigned int n_candidate1 = 0;
+    hash1_w, n_candidate, start_addr, hTables0, qVertices, htb_buf, htb_buf);
+  
   mwj_batch<LKP3_HASH_W,
             MAX_HASH_W,
             FULL_HASH_W,
@@ -1469,12 +1458,9 @@ fillTablesURAM(row_t* edge_buf,
             EDGE_LOG,
             ROW_LOG,
             MAX_CL>(
-    hash1_w, n_candidate1, start_addr3_1, hTables0_1, qVertices, htb_buf1, htb_buf);
-  // store starting candidates join
-  n_candidate = n_candidate0 + n_candidate1;
-  start_candidate = start_addr3_0;
+    hash1_w, n_candidate, start_addr, hTables0_1, qVertices, htb_buf1, htb_buf);
 
-
+  start_candidate = start_addr;
   // #ifndef __SYNTHESIS__
   //     end_addr = start_addr * (1UL << (ROW_LOG - 3)) + ((numTables * ((1 << hash1_w) + 1)) << (BLOOM_LOG - 3));
   //     std::cout << "Occupied " << end_addr << " bytes, " << 
