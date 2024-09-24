@@ -1920,7 +1920,6 @@ multiwayJoin(ap_uint<DDR_W>* htb_buf0_0,
              ap_uint<DDR_W>* htb_buf2_0,
              ap_uint<DDR_W>* htb_buf2_1,
              ap_uint<DDR_W>* htb_buf3_0,
-             ap_uint<DDR_W>* htb_buf3_1,
              T_BLOOM* bloom_p,
              T_BLOOM* bloom_p_1,
              row_t* res_buf,
@@ -1945,7 +1944,6 @@ multiwayJoin(ap_uint<DDR_W>* htb_buf0_0,
 #pragma HLS STABLE variable=htb_buf2_0
 #pragma HLS STABLE variable=htb_buf2_1
 #pragma HLS STABLE variable=htb_buf3_0
-#pragma HLS STABLE variable=htb_buf3_1
 #pragma HLS STABLE variable=bloom_p
 #pragma HLS STABLE variable=bloom_p_1
 #pragma HLS STABLE variable=hTables0_0
@@ -2458,7 +2456,6 @@ void subgraphIsomorphism(row_t htb_buf0_0[HASHTABLES_SPACE],
                          row_t htb_buf2_0[HASHTABLES_SPACE],
                          row_t htb_buf2_1[HASHTABLES_SPACE],             
                          row_t htb_buf3_0[HASHTABLES_SPACE],
-                         row_t htb_buf3_1[HASHTABLES_SPACE],
                          row_t bloom_p[BLOOM_SPACE],
                          row_t bloom_p_1[BLOOM_SPACE],
                          row_t res_buf[RESULTS_SPACE],
@@ -2532,9 +2529,6 @@ void subgraphIsomorphism(row_t htb_buf0_0[HASHTABLES_SPACE],
 #pragma HLS INTERFACE mode=m_axi port=htb_buf3_0 bundle=readmin_e_0 \
     max_widen_bitwidth=128 num_write_outstanding=1 max_write_burst_length=2 \
     latency=1
-#pragma HLS INTERFACE mode=m_axi port=htb_buf3_1 bundle=readmin_e_1 \
-    max_widen_bitwidth=128 num_write_outstanding=1 max_write_burst_length=2 \
-    latency=1
 #pragma HLS INTERFACE mode=m_axi port=res_buf bundle=fifo \
     max_widen_bitwidth=128 max_read_burst_length=32 max_write_burst_length=32 \
     latency=1
@@ -2544,7 +2538,7 @@ void subgraphIsomorphism(row_t htb_buf0_0[HASHTABLES_SPACE],
     max_widen_bitwidth=128 latency=20
 
 #pragma HLS alias ports = htb_buf0_0,htb_buf1_0,htb_buf2_0,htb_buf3_0 distance = 0
-#pragma HLS alias ports = htb_buf0_1,htb_buf1_1,htb_buf2_1,htb_buf3_1 distance = 0
+#pragma HLS alias ports = htb_buf0_1,htb_buf1_1,htb_buf2_1 distance = 0
 
 #pragma HLS INTERFACE mode = s_axilite port = numQueryVert
 #pragma HLS INTERFACE mode = s_axilite port = hash1_w
@@ -2613,7 +2607,6 @@ void subgraphIsomorphism(row_t htb_buf0_0[HASHTABLES_SPACE],
                    htb_buf2_0,
                    htb_buf2_1,
                    htb_buf3_0,
-                   htb_buf3_1,
                    bloom_p,
                    bloom_p_1,
                    res_buf,
@@ -2676,7 +2669,6 @@ void subgraphIsomorphism(row_t htb_buf0_0[HASHTABLES_SPACE],
                          row_t htb_buf2_0[HASHTABLES_SPACE],
                          row_t htb_buf2_1[HASHTABLES_SPACE],
                          row_t htb_buf3_0[HASHTABLES_SPACE],
-                         row_t htb_buf3_1[HASHTABLES_SPACE],
                          row_t bloom_p[BLOOM_SPACE],
                          row_t bloom_p_1[BLOOM_SPACE],
                          row_t res_buf[RESULTS_SPACE],
@@ -2743,8 +2735,6 @@ void subgraphIsomorphism(row_t htb_buf0_0[HASHTABLES_SPACE],
     latency=0 max_read_burst_length=16
 #pragma HLS INTERFACE mode=m_axi port=htb_buf3_0 bundle=prop_batch_0 \
     max_widen_bitwidth=128 latency=0
-#pragma HLS INTERFACE mode=m_axi port=htb_buf3_1 bundle=prop_batch_1 \
-    max_widen_bitwidth=128 latency=0  
 #pragma HLS INTERFACE mode=m_axi port=res_buf bundle=fifo \
     max_widen_bitwidth=128 max_read_burst_length=32 max_write_burst_length=32 \
     latency=0
@@ -2753,7 +2743,7 @@ void subgraphIsomorphism(row_t htb_buf0_0[HASHTABLES_SPACE],
 #pragma HLS INTERFACE mode=m_axi port=bloom_p_1 bundle=bloom_1 \
     max_widen_bitwidth=128 latency=20
 
-#pragma HLS alias ports=htb_buf0_0,htb_buf0_1,htb_buf1_0,htb_buf1_1,htb_buf2_0,htb_buf2_1,htb_buf3_0,htb_buf3_1 distance=0
+#pragma HLS alias ports=htb_buf0_0,htb_buf0_1,htb_buf1_0,htb_buf1_1,htb_buf2_0,htb_buf2_1,htb_buf3_0 distance=0
 
 #pragma HLS INTERFACE mode=s_axilite port=numQueryVert
 #pragma HLS INTERFACE mode=s_axilite port=numQueryEdges
@@ -2866,7 +2856,6 @@ void subgraphIsomorphism(row_t htb_buf0_0[HASHTABLES_SPACE],
                      htb_buf2_0,
                      htb_buf2_1,
                      htb_buf3_0,
-                     htb_buf3_1,
                      bloom_p,
                      bloom_p_1,
                      res_buf,

@@ -105,8 +105,8 @@ def subiso(test, path):
         "addr_mem2" : 0x40,
         "addr_mem2_1" : 0x4c,
         "addr_mem3" : 0x58,
-        "addr_mem3_1" : 0x64,
-        "addr_bloom" : 0x70,
+        "addr_bloom" : 0x64,
+        "addr_bloom_1" : 0x70,
         "addr_fifo" : 0x7c,
         "addr_qv" : 0x88,
         "addr_qe" : 0x90,
@@ -168,6 +168,7 @@ def subiso(test, path):
     FIFO = allocate(shape=(int(RESULTS_SPACE/np.dtype(edge_t).itemsize),), dtype=edge_t)
     BLOOM = allocate(shape=(BLOOM_SPACE,), dtype=np.uint8)
     MEM = allocate(shape=(int(HASHTABLES_SPACE/np.dtype(node_t).itemsize),), dtype=node_t)
+    MEM1 = allocate(shape=(int(HASHTABLES_SPACE/np.dtype(node_t).itemsize),), dtype=node_t)
     dynfifo_space = 0
 
     fres = open(path + "results.txt", "a")
@@ -316,8 +317,10 @@ def subiso(test, path):
 
             #Resetting memory space
             MEM.fill(0)
+            MEM1.fill(0) # new!
             BLOOM.fill(0)
             MEM.flush()
+            MEM1.flush()  # new!
             BLOOM.flush()
             FIFO.flush()
             
@@ -349,13 +352,12 @@ def subiso(test, path):
             print(f"h1 {hash1_w}, h2 {hash2_w}, blocks: {blocks} max 2048")
             
             ol.subgraphIsomorphism_0.write(axi_addresses["addr_mem0"], MEM.device_address)
-            ol.subgraphIsomorphism_0.write(axi_addresses["addr_mem0_1"], MEM.device_address)
+            ol.subgraphIsomorphism_0.write(axi_addresses["addr_mem0_1"], MEM1.device_address)
             ol.subgraphIsomorphism_0.write(axi_addresses["addr_mem1"], MEM.device_address)
-            ol.subgraphIsomorphism_0.write(axi_addresses["addr_mem1_1"], MEM.device_address)
+            ol.subgraphIsomorphism_0.write(axi_addresses["addr_mem1_1"], MEM1.device_address)
             ol.subgraphIsomorphism_0.write(axi_addresses["addr_mem2"], MEM.device_address)
-            ol.subgraphIsomorphism_0.write(axi_addresses["addr_mem2_1"], MEM.device_address)
+            ol.subgraphIsomorphism_0.write(axi_addresses["addr_mem2_1"], MEM1.device_address)
             ol.subgraphIsomorphism_0.write(axi_addresses["addr_mem3"], MEM.device_address)
-            ol.subgraphIsomorphism_0.write(axi_addresses["addr_mem3_1"], MEM.device_address)
             ol.subgraphIsomorphism_0.write(axi_addresses["addr_bloom"], BLOOM.device_address)
             ol.subgraphIsomorphism_0.write(axi_addresses["addr_fifo"], FIFO.device_address)
             ol.subgraphIsomorphism_0.write(axi_addresses["addr_hash1_w"], hash1_w)
@@ -369,6 +371,7 @@ def subiso(test, path):
             mem_counter = 0
             mem_counter += FIFO.nbytes
             mem_counter += MEM.nbytes
+            mem_counter += MEM1.nbytes # new!
             mem_counter += BLOOM.nbytes
             
             #Print useful information on memory occupation
@@ -378,7 +381,7 @@ def subiso(test, path):
                   f" bloom use {((bloom_spaceused / BLOOM.nbytes) * 100):.2f}%."
                   f" {dynfifo_space} lines available in fifo.", flush=True)
 
-            if (hashtable_spaceused <= MEM.nbytes and bloom_spaceused <= BLOOM.nbytes):
+            if (hashtable_spaceused <= MEM.nbytes and hashtable_spaceused <= MEM.nbytes and bloom_spaceused <= BLOOM.nbytes):
                 power = []
                 start = perf_counter()
 
@@ -590,7 +593,7 @@ def subiso(test, path):
     # print(f"Total test time: {tot_time_bench:.4f}", file=fres)
     fres.close()
     # del FIFO, GRAPH_SPACE, MEM, BLOOM
-    del FIFO, MEM, BLOOM
+    del FIFO, MEM, MEM1, BLOOM # added MEM!
 
 if __name__ == "__main__":
     args = parse_args()
