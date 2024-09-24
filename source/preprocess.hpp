@@ -490,9 +490,10 @@ countEdgesPerBlock(hls::stream<counter_tuple_t> stream_address[2],
                   unsigned int block_n_edges_1[1024])
 {
     const size_t BRAM_LAT = 3;
-    unsigned int local_cache_address[2][BRAM_LAT];
-    unsigned int local_cache_counter[2][BRAM_LAT];
-    ap_uint<BRAM_LAT> local_cache_valid[2] = {0,0};
+    unsigned int local_cache_address[BRAM_LAT];
+    ap_uint<1> local_cache_selch[BRAM_LAT];
+    unsigned int local_cache_counter[BRAM_LAT];
+    ap_uint<BRAM_LAT> local_cache_valid = 0;
     counter_tuple_t tuple_in;
     auto select = 0;
     
@@ -506,56 +507,60 @@ COUNT_EDGES_PER_BLOCK_LOOP:
   RAW false
 #pragma HLS pipeline II = 1
 
+        // get addr & ch from tuple
         unsigned int address = tuple_in.address;
         ap_uint<1> selch = tuple_in.chsel;
 
+        // init variables
         bool hit = false;
-        unsigned int local_value_counter[2] = {0,0};
+        unsigned int local_value_counter = 0;
 
         /* Check if the counter has been used recently, by cycling backword to
          * catch the updated value */
         for (auto s = 0; s < BRAM_LAT; s++) {
 #pragma HLS unroll
             auto g = BRAM_LAT - s - 1;
-            if (local_cache_address[selch][g] == address && local_cache_valid[selch][g]) {
+            if (local_cache_address[g] == address && local_cache_selch[g] == selch &&  local_cache_valid[g]) {
                 hit = true;
-                local_value_counter[selch] = local_cache_counter[selch][g];
+                local_value_counter = local_cache_counter[g];
             }
         }
 
         /* Read from memory only if is not present in local cache, in this way
          * it is possible to remove the RAW dependency */
         if (hit){
-          local_value_counter[selch]++;
+          local_value_counter++;
         } else {
           if(selch==1)
-            local_value_counter[1] = block_n_edges_1[address];
+            local_value_counter = block_n_edges_1[address];
           else
-            local_value_counter[0] = block_n_edges[address];
-          local_value_counter[selch]++;
+            local_value_counter = block_n_edges[address];
+          local_value_counter++;
         }
 
         /* Shift everything by one position and writes the last one in memory */
         for (auto s = 0; s < BRAM_LAT - 1; s++) {
 #pragma HLS unroll
           auto g = BRAM_LAT - s - 1;
-          local_cache_address[selch][g] = local_cache_address[selch][g - 1];
-          local_cache_counter[selch][g] = local_cache_counter[selch][g - 1];
-          local_cache_valid[selch][g] = local_cache_valid[selch][g - 1];
+          local_cache_address[g] = local_cache_address[g - 1];
+          local_cache_selch[g] = local_cache_selch[g - 1];
+          local_cache_counter[g] = local_cache_counter[g - 1];
+          local_cache_valid[g] = local_cache_valid[g - 1];
         }
-        local_cache_address[selch][0] = address;
-        local_cache_counter[selch][0] = local_value_counter[selch];
-        local_cache_valid[selch][0] = true;
+        local_cache_address[0] = address;
+        local_cache_selch[0] = selch;
+        local_cache_counter[0] = local_value_counter;
+        local_cache_valid[0] = true;
         if(selch)
-          block_n_edges_1[address] = local_value_counter[1];
+          block_n_edges_1[address] = local_value_counter;
         else
-          block_n_edges[address] = local_value_counter[0];
+          block_n_edges[address] = local_value_counter;
 
         tuple_in = stream_address[select].read();
         select = (select + 1) % 2;
 
 #ifndef __SYNTHESIS__
-        assert(local_value_counter[selch] < UINT32_MAX);
+        assert(local_value_counter < UINT32_MAX);
 #endif
     }
 }
@@ -709,9 +714,10 @@ storeEdgesPerBlock(hls::stream<store_tuple_t<row_t> > stream_edge[2],
                   unsigned int block_n_edges_1[1024])
 {
     const size_t BRAM_LAT = 3;
-    unsigned int local_cache_address[2][BRAM_LAT];
-    unsigned int local_cache_counter[2][BRAM_LAT];
-    ap_uint<BRAM_LAT> local_cache_valid[2] = {0,0};
+    unsigned int local_cache_address[BRAM_LAT];
+    ap_uint<1> local_cache_selch[BRAM_LAT];
+    unsigned int local_cache_counter[BRAM_LAT];
+    ap_uint<BRAM_LAT> local_cache_valid = 0;
     store_tuple_t<row_t> tuple_in;
     auto select = 0;
     
@@ -729,16 +735,16 @@ STORE_EDGES_PER_BLOCK_LOOP:
         ap_uint<1> chsel = tuple_in.chsel;
 
         bool hit = false;
-        unsigned int local_value_counter[2] = {0,0};
+        unsigned int local_value_counter = 0;
 
         /* Check if the counter has been used recently, by cycling backword to
          * catch the updated value */
         for (auto s = 0; s < BRAM_LAT; s++) {
 #pragma HLS unroll
             auto g = BRAM_LAT - s - 1;
-            if (local_cache_address[chsel][g] == address && local_cache_valid[chsel][g]) {
+            if (local_cache_address[g] == address &&  local_cache_selch[g]==chsel && local_cache_valid[g]) {
                 hit = true;
-                local_value_counter[chsel] = local_cache_counter[chsel][g];
+                local_value_counter = local_cache_counter[g];
             }
         }
 
@@ -746,35 +752,37 @@ STORE_EDGES_PER_BLOCK_LOOP:
          * it is possible to remove the RAW dependency */
         if (!hit){
           if(chsel)
-            local_value_counter[chsel] = block_n_edges_1[address];
+            local_value_counter = block_n_edges_1[address];
           else
-            local_value_counter[chsel] = block_n_edges[address];
+            local_value_counter = block_n_edges[address];
         }
 
         /* Shift everything by one position and writes the last one in memory */
         for (auto s = 0; s < BRAM_LAT - 1; s++) {
 #pragma HLS unroll
           auto g = BRAM_LAT - s - 1;
-          local_cache_address[chsel][g] = local_cache_address[chsel][g - 1];
-          local_cache_counter[chsel][g] = local_cache_counter[chsel][g - 1];
-          local_cache_valid[chsel][g] = local_cache_valid[chsel][g - 1];
+          local_cache_address[g] = local_cache_address[g - 1];
+          local_cache_selch[g] = local_cache_selch[g-1];
+          local_cache_counter[g] = local_cache_counter[g - 1];
+          local_cache_valid[g] = local_cache_valid[g - 1];
         }
-        local_cache_address[chsel][0] = address;
-        local_cache_counter[chsel][0] = local_value_counter[chsel] + 1;
-        local_cache_valid[chsel][0] = true;
+        local_cache_address[0] = address;
+        local_cache_selch[0] = chsel;
+        local_cache_counter[0] = local_value_counter + 1;
+        local_cache_valid[0] = true;
         if(chsel)
-          block_n_edges_1[address] = local_value_counter[chsel] + 1;
+          block_n_edges_1[address] = local_value_counter + 1;
         else
-          block_n_edges[address] = local_value_counter[chsel] + 1;
+          block_n_edges[address] = local_value_counter + 1;
         if(chsel)
-          m_axi_1[local_value_counter[chsel]] = tuple_in.edge;
+          m_axi_1[local_value_counter] = tuple_in.edge;
         else
-          m_axi[local_value_counter[chsel]] = tuple_in.edge;
+          m_axi[local_value_counter] = tuple_in.edge;
         tuple_in = stream_edge[select].read();
         select = (select + 1) % 2;
 
 #ifndef __SYNTHESIS__
-        assert(local_value_counter[chsel] < UINT32_MAX);
+        assert(local_value_counter < UINT32_MAX);
 #endif
     }
 }
@@ -861,9 +869,6 @@ blockToHTB(row_t* edge_buf,
     if (prev_ntb != ntb){
         base_address = 0;
     }
-
-    //std::cout << "processing table block: " << (int)s << std::endl;
-    //std::cout << "block edges: " << (int)block_edges << std::endl;
 
     COUNT_EDGES_INSIDE_BLOCK_LOOP:
     for (auto g = 0; g < block_edges; g++) {
@@ -1240,7 +1245,6 @@ PROPOSE_READ_MIN_INDEXING_LOOP:
 
 #if DEBUG_STATS
     debug::batch_reads += ceil((rowend - rowstart) / 16.0);
-    // std::cout << rm_start << " removed\n";
 #endif
 }
 
@@ -1330,8 +1334,8 @@ fillTablesURAM(row_t* edge_buf,
   for (auto g = 0; g < numTables * block_per_table; g++) {
     #pragma HLS pipeline II = 1
     auto data = block_n_edges[g];
-    std::cout << "P1 processing table block: " << (int)g << std::endl;
-    std::cout << "P1 block edges: " << (int)data << std::endl;
+    //std::cout << "P1 processing table block: " << (int)g << std::endl;
+    //std::cout << "P1 block edges: " << (int)data << std::endl;
     block_n_edges[g] = base_addr;
     base_addr += data;
   }
@@ -1392,8 +1396,9 @@ STORE_EDGES_POINTER_LOOP:
     hTables1_1[ntb].start_offset = hTables0_1[ntb].start_offset;
     hTables1_1[ntb].start_edges = hTables0_1[ntb].start_edges;
     hTables1_1[ntb].n_edges = hTables0_1[ntb].n_edges;
-
+    #ifndef __SYNTHESIS__
     std::cout << "Edges " << ntb << " table: " << hTables0_1[ntb].n_edges + hTables0[ntb].n_edges << std::endl;
+    #endif
   }
 
   blockToHTB<NODE_W,
