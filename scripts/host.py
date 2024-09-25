@@ -339,7 +339,7 @@ def subiso(test, path):
                 hash2_w = 14 - hash1_w
 
             blocks = len(tablelist) * 2**(hash1_w + hash2_w - 14)
-            while(blocks > 2048):
+            while(blocks > 1024):
                 hash2_w -= 1
                 blocks = len(tablelist) * 2**(hash1_w + hash2_w - 14)
             
@@ -352,7 +352,7 @@ def subiso(test, path):
 
             bloom_spaceused = len(tablelist) * (2**hash1_w) * byte_bloom
             
-            print(f"h1 {hash1_w}, h2 {hash2_w}, blocks: {blocks} max 2048")
+            print(f"h1 {hash1_w}, h2 {hash2_w}, blocks: {blocks} max 1024")
             
             ol.subgraphIsomorphism_0.write(axi_addresses["addr_mem0"], MEM.device_address)
             ol.subgraphIsomorphism_0.write(axi_addresses["addr_mem0_1"], MEM1.device_address)
