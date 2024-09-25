@@ -167,6 +167,7 @@ def subiso(test, path):
     ol = Overlay(path + "design_1.bit", download=False)
     FIFO = allocate(shape=(int(RESULTS_SPACE/np.dtype(edge_t).itemsize),), dtype=edge_t)
     BLOOM = allocate(shape=(BLOOM_SPACE,), dtype=np.uint8)
+    BLOOM1 = allocate(shape=(BLOOM_SPACE,), dtype=np.uint8)
     MEM = allocate(shape=(int(HASHTABLES_SPACE/np.dtype(node_t).itemsize),), dtype=node_t)
     MEM1 = allocate(shape=(int(HASHTABLES_SPACE/np.dtype(node_t).itemsize),), dtype=node_t)
     dynfifo_space = 0
@@ -319,9 +320,11 @@ def subiso(test, path):
             MEM.fill(0)
             MEM1.fill(0) # new!
             BLOOM.fill(0)
+            BLOOM1.fill(0) # new!
             MEM.flush()
             MEM1.flush()  # new!
             BLOOM.flush()
+            BLOOM1.flush() # new!
             FIFO.flush()
             
             #hash1_w = int(querytuple[2])
@@ -359,6 +362,7 @@ def subiso(test, path):
             ol.subgraphIsomorphism_0.write(axi_addresses["addr_mem2_1"], MEM1.device_address)
             ol.subgraphIsomorphism_0.write(axi_addresses["addr_mem3"], MEM.device_address)
             ol.subgraphIsomorphism_0.write(axi_addresses["addr_bloom"], BLOOM.device_address)
+            ol.subgraphIsomorphism_0.write(axi_addresses["addr_bloom_1"], BLOOM1.device_address)
             ol.subgraphIsomorphism_0.write(axi_addresses["addr_fifo"], FIFO.device_address)
             ol.subgraphIsomorphism_0.write(axi_addresses["addr_hash1_w"], hash1_w)
             ol.subgraphIsomorphism_0.write(axi_addresses["addr_hash2_w"], hash2_w)
@@ -373,12 +377,13 @@ def subiso(test, path):
             mem_counter += MEM.nbytes
             mem_counter += MEM1.nbytes # new!
             mem_counter += BLOOM.nbytes
+            mem_counter += BLOOM1.nbytes # new!
             
             #Print useful information on memory occupation
             print(data, querytuple, sep=" ", flush=True)
             print(f"Allocated {(mem_counter / (2**20))} Mb. Hash tables" 
-                  f" use {((hashtable_spaceused / MEM.nbytes) * 100):.2f}%,"
-                  f" bloom use {((bloom_spaceused / BLOOM.nbytes) * 100):.2f}%."
+                  f" use0 {((hashtable_spaceused / MEM.nbytes) * 100):.2f}%,"
+                  f" bloom0 use {((bloom_spaceused / BLOOM.nbytes) * 100):.2f}%."
                   f" {dynfifo_space} lines available in fifo.", flush=True)
 
             if (hashtable_spaceused <= MEM.nbytes and hashtable_spaceused <= MEM.nbytes and bloom_spaceused <= BLOOM.nbytes):
@@ -593,7 +598,7 @@ def subiso(test, path):
     # print(f"Total test time: {tot_time_bench:.4f}", file=fres)
     fres.close()
     # del FIFO, GRAPH_SPACE, MEM, BLOOM
-    del FIFO, MEM, MEM1, BLOOM # added MEM!
+    del FIFO, MEM, MEM1, BLOOM, BLOOM1 # added MEM1 BLOOM1!
 
 if __name__ == "__main__":
     args = parse_args()
