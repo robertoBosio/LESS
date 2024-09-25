@@ -274,8 +274,9 @@ def subiso(test, path):
 
                 tupleedge = (labelsrc, labeldst, direction)
 
-                if tablelist.count(tupleedge) == 0:
-                    tablelist.append(tupleedge)
+                #if tablelist.count(tupleedge) == 0:
+                #    tablelist.append(tupleedge)
+                tablelist.append(tupleedge)
 
             #Taking as a starting node the one with highest degree 
             order.append(start_node)
@@ -338,10 +339,13 @@ def subiso(test, path):
             if (hash1_w + hash2_w <= 14):
                 hash2_w = 14 - hash1_w
 
-            blocks = len(tablelist) * 2**(hash1_w + hash2_w - 14)
+            blocks = len(tablelist) * 2**(hash1_w-1 + hash2_w - 13)
+            print( "N tables: "+str(len(tablelist)))
+            print( "blocks iter: "+str(blocks))
             while(blocks > 1024):
                 hash2_w -= 1
-                blocks = len(tablelist) * 2**(hash1_w + hash2_w - 14)
+                blocks = len(tablelist) * 2**(hash1_w-1 + hash2_w - 13)
+                print( "blocks iter: "+str(blocks))
             
             hashtable_spaceused = len(tablelist) * (2**hash1_w) * (2**hash2_w) * byte_counter
             hashtable_spaceused += datagraph_e * byte_edge
