@@ -54,7 +54,7 @@ void load_datagraphs(
     edge_t edge;
     
     /* Remove "../" to make paths correct */
-    // datafile = datafile.substr(3);
+    datafile = datafile.substr(3);
     
     std::ifstream fData(datafile);
     
@@ -130,7 +130,7 @@ int load_querygraphs(
     edge_t edge;
     
     /* Remove "../" to make paths correct */
-    // queryfile = queryfile.substr(3);
+    queryfile = queryfile.substr(3);
     
     /* Query file */
     std::ifstream fQuery(queryfile);

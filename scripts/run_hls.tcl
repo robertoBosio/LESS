@@ -6,7 +6,7 @@ open_project $proj
 add_files "$dir/logger.cpp"
 add_files "$dir/cmdlineparser.cpp"
 add_files "$dir/subgraphIsomorphism.cpp" -cflags "-Wno-attributes -Wno-unknown-pragmas"
-add_files -tb "$dir/subiso-test.cpp scripts /home/roberto/Documents/subgraph-iso/dataset /home/roberto/Documents/subgraph-iso/dataset2" -cflags "-O3 -Wno-attributes -Wno-unknown-pragmas"
+add_files -tb "$dir/subiso-test.cpp scripts dataset_example" -cflags "-O3 -Wno-attributes -Wno-unknown-pragmas"
 set_top subgraphIsomorphism
 
 open_solution -reset "solution1" -flow_target vivado
