@@ -22,11 +22,13 @@
 #endif /* SOFTWARE_PREPROC */
 
 // XRT includes
+#ifdef XILINX_XRT
 #include "cmdlineparser.h"
 #include "xrt/xrt_bo.h"
 #include "xrt/xrt_device.h"
 #include "xrt/xrt_kernel.h"
 #include "experimental/xrt_xclbin.h"
+#endif /* XILINX_XRT */
 
 
 struct TestEntry {
@@ -52,7 +54,7 @@ void load_datagraphs(
     edge_t edge;
     
     /* Remove "../" to make paths correct */
-    datafile = datafile.substr(3);
+    // datafile = datafile.substr(3);
     
     std::ifstream fData(datafile);
     
@@ -128,7 +130,7 @@ int load_querygraphs(
     edge_t edge;
     
     /* Remove "../" to make paths correct */
-    queryfile = queryfile.substr(3);
+    // queryfile = queryfile.substr(3);
     
     /* Query file */
     std::ifstream fQuery(queryfile);
@@ -359,7 +361,19 @@ int main(int argc, char** argv)
     unsigned int res_expected;
     unsigned long diagnostic;
     unsigned long dynfifo_space;
-    unsigned long counters[25];
+    unsigned long counters[12] = {0};
+    std::string counters_meaning[] = {"hits_findmin",
+                                    "hits_readmin_counter",
+                                    "hits_readmin_edge",
+                                    "hits_intersect",
+                                    "hits_verify",
+                                    "reqs_findmin",
+                                    "reqs_readmin_counter",
+                                    "reqs_readmin_edge",
+                                    "reqs_intersect",
+                                    "reqs_verify",
+                                    "reqs_dynfifo",
+                                    "bloom_filtered"};
     unsigned int dynfifo_overflow;
     unsigned int debug_endpreprocess_s;
     bool flag = true;
@@ -396,9 +410,9 @@ int main(int argc, char** argv)
 		return -1;
 	}
 
-    std::ifstream testfile("scripts/run_list.txt");
+    std::ifstream testfile("scripts/run_list_fpga.txt");
     if (!testfile) {
-        std::cerr << "Error: Unable to open test.txt" << std::endl;
+        std::cerr << "Error: Unable to open run_list_fpga.txt" << std::endl;
         return -1;
     }
 
@@ -682,10 +696,11 @@ int main(int argc, char** argv)
             res_actual = result;
 #endif
 
-            std::cout << "Expected: " << res_expected << " actual: " << res_actual << std::endl;
+            std::cout << "Expected: " << res_expected << " Actual: " << res_actual << std::endl;
             flag &= (res_actual == res_expected);
-            for (int g = 0; g < 25; g++) {
-                std::cout << counters[g] << std::endl;
+            std::cout << "Debug counters:" << std::endl;
+            for (int g = 0; g < 12; g++) {
+                std::cout << "\t" << counters_meaning[g] << ": " << counters[g] << std::endl;
             }
         }
     }

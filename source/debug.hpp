@@ -66,7 +66,7 @@ namespace debug
           const unsigned char hash1_w,
           const unsigned char hash2_w)
       {
-            std::ofstream debof("../../../../stats.txt", std::ofstream::app);
+            std::ofstream debof("../../../../reports/stats.txt", std::ofstream::app);
 
             unsigned long mem_accesses = batch_reads + findmin_reads +
                                          readmin_counter_reads + readmin_edge_reads +

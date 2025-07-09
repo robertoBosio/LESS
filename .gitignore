@@ -1,8 +1,8 @@
 dataset/*
 dataset2/*
 sw_benchmark/*
-subgraphiso-kria*/*
-subiso_bd/*
+less_hls/*
+less_bd/*
 subiso_bd2023/*
 .vscode/*
 result*

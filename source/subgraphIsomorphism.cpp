@@ -73,7 +73,7 @@ typedef cache<ap_uint<DDR_W>,
               2,
               HASHTABLES_SPACE,
               0,
-              0,
+              1,
               (1UL << CACHE_WORDS_PER_LINE),
               false,
               4096,
@@ -90,7 +90,7 @@ typedef cache<ap_uint<DDR_W>,
               1,
               HASHTABLES_SPACE,
               0,
-              0,
+              1,
               16,
               false,
               512,
@@ -1809,9 +1809,10 @@ multiwayJoin(ap_uint<DDR_W>* htb_buf0,
     htb_cache2.get_l1_stats(0, hits_readmin_edge, reqs_readmin_edge);
 #else
 
+    // Increase the task counter, as with the loop inside the dataflow
+    // the CSIM immiediately detect a deadlock.
     for (int g = 0; g < STOP_S + 2; g++)
-      // hls::stream_globals<false>::incr_task_counter();
-      hls::stream_globals::incr_task_counter();
+      hls::stream_globals<false>::incr_task_counter();
 
     htb_cache.init();
     htb_cache2.init();
@@ -1932,21 +1933,6 @@ void subgraphIsomorphism(row_t htb_buf0[HASHTABLES_SPACE],
 
 #if DEBUG_INTERFACE
                          volatile unsigned int &debif_endpreprocess,
-                         unsigned long &p_propose_empty,
-                         unsigned long &p_edgebuild_empty,
-                         unsigned long &p_findmin_empty,
-                         unsigned long &p_readmin_counter_empty,
-                         unsigned long &p_readmin_edge_empty,
-                         unsigned long &p_homomorphism_empty,
-                         unsigned long &p_batchbuild_empty,
-                         unsigned long &p_tuplebuild_empty,
-                         unsigned long &p_intersect_empty,
-                         unsigned long &p_offset_empty,
-                         unsigned long &p_split_empty,
-                         unsigned long &p_verify_empty,
-                         unsigned long &p_compact_empty,
-                         unsigned long &p_filter_empty,
-                         unsigned long &p_assembly_empty,
                          unsigned long &p_hits_findmin,
                          unsigned long &p_hits_readmin_counter,
                          unsigned long &p_hits_readmin_edge,
@@ -1957,26 +1943,28 @@ void subgraphIsomorphism(row_t htb_buf0[HASHTABLES_SPACE],
                          unsigned long &p_reqs_readmin_edge,
                          unsigned long &p_reqs_intersect,
                          unsigned long &p_reqs_verify,
+                         unsigned long &p_reqs_dynfifo,
+                         unsigned long &p_bloom_filtered,
 #endif /* DEBUG_INTERFACE */
                          long unsigned int &result)
 {
 
 #pragma HLS INTERFACE mode=m_axi port=htb_buf0 bundle=prop_batch \
-    max_widen_bitwidth=128 latency=1
+    max_widen_bitwidth=128 latency=1 depth=100000000
 #pragma HLS INTERFACE mode=m_axi port=htb_buf1 bundle=cache \
     max_widen_bitwidth=128 num_write_outstanding=1 max_write_burst_length=2 \
-    latency=1
+    latency=1 depth=100000000
 #pragma HLS INTERFACE mode=m_axi port=htb_buf2 bundle=readmin_c \
     max_widen_bitwidth=128 num_write_outstanding=1 max_write_burst_length=2 \
-    latency=1
+    latency=1 depth=100000000
 #pragma HLS INTERFACE mode=m_axi port=htb_buf3 bundle=readmin_e \
     max_widen_bitwidth=128 num_write_outstanding=1 max_write_burst_length=2 \
-    latency=1
+    latency=1 depth=100000000
 #pragma HLS INTERFACE mode=m_axi port=res_buf bundle=fifo \
     max_widen_bitwidth=128 max_read_burst_length=32 max_write_burst_length=32 \
-    latency=1
+    latency=1 depth=100000000
 #pragma HLS INTERFACE mode=m_axi port=bloom_p bundle=bloom \
-    max_widen_bitwidth=128 latency=20
+    max_widen_bitwidth=128 latency=20 depth=100000000
 
 #pragma HLS alias ports = htb_buf0, htb_buf1, htb_buf2, htb_buf3 distance = 0
 
@@ -1988,38 +1976,26 @@ void subgraphIsomorphism(row_t htb_buf0[HASHTABLES_SPACE],
 #pragma HLS INTERFACE mode = s_axilite port = return
 
 #if DEBUG_INTERFACE
-#pragma HLS INTERFACE mode = s_axilite port = debif_endpreprocess
-#pragma HLS INTERFACE mode = s_axilite port = p_propose_empty
-#pragma HLS INTERFACE mode = s_axilite port = p_edgebuild_empty
-#pragma HLS INTERFACE mode = s_axilite port = p_findmin_empty
-#pragma HLS INTERFACE mode = s_axilite port = p_readmin_counter_empty
-#pragma HLS INTERFACE mode = s_axilite port = p_readmin_edge_empty
-#pragma HLS INTERFACE mode = s_axilite port = p_tuplebuild_empty
-#pragma HLS INTERFACE mode = s_axilite port = p_intersect_empty
-#pragma HLS INTERFACE mode = s_axilite port = p_verify_empty
-#pragma HLS INTERFACE mode = s_axilite port = p_assembly_empty
-#pragma HLS INTERFACE mode = s_axilite port = p_homomorphism_empty
-#pragma HLS INTERFACE mode = s_axilite port = p_batchbuild_empty
-#pragma HLS INTERFACE mode = s_axilite port = p_offset_empty
-#pragma HLS INTERFACE mode = s_axilite port = p_split_empty
-#pragma HLS INTERFACE mode = s_axilite port = p_compact_empty
-#pragma HLS INTERFACE mode = s_axilite port = p_filter_empty
-#pragma HLS INTERFACE mode = s_axilite port = p_reqs_findmin
-#pragma HLS INTERFACE mode = s_axilite port = p_reqs_readmin_counter
-#pragma HLS INTERFACE mode = s_axilite port = p_reqs_readmin_edge
-#pragma HLS INTERFACE mode = s_axilite port = p_reqs_intersect
-#pragma HLS INTERFACE mode = s_axilite port = p_reqs_verify
-#pragma HLS INTERFACE mode = s_axilite port = p_hits_findmin
-#pragma HLS INTERFACE mode = s_axilite port = p_hits_readmin_counter
-#pragma HLS INTERFACE mode = s_axilite port = p_hits_readmin_edge
-#pragma HLS INTERFACE mode = s_axilite port = p_hits_intersect
-#pragma HLS INTERFACE mode = s_axilite port = p_hits_verify
+#pragma HLS INTERFACE mode=s_axilite port=debif_endpreprocess
+#pragma HLS INTERFACE mode=s_axilite port=p_reqs_findmin
+#pragma HLS INTERFACE mode=s_axilite port=p_reqs_readmin_counter
+#pragma HLS INTERFACE mode=s_axilite port=p_reqs_readmin_edge
+#pragma HLS INTERFACE mode=s_axilite port=p_reqs_intersect
+#pragma HLS INTERFACE mode=s_axilite port=p_reqs_verify
+#pragma HLS INTERFACE mode=s_axilite port=p_reqs_dynfifo
+#pragma HLS INTERFACE mode=s_axilite port=p_hits_findmin
+#pragma HLS INTERFACE mode=s_axilite port=p_hits_readmin_counter
+#pragma HLS INTERFACE mode=s_axilite port=p_hits_readmin_edge
+#pragma HLS INTERFACE mode=s_axilite port=p_hits_intersect
+#pragma HLS INTERFACE mode=s_axilite port=p_hits_verify
+#pragma HLS INTERFACE mode=s_axilite port=p_bloom_filtered
 #endif /* DEBUG_INTERFACE */
 
 #pragma HLS INTERFACE mode = s_axilite port = result
 
-  unsigned long local_result = 0;
-  unsigned int local_dynfifo_overflow = 0;
+    unsigned long localResult = 0;
+    unsigned int local_dynfifo_overflow = 0;
+    unsigned long reqs_dynfifo = 0;
 
 #if DEBUG_STATS
   debug::init();
@@ -2052,33 +2028,24 @@ void subgraphIsomorphism(row_t htb_buf0[HASHTABLES_SPACE],
                    hash2_w,
                    dynfifo_space,
                    local_dynfifo_overflow,
-                   local_result);
+                   reqs_dynfifo,
+                   localResult);
 
   ap_wait();
-  result = local_result;
+  result = localResult;
   dynfifo_overflow = local_dynfifo_overflow;
-  p_propose_empty = propose_empty;
-  p_edgebuild_empty = edgebuild_empty;
-  p_findmin_empty = findmin_empty;
-  p_readmin_counter_empty = readmin_counter_empty;
-  p_readmin_edge_empty = readmin_edge_empty;
-  p_homomorphism_empty = homomorphism_empty;
-  p_batchbuild_empty = batchbuild_empty;
-  p_tuplebuild_empty = tuplebuild_empty;
-  p_intersect_empty = intersect_empty;
-  p_offset_empty = offset_empty;
-  p_split_empty = split_empty;
-  p_verify_empty = verify_empty;
-  p_compact_empty = compact_empty;
-  p_filter_empty = filter_empty;
-  p_assembly_empty = assembly_empty;
-  p_hits_verify = hits_verify;
-  p_hits_intersect = hits_intersect;
   p_reqs_findmin = reqs_findmin;
   p_reqs_readmin_counter = reqs_readmin_counter;
   p_reqs_readmin_edge = reqs_readmin_edge;
-  p_reqs_verify = reqs_verify;
   p_reqs_intersect = reqs_intersect;
+  p_reqs_verify = reqs_verify;
+  p_reqs_dynfifo = reqs_dynfifo;
+  p_hits_findmin = hits_findmin;
+  p_hits_readmin_counter = hits_readmin_counter;
+  p_hits_readmin_edge = hits_readmin_edge;
+  p_hits_verify = hits_verify;
+  p_hits_intersect = hits_intersect;
+  p_bloom_filtered = bloom_filtered;
 
 #if DEBUG_STATS
   debug::print(hash1_w, hash2_w);

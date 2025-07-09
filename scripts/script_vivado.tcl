@@ -1,7 +1,6 @@
-set proj_name "subiso_bd"
-set proj_dir "./subiso_bd"
-# set proj_name_hls "subiso_hls"
-set proj_dir_hls "./subgraphiso-kria"
+set proj_name "less_bd"
+set proj_dir "./less_bd"
+set proj_dir_hls "./less_hls"
 
 if {[file exists $proj_dir/$proj_name.xpr]} {
     puts "Project $proj_name already exists. Opening the existing project..."
@@ -20,7 +19,7 @@ if {[file exists $proj_dir/$proj_name.xpr]} {
     set_property ip_repo_paths "$proj_dir_hls/solution1/impl/ip" [current_project]
    
     # Create block design 
-    source subiso_bd.tcl
+    source scripts/less_bd.tcl
 
     # Make wrapper
     make_wrapper -files [get_files "$proj_dir/$proj_name.srcs/sources_1/bd/design_1/design_1.bd"] -top

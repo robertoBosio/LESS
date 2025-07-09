@@ -309,12 +309,12 @@ def subiso(test, path):
             BLOOM.flush()
             FIFO.flush()
             
-            #hash1_w = int(querytuple[2])
-            #hash2_w = int(querytuple[3])
+            hash1_w = int(querytuple[2])
+            hash2_w = int(querytuple[3])
 
             #Heuristic to compute hash table parameters
-            hash1_w = int(0.4 * np.log(5*(10**7)*datagraph_e)) + 2
-            hash2_w = int(min(max_degree + 1, 7))
+            # hash1_w = int(0.4 * np.log(5*(10**7)*datagraph_e)) + 2
+            # hash2_w = int(min(max_degree + 1, 7))
 
             # Assert that the sum of hash widths is bigger than 14
             if (hash1_w + hash2_w <= 14):
@@ -376,7 +376,6 @@ def subiso(test, path):
                 end_preprocess = perf_counter()
                 print(f"Preprocessing used {(end_preprocess - start):.3f}s.", flush=True)
 
-# while (not (ol.subgraphIsomorphism_0.read(addr_res_ctrl))):
                 while (not (ol.subgraphIsomorphism_0.read(0x00) & 0x2)):
                     with open("/sys/class/hwmon/hwmon2/power1_input") as f_input:
                        power.append(int(f_input.read()))
@@ -451,125 +450,11 @@ def subiso(test, path):
                       sep="",
                       file=fres)
                 fres.flush()
-                #cycles = int((tot_time - pre_time) * 290000000);
-                #empty = 0
-                #empty0 = ol.subgraphIsomorphism_0.read(0xb8);
-                #empty1 = ol.subgraphIsomorphism_0.read(0xbc);
-                #empty = (empty1 << 32) | empty0;
-                #print(f"Propose empty         {empty} cc, {(empty * 100 / cycles):.2f}%", file=fres)
-                #empty = 0
-                #empty0 = ol.subgraphIsomorphism_0.read(0xd0);
-                #empty1 = ol.subgraphIsomorphism_0.read(0xb4);
-                #empty = (empty1 << 32) | empty0;
-                #empty = empty * 2
-                #print(f"Edgebuild empty       {empty} cc, {(empty * 100 / cycles):.2f}%", file=fres)
-                #empty = 0
-                #empty0 = ol.subgraphIsomorphism_0.read(0xe8);
-                #empty1 = ol.subgraphIsomorphism_0.read(0xec);
-                #empty = (empty1 << 32) | empty0;
-                #empty = empty * 4
-                #print(f"Findmin empty         {empty} cc, {(empty * 100 / cycles):.2f}%", file=fres)
-                #empty = 0
-                #empty0 = ol.subgraphIsomorphism_0.read(0x100);
-                #empty1 = ol.subgraphIsomorphism_0.read(0x104);
-                #empty = (empty1 << 32) | empty0;
-                #empty = empty * 2
-                #print(f"Readmin counter empty {empty} cc, {(empty * 100 / cycles):.2f}%", file=fres)
-                #empty = 0
-                #empty0 = ol.subgraphIsomorphism_0.read(0x118);
-                #empty1 = ol.subgraphIsomorphism_0.read(0x11c);
-                #empty = (empty1 << 32) | empty0;
-                #empty = empty * 2
-                #print(f"Readmin edge empty    {empty} cc, {(empty * 100 / cycles):.2f}%", file=fres)
-                #empty = 0
-                #empty0 = ol.subgraphIsomorphism_0.read(0x130);
-                #empty1 = ol.subgraphIsomorphism_0.read(0x134);
-                #empty = (empty1 << 32) | empty0;
-                #empty = empty * 2
-                #print(f"Homomorphism empty    {empty} cc, {(empty * 100 / cycles):.2f}%", file=fres)
-                #empty = 0
-                #empty0 = ol.subgraphIsomorphism_0.read(0x148);
-                #empty1 = ol.subgraphIsomorphism_0.read(0x14c);
-                #empty = (empty1 << 32) | empty0;
-                #empty = empty * 2
-                #print(f"Batch build empty     {empty} cc, {(empty * 100 / cycles):.2f}%", file=fres)
-                #empty = 0
-                #empty0 = ol.subgraphIsomorphism_0.read(0x160);
-                #empty1 = ol.subgraphIsomorphism_0.read(0x164);
-                #empty = (empty1 << 32) | empty0;
-                #print(f"Tuplebuild empty      {empty} cc, {(empty * 100 / cycles):.2f}%", file=fres)
-                #empty = 0
-                #empty0 = ol.subgraphIsomorphism_0.read(0x178);
-                #empty1 = ol.subgraphIsomorphism_0.read(0x17c);
-                #empty = (empty1 << 32) | empty0;
-                #print(f"Intersect empty       {empty} cc, {(empty * 100 / cycles):.2f}%", file=fres)
-                #empty = 0
-                #empty0 = ol.subgraphIsomorphism_0.read(0x190);
-                #empty1 = ol.subgraphIsomorphism_0.read(0x194);
-                #empty = (empty1 << 32) | empty0;
-                #empty = empty
-                #print(f"Bypass filter empty          {empty} cc, {(empty * 100 / cycles):.2f}%", file=fres)
-                #empty = 0
-                #empty0 = ol.subgraphIsomorphism_0.read(0x1a8);
-                #empty1 = ol.subgraphIsomorphism_0.read(0x1ac);
-                #empty = (empty1 << 32) | empty0;
-                #empty = empty * 2
-                #print(f"Split empty           {empty} cc, {(empty * 100 / cycles):.2f}%", file=fres)
-                #empty = 0
-                #empty0 = ol.subgraphIsomorphism_0.read(0x1c0);
-                #empty1 = ol.subgraphIsomorphism_0.read(0x1c4);
-                #empty = (empty1 << 32) | empty0;
-                #print(f"Verify empty          {empty} cc, {(empty * 100 / cycles):.2f}%", file=fres)
-                #empty = 0
-                #empty0 = ol.subgraphIsomorphism_0.read(0x1d8);
-                #empty1 = ol.subgraphIsomorphism_0.read(0x1dc);
-                #empty = (empty1 << 32) | empty0;
-                #print(f"Compact empty         {empty} cc, {(empty * 100 / cycles):.2f}%", file=fres)
-                #empty = 0
-                #empty0 = ol.subgraphIsomorphism_0.read(0x1f0);
-                #empty1 = ol.subgraphIsomorphism_0.read(0x1f4);
-                #empty = (empty1 << 32) | empty0;
-                #print(f"Filter empty          {empty} cc, {(empty * 100 / cycles):.2f}%", file=fres)
-                #empty = 0
-                #empty0 = ol.subgraphIsomorphism_0.read(0x208);
-                #empty1 = ol.subgraphIsomorphism_0.read(0x20c);
-                #empty = (empty1 << 32) | empty0;
-                #empty = empty * 2
-                #print(f"Assembly empty        {empty} cc, {(empty * 100 / cycles):.2f}%", file=fres)
-                #print(f"Cycles: {cycles}", file=fres)
-#
-#                if c == int(querytuple[1]):
-#                    print("OK, solutions: ", c, sep="", flush=True)
-#                    print(f"{pre_time:.4f}", 
-#                          f"{tot_time:.4f}   OK\n",
-#                          sep='\n',
-#                          file=fres)
-#                else:
-#                    print("***** NO *****, expected: ", 
-#                          querytuple[1], "\tactual: ", c, sep="",  flush=True)
-#                    print(f"{pre_time:.4f}", 
-#                          f"{tot_time:.4f} **NO**\n",
-#                          sep='\n',
-#                          file=fres)
-                
             else :
                 print("Skipped due to memory overflow.", flush=True)
             print(" ", flush=True)
 
-# nfile += 1
-# np.save("/home/ubuntu/" + str(nfile) + ".csv", MEM)
-# print("tot time: " + str(np.mean(tot_time_arr)) +
-# "+-" + str(np.std(tot_time_arr)) + " s", file=fq)
-# print("pre time: " + str(np.mean(pre_time_arr)) +
-# "+-" + str(np.std(pre_time_arr)) + " s", file=fq)
-# print("power: " + str(np.avg(power_arr)) + "+-" + str(np.std(power_arr)) +
-# " (energy: " + str(np.avg(energy_arr)) +
-# "+- " + str(np.std(energy_arr)) + ")")
-# print(FIFO[4194254:4194354], file=fq)
-    
-    # print(f"Total test time: {tot_time_bench:.4f}", file=fres)
     fres.close()
-    # del FIFO, GRAPH_SPACE, MEM, BLOOM
     del FIFO, MEM, BLOOM
 
 if __name__ == "__main__":
@@ -591,43 +476,3 @@ if __name__ == "__main__":
     testfile.close()
     
     subiso(test, args.path)
-    
-    # Allocating space for streams. #
-# SRC_EDG_D = allocate(shape=(datagraph_e,), dtype=node_t)
-# DST_EDG_D = allocate(shape=(datagraph_e,), dtype=node_t)
-# SRC_EDG_D_L = allocate(shape=(datagraph_e,), dtype=label_t)
-# DST_EDG_D_L = allocate(shape=(datagraph_e,), dtype=label_t)
-    # Allocating space for streams. #
-# SRC_ORD = allocate(shape=(querygraph_v,), dtype=node_t)
-# SRC_EDG_Q = allocate(shape=(querygraph_e,), dtype=node_t)
-# DST_EDG_Q = allocate(shape=(querygraph_e,), dtype=node_t)
-# SRC_EDG_Q_L = allocate(shape=(querygraph_e,), dtype=label_t)
-# DST_EDG_Q_L = allocate(shape=(querygraph_e,), dtype=label_t)
-
-        #First transaction query vertex order
-# ol.axi_dma_0.sendchannel.transfer(SRC_ORD)
-# ol.axi_dma_0.sendchannel.wait()
-
-# Second transaction query edges
-# ol.axi_dma_3.sendchannel.transfer(DST_EDG_Q_L)
-# ol.axi_dma_2.sendchannel.transfer(SRC_EDG_Q_L)
-# ol.axi_dma_1.sendchannel.transfer(DST_EDG_Q)
-# ol.axi_dma_0.sendchannel.transfer(SRC_EDG_Q)
-# ol.axi_dma_0.sendchannel.wait()
-
-# Third transaction data edges
-# ol.axi_dma_3.sendchannel.transfer(DST_EDG_D_L)
-# ol.axi_dma_2.sendchannel.transfer(SRC_EDG_D_L)
-# ol.axi_dma_1.sendchannel.transfer(DST_EDG_D)
-# ol.axi_dma_0.sendchannel.transfer(SRC_EDG_D)
-# ol.axi_dma_0.sendchannel.wait()
-
-# Fourth transaction data edges
-# ol.axi_dma_3.sendchannel.transfer(DST_EDG_D_L)
-# ol.axi_dma_2.sendchannel.transfer(SRC_EDG_D_L)
-# ol.axi_dma_1.sendchannel.transfer(DST_EDG_D)
-# ol.axi_dma_0.sendchannel.transfer(SRC_EDG_D)
-# ol.axi_dma_0.sendchannel.wait()
-
-        #while (not (ol.subgraphIsomorphism_0.read(0x00) & 0x2)):
-        #    pass

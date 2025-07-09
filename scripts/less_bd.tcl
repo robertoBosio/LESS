@@ -20,12 +20,18 @@ set script_folder [_tcl::get_script_folder]
 ################################################################
 # Check if script is running in correct Vivado version.
 ################################################################
-set scripts_vivado_version 2022.2
+set scripts_vivado_version 2024.1
 set current_vivado_version [version -short]
 
 if { [string first $scripts_vivado_version $current_vivado_version] == -1 } {
    puts ""
-   catch {common::send_gid_msg -ssname BD::TCL -id 2041 -severity "ERROR" "This script was generated using Vivado <$scripts_vivado_version> and is being run in <$current_vivado_version> of Vivado. Please run the script in Vivado <$scripts_vivado_version> then open the design in Vivado <$current_vivado_version>. Upgrade the design by running \"Tools => Report => Report IP Status...\", then run write_bd_tcl to create an updated script."}
+   if { [string compare $scripts_vivado_version $current_vivado_version] > 0 } {
+      catch {common::send_gid_msg -ssname BD::TCL -id 2042 -severity "ERROR" " This script was generated using Vivado <$scripts_vivado_version> and is being run in <$current_vivado_version> of Vivado. Sourcing the script failed since it was created with a future version of Vivado."}
+
+   } else {
+     catch {common::send_gid_msg -ssname BD::TCL -id 2041 -severity "ERROR" "This script was generated using Vivado <$scripts_vivado_version> and is being run in <$current_vivado_version> of Vivado. Please run the script in Vivado <$scripts_vivado_version> then open the design in Vivado <$current_vivado_version>. Upgrade the design by running \"Tools => Report => Report IP Status...\", then run write_bd_tcl to create an updated script."}
+
+   }
 
    return 1
 }
@@ -124,11 +130,11 @@ set bCheckIPsPassed 1
 set bCheckIPs 1
 if { $bCheckIPs == 1 } {
    set list_check_ips "\ 
-xilinx.com:ip:clk_wiz:6.0\
-xilinx.com:ip:proc_sys_reset:5.0\
-xilinx.com:ip:smartconnect:1.0\
 xilinx.com:hls:subgraphIsomorphism:1.0\
-xilinx.com:ip:zynq_ultra_ps_e:3.4\
+xilinx.com:ip:zynq_ultra_ps_e:3.5\
+xilinx.com:ip:clk_wiz:6.0\
+xilinx.com:ip:smartconnect:1.0\
+xilinx.com:ip:proc_sys_reset:5.0\
 "
 
    set list_ips_missing ""
@@ -195,39 +201,11 @@ proc create_root_design { parentCell } {
 
   # Create ports
 
-  # Create instance: clk_wiz_0, and set properties
-  set clk_wiz_0 [ create_bd_cell -type ip -vlnv xilinx.com:ip:clk_wiz:6.0 clk_wiz_0 ]
-  set_property -dict [list \
-    CONFIG.CLKOUT1_JITTER {94.863} \
-    CONFIG.CLKOUT1_PHASE_ERROR {87.181} \
-    CONFIG.CLKOUT1_REQUESTED_OUT_FREQ {300} \
-    CONFIG.MMCM_CLKFBOUT_MULT_F {12.000} \
-    CONFIG.MMCM_CLKOUT0_DIVIDE_F {4.000} \
-    CONFIG.MMCM_DIVCLK_DIVIDE {1} \
-    CONFIG.PRIM_SOURCE {No_buffer} \
-    CONFIG.RESET_PORT {resetn} \
-    CONFIG.RESET_TYPE {ACTIVE_LOW} \
-  ] $clk_wiz_0
-
-
-  # Create instance: ps8_0_axi_periph, and set properties
-  set ps8_0_axi_periph [ create_bd_cell -type ip -vlnv xilinx.com:ip:axi_interconnect:2.1 ps8_0_axi_periph ]
-  set_property CONFIG.NUM_MI {1} $ps8_0_axi_periph
-
-
-  # Create instance: rst_ps8_0_99M, and set properties
-  set rst_ps8_0_99M [ create_bd_cell -type ip -vlnv xilinx.com:ip:proc_sys_reset:5.0 rst_ps8_0_99M ]
-
-  # Create instance: smartconnect_0, and set properties
-  set smartconnect_0 [ create_bd_cell -type ip -vlnv xilinx.com:ip:smartconnect:1.0 smartconnect_0 ]
-  set_property CONFIG.NUM_SI {3} $smartconnect_0
-
-
   # Create instance: subgraphIsomorphism_0, and set properties
   set subgraphIsomorphism_0 [ create_bd_cell -type ip -vlnv xilinx.com:hls:subgraphIsomorphism:1.0 subgraphIsomorphism_0 ]
 
   # Create instance: zynq_ultra_ps_e_0, and set properties
-  set zynq_ultra_ps_e_0 [ create_bd_cell -type ip -vlnv xilinx.com:ip:zynq_ultra_ps_e:3.4 zynq_ultra_ps_e_0 ]
+  set zynq_ultra_ps_e_0 [ create_bd_cell -type ip -vlnv xilinx.com:ip:zynq_ultra_ps_e:3.5 zynq_ultra_ps_e_0 ]
   set_property -dict [list \
     CONFIG.PSU_BANK_0_IO_STANDARD {LVCMOS18} \
     CONFIG.PSU_BANK_1_IO_STANDARD {LVCMOS18} \
@@ -243,7 +221,6 @@ proc create_root_design { parentCell } {
     CONFIG.PSU_MIO_11_DRIVE_STRENGTH {4} \
     CONFIG.PSU_MIO_11_SLEW {slow} \
     CONFIG.PSU_MIO_12_DRIVE_STRENGTH {4} \
-    CONFIG.PSU_MIO_12_INPUT_TYPE {cmos} \
     CONFIG.PSU_MIO_12_POLARITY {Default} \
     CONFIG.PSU_MIO_12_SLEW {slow} \
     CONFIG.PSU_MIO_13_DRIVE_STRENGTH {4} \
@@ -276,7 +253,6 @@ proc create_root_design { parentCell } {
     CONFIG.PSU_MIO_21_POLARITY {Default} \
     CONFIG.PSU_MIO_21_SLEW {slow} \
     CONFIG.PSU_MIO_22_DRIVE_STRENGTH {4} \
-    CONFIG.PSU_MIO_22_INPUT_TYPE {cmos} \
     CONFIG.PSU_MIO_22_POLARITY {Default} \
     CONFIG.PSU_MIO_22_SLEW {slow} \
     CONFIG.PSU_MIO_23_DRIVE_STRENGTH {4} \
@@ -394,7 +370,6 @@ proc create_root_design { parentCell } {
     CONFIG.PSU_MIO_77_DRIVE_STRENGTH {4} \
     CONFIG.PSU_MIO_77_SLEW {slow} \
     CONFIG.PSU_MIO_7_DRIVE_STRENGTH {4} \
-    CONFIG.PSU_MIO_7_INPUT_TYPE {cmos} \
     CONFIG.PSU_MIO_7_POLARITY {Default} \
     CONFIG.PSU_MIO_7_SLEW {slow} \
     CONFIG.PSU_MIO_8_DRIVE_STRENGTH {4} \
@@ -621,24 +596,60 @@ Port;FD4A0000;FD4AFFFF;0|FPD;DPDMA;FD4C0000;FD4CFFFF;0|FPD;DDR_XMPU5_CFG;FD05000
   ] $zynq_ultra_ps_e_0
 
 
+  # Create instance: clk_wiz_0, and set properties
+  set clk_wiz_0 [ create_bd_cell -type ip -vlnv xilinx.com:ip:clk_wiz:6.0 clk_wiz_0 ]
+  set_property -dict [list \
+    CONFIG.CLKOUT1_JITTER {110.210} \
+    CONFIG.CLKOUT1_PHASE_ERROR {98.576} \
+    CONFIG.CLKOUT1_REQUESTED_OUT_FREQ {250.000} \
+    CONFIG.MMCM_CLKFBOUT_MULT_F {10.000} \
+    CONFIG.MMCM_CLKOUT0_DIVIDE_F {4.000} \
+    CONFIG.PRIM_SOURCE {No_buffer} \
+    CONFIG.RESET_PORT {resetn} \
+    CONFIG.RESET_TYPE {ACTIVE_LOW} \
+  ] $clk_wiz_0
+
+
+  # Create instance: axi_smc, and set properties
+  set axi_smc [ create_bd_cell -type ip -vlnv xilinx.com:ip:smartconnect:1.0 axi_smc ]
+  set_property CONFIG.NUM_SI {1} $axi_smc
+
+
+  # Create instance: rst_ps8_0_99M, and set properties
+  set rst_ps8_0_99M [ create_bd_cell -type ip -vlnv xilinx.com:ip:proc_sys_reset:5.0 rst_ps8_0_99M ]
+
+  # Create instance: smartconnect_0, and set properties
+  set smartconnect_0 [ create_bd_cell -type ip -vlnv xilinx.com:ip:smartconnect:1.0 smartconnect_0 ]
+
   # Create interface connections
-  connect_bd_intf_net -intf_net ps8_0_axi_periph_M00_AXI [get_bd_intf_pins ps8_0_axi_periph/M00_AXI] [get_bd_intf_pins subgraphIsomorphism_0/s_axi_control]
+  connect_bd_intf_net -intf_net axi_smc_M00_AXI [get_bd_intf_pins axi_smc/M00_AXI] [get_bd_intf_pins subgraphIsomorphism_0/s_axi_control]
   connect_bd_intf_net -intf_net smartconnect_0_M00_AXI [get_bd_intf_pins smartconnect_0/M00_AXI] [get_bd_intf_pins zynq_ultra_ps_e_0/S_AXI_HP3_FPD]
   connect_bd_intf_net -intf_net subgraphIsomorphism_0_m_axi_bloom [get_bd_intf_pins subgraphIsomorphism_0/m_axi_bloom] [get_bd_intf_pins zynq_ultra_ps_e_0/S_AXI_HP2_FPD]
   connect_bd_intf_net -intf_net subgraphIsomorphism_0_m_axi_cache [get_bd_intf_pins subgraphIsomorphism_0/m_axi_cache] [get_bd_intf_pins zynq_ultra_ps_e_0/S_AXI_HP0_FPD]
-  connect_bd_intf_net -intf_net subgraphIsomorphism_0_m_axi_fifo [get_bd_intf_pins smartconnect_0/S00_AXI] [get_bd_intf_pins subgraphIsomorphism_0/m_axi_fifo]
-  connect_bd_intf_net -intf_net subgraphIsomorphism_0_m_axi_prop_batch [get_bd_intf_pins smartconnect_0/S01_AXI] [get_bd_intf_pins subgraphIsomorphism_0/m_axi_prop_batch]
-  connect_bd_intf_net -intf_net subgraphIsomorphism_0_m_axi_readmin_c [get_bd_intf_pins subgraphIsomorphism_0/m_axi_readmin_c] [get_bd_intf_pins zynq_ultra_ps_e_0/S_AXI_HP1_FPD]
-  connect_bd_intf_net -intf_net subgraphIsomorphism_0_m_axi_readmin_e [get_bd_intf_pins smartconnect_0/S02_AXI] [get_bd_intf_pins subgraphIsomorphism_0/m_axi_readmin_e]
-  connect_bd_intf_net -intf_net zynq_ultra_ps_e_0_M_AXI_HPM0_FPD [get_bd_intf_pins ps8_0_axi_periph/S00_AXI] [get_bd_intf_pins zynq_ultra_ps_e_0/M_AXI_HPM0_FPD]
+  connect_bd_intf_net -intf_net subgraphIsomorphism_0_m_axi_fifo [get_bd_intf_pins subgraphIsomorphism_0/m_axi_fifo] [get_bd_intf_pins smartconnect_0/S01_AXI]
+  connect_bd_intf_net -intf_net subgraphIsomorphism_0_m_axi_readmin_c [get_bd_intf_pins subgraphIsomorphism_0/m_axi_readmin_c] [get_bd_intf_pins smartconnect_0/S00_AXI]
+  connect_bd_intf_net -intf_net subgraphIsomorphism_0_m_axi_readmin_e [get_bd_intf_pins subgraphIsomorphism_0/m_axi_readmin_e] [get_bd_intf_pins zynq_ultra_ps_e_0/S_AXI_HP1_FPD]
+  connect_bd_intf_net -intf_net zynq_ultra_ps_e_0_M_AXI_HPM0_FPD [get_bd_intf_pins zynq_ultra_ps_e_0/M_AXI_HPM0_FPD] [get_bd_intf_pins axi_smc/S00_AXI]
 
   # Create port connections
-  connect_bd_net -net clk_wiz_0_clk_out1 [get_bd_pins clk_wiz_0/clk_out1] [get_bd_pins ps8_0_axi_periph/ACLK] [get_bd_pins ps8_0_axi_periph/M00_ACLK] [get_bd_pins ps8_0_axi_periph/S00_ACLK] [get_bd_pins rst_ps8_0_99M/slowest_sync_clk] [get_bd_pins smartconnect_0/aclk] [get_bd_pins subgraphIsomorphism_0/ap_clk] [get_bd_pins zynq_ultra_ps_e_0/maxihpm0_fpd_aclk] [get_bd_pins zynq_ultra_ps_e_0/saxihp0_fpd_aclk] [get_bd_pins zynq_ultra_ps_e_0/saxihp1_fpd_aclk] [get_bd_pins zynq_ultra_ps_e_0/saxihp2_fpd_aclk] [get_bd_pins zynq_ultra_ps_e_0/saxihp3_fpd_aclk]
-  connect_bd_net -net clk_wiz_0_locked [get_bd_pins clk_wiz_0/locked] [get_bd_pins rst_ps8_0_99M/dcm_locked]
-  connect_bd_net -net rst_ps8_0_99M_peripheral_aresetn [get_bd_pins ps8_0_axi_periph/ARESETN] [get_bd_pins ps8_0_axi_periph/M00_ARESETN] [get_bd_pins ps8_0_axi_periph/S00_ARESETN] [get_bd_pins rst_ps8_0_99M/peripheral_aresetn] [get_bd_pins smartconnect_0/aresetn] [get_bd_pins subgraphIsomorphism_0/ap_rst_n]
-  connect_bd_net -net subgraphIsomorphism_0_interrupt [get_bd_pins subgraphIsomorphism_0/interrupt] [get_bd_pins zynq_ultra_ps_e_0/pl_ps_irq0]
-  connect_bd_net -net zynq_ultra_ps_e_0_pl_clk0 [get_bd_pins clk_wiz_0/clk_in1] [get_bd_pins zynq_ultra_ps_e_0/pl_clk0]
-  connect_bd_net -net zynq_ultra_ps_e_0_pl_resetn0 [get_bd_pins clk_wiz_0/resetn] [get_bd_pins rst_ps8_0_99M/ext_reset_in] [get_bd_pins zynq_ultra_ps_e_0/pl_resetn0]
+  connect_bd_net -net clk_wiz_0_clk_out1  [get_bd_pins clk_wiz_0/clk_out1] \
+  [get_bd_pins smartconnect_0/aclk] \
+  [get_bd_pins subgraphIsomorphism_0/ap_clk] \
+  [get_bd_pins axi_smc/aclk] \
+  [get_bd_pins rst_ps8_0_99M/slowest_sync_clk] \
+  [get_bd_pins zynq_ultra_ps_e_0/maxihpm0_fpd_aclk] \
+  [get_bd_pins zynq_ultra_ps_e_0/saxihp0_fpd_aclk] \
+  [get_bd_pins zynq_ultra_ps_e_0/saxihp1_fpd_aclk] \
+  [get_bd_pins zynq_ultra_ps_e_0/saxihp2_fpd_aclk] \
+  [get_bd_pins zynq_ultra_ps_e_0/saxihp3_fpd_aclk]
+  connect_bd_net -net rst_ps8_0_99M_peripheral_aresetn  [get_bd_pins rst_ps8_0_99M/peripheral_aresetn] \
+  [get_bd_pins subgraphIsomorphism_0/ap_rst_n] \
+  [get_bd_pins axi_smc/aresetn]
+  connect_bd_net -net zynq_ultra_ps_e_0_pl_clk0  [get_bd_pins zynq_ultra_ps_e_0/pl_clk0] \
+  [get_bd_pins clk_wiz_0/clk_in1]
+  connect_bd_net -net zynq_ultra_ps_e_0_pl_resetn0  [get_bd_pins zynq_ultra_ps_e_0/pl_resetn0] \
+  [get_bd_pins rst_ps8_0_99M/ext_reset_in] \
+  [get_bd_pins clk_wiz_0/resetn]
 
   # Create address segments
   assign_bd_address -offset 0x000800000000 -range 0x000800000000 -target_address_space [get_bd_addr_spaces subgraphIsomorphism_0/Data_m_axi_bloom] [get_bd_addr_segs zynq_ultra_ps_e_0/SAXIGP4/HP2_DDR_HIGH] -force
@@ -650,16 +661,20 @@ Port;FD4A0000;FD4AFFFF;0|FPD;DPDMA;FD4C0000;FD4CFFFF;0|FPD;DDR_XMPU5_CFG;FD05000
   assign_bd_address -offset 0x000800000000 -range 0x000800000000 -target_address_space [get_bd_addr_spaces subgraphIsomorphism_0/Data_m_axi_fifo] [get_bd_addr_segs zynq_ultra_ps_e_0/SAXIGP5/HP3_DDR_HIGH] -force
   assign_bd_address -offset 0x00000000 -range 0x80000000 -target_address_space [get_bd_addr_spaces subgraphIsomorphism_0/Data_m_axi_fifo] [get_bd_addr_segs zynq_ultra_ps_e_0/SAXIGP5/HP3_DDR_LOW] -force
   assign_bd_address -offset 0xC0000000 -range 0x20000000 -target_address_space [get_bd_addr_spaces subgraphIsomorphism_0/Data_m_axi_fifo] [get_bd_addr_segs zynq_ultra_ps_e_0/SAXIGP5/HP3_QSPI] -force
-  assign_bd_address -offset 0x000800000000 -range 0x000800000000 -target_address_space [get_bd_addr_spaces subgraphIsomorphism_0/Data_m_axi_prop_batch] [get_bd_addr_segs zynq_ultra_ps_e_0/SAXIGP5/HP3_DDR_HIGH] -force
-  assign_bd_address -offset 0x00000000 -range 0x80000000 -target_address_space [get_bd_addr_spaces subgraphIsomorphism_0/Data_m_axi_prop_batch] [get_bd_addr_segs zynq_ultra_ps_e_0/SAXIGP5/HP3_DDR_LOW] -force
-  assign_bd_address -offset 0xC0000000 -range 0x20000000 -target_address_space [get_bd_addr_spaces subgraphIsomorphism_0/Data_m_axi_prop_batch] [get_bd_addr_segs zynq_ultra_ps_e_0/SAXIGP5/HP3_QSPI] -force
-  assign_bd_address -offset 0x000800000000 -range 0x000800000000 -target_address_space [get_bd_addr_spaces subgraphIsomorphism_0/Data_m_axi_readmin_c] [get_bd_addr_segs zynq_ultra_ps_e_0/SAXIGP3/HP1_DDR_HIGH] -force
-  assign_bd_address -offset 0x00000000 -range 0x80000000 -target_address_space [get_bd_addr_spaces subgraphIsomorphism_0/Data_m_axi_readmin_c] [get_bd_addr_segs zynq_ultra_ps_e_0/SAXIGP3/HP1_DDR_LOW] -force
-  assign_bd_address -offset 0xC0000000 -range 0x20000000 -target_address_space [get_bd_addr_spaces subgraphIsomorphism_0/Data_m_axi_readmin_c] [get_bd_addr_segs zynq_ultra_ps_e_0/SAXIGP3/HP1_QSPI] -force
-  assign_bd_address -offset 0x000800000000 -range 0x000800000000 -target_address_space [get_bd_addr_spaces subgraphIsomorphism_0/Data_m_axi_readmin_e] [get_bd_addr_segs zynq_ultra_ps_e_0/SAXIGP5/HP3_DDR_HIGH] -force
-  assign_bd_address -offset 0x00000000 -range 0x80000000 -target_address_space [get_bd_addr_spaces subgraphIsomorphism_0/Data_m_axi_readmin_e] [get_bd_addr_segs zynq_ultra_ps_e_0/SAXIGP5/HP3_DDR_LOW] -force
-  assign_bd_address -offset 0xC0000000 -range 0x20000000 -target_address_space [get_bd_addr_spaces subgraphIsomorphism_0/Data_m_axi_readmin_e] [get_bd_addr_segs zynq_ultra_ps_e_0/SAXIGP5/HP3_QSPI] -force
+  assign_bd_address -offset 0x000800000000 -range 0x000800000000 -target_address_space [get_bd_addr_spaces subgraphIsomorphism_0/Data_m_axi_readmin_c] [get_bd_addr_segs zynq_ultra_ps_e_0/SAXIGP5/HP3_DDR_HIGH] -force
+  assign_bd_address -offset 0x00000000 -range 0x80000000 -target_address_space [get_bd_addr_spaces subgraphIsomorphism_0/Data_m_axi_readmin_c] [get_bd_addr_segs zynq_ultra_ps_e_0/SAXIGP5/HP3_DDR_LOW] -force
+  assign_bd_address -offset 0xC0000000 -range 0x20000000 -target_address_space [get_bd_addr_spaces subgraphIsomorphism_0/Data_m_axi_readmin_c] [get_bd_addr_segs zynq_ultra_ps_e_0/SAXIGP5/HP3_QSPI] -force
+  assign_bd_address -offset 0x000800000000 -range 0x000800000000 -target_address_space [get_bd_addr_spaces subgraphIsomorphism_0/Data_m_axi_readmin_e] [get_bd_addr_segs zynq_ultra_ps_e_0/SAXIGP3/HP1_DDR_HIGH] -force
+  assign_bd_address -offset 0x00000000 -range 0x80000000 -target_address_space [get_bd_addr_spaces subgraphIsomorphism_0/Data_m_axi_readmin_e] [get_bd_addr_segs zynq_ultra_ps_e_0/SAXIGP3/HP1_DDR_LOW] -force
+  assign_bd_address -offset 0xC0000000 -range 0x20000000 -target_address_space [get_bd_addr_spaces subgraphIsomorphism_0/Data_m_axi_readmin_e] [get_bd_addr_segs zynq_ultra_ps_e_0/SAXIGP3/HP1_QSPI] -force
   assign_bd_address -offset 0xA0000000 -range 0x00010000 -target_address_space [get_bd_addr_spaces zynq_ultra_ps_e_0/Data] [get_bd_addr_segs subgraphIsomorphism_0/s_axi_control/Reg] -force
+
+  # Exclude Address Segments
+  exclude_bd_addr_seg -offset 0xFF000000 -range 0x01000000 -target_address_space [get_bd_addr_spaces subgraphIsomorphism_0/Data_m_axi_bloom] [get_bd_addr_segs zynq_ultra_ps_e_0/SAXIGP4/HP2_LPS_OCM]
+  exclude_bd_addr_seg -offset 0xFF000000 -range 0x01000000 -target_address_space [get_bd_addr_spaces subgraphIsomorphism_0/Data_m_axi_cache] [get_bd_addr_segs zynq_ultra_ps_e_0/SAXIGP2/HP0_LPS_OCM]
+  exclude_bd_addr_seg -offset 0xFF000000 -range 0x01000000 -target_address_space [get_bd_addr_spaces subgraphIsomorphism_0/Data_m_axi_fifo] [get_bd_addr_segs zynq_ultra_ps_e_0/SAXIGP5/HP3_LPS_OCM]
+  exclude_bd_addr_seg -offset 0xFF000000 -range 0x01000000 -target_address_space [get_bd_addr_spaces subgraphIsomorphism_0/Data_m_axi_readmin_c] [get_bd_addr_segs zynq_ultra_ps_e_0/SAXIGP5/HP3_LPS_OCM]
+  exclude_bd_addr_seg -offset 0xFF000000 -range 0x01000000 -target_address_space [get_bd_addr_spaces subgraphIsomorphism_0/Data_m_axi_readmin_e] [get_bd_addr_segs zynq_ultra_ps_e_0/SAXIGP3/HP1_LPS_OCM]
 
 
   # Restore current instance
@@ -674,6 +689,9 @@ Port;FD4A0000;FD4AFFFF;0|FPD;DPDMA;FD4C0000;FD4CFFFF;0|FPD;DDR_XMPU5_CFG;FD05000
 ##################################################################
 # MAIN FLOW
 ##################################################################
+
+
+common::send_gid_msg -ssname BD::TCL -id 2052 -severity "CRITICAL WARNING" "This Tcl script was generated from a block design that is out-of-date/locked. It is possible that design <$design_name> may result in errors during construction."
 
 create_root_design ""
 

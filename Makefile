@@ -40,11 +40,11 @@ ifeq (,$(wildcard $(XILINX_VIVADO)/bin/vivado))
 	@echo "Cannot locate Vivado installation. Please set XILINX_VIVADO variable." && false
 endif
 
-#.PHONY: check_hls
-#check_hls:
-#ifeq (,$(wildcard $(XILINX_HLS)/bin/vitis_hls))
-#	@echo "Cannot locate Vitis_hls installation. Please set XILINX_HLS variable." && false
-#endif
+.PHONY: check_hls
+check_hls:
+ifeq (,$(wildcard $(XILINX_HLS)/bin/vitis_hls))
+	@echo "Cannot locate Vitis_hls installation. Please set XILINX_HLS variable." && false
+endif
 
 export PATH := $(XILINX_VIVADO)/bin:$(PATH)
 export PATH := $(XILINX_VITIS)/bin:$(XILINX_XRT)/bin:$(PATH)
@@ -94,29 +94,28 @@ endif
 run: setup runhls runimpl
 
 setup:
-	@rm -f ./settings.tcl
-	@if [ -n "$$CLKP" ]; then echo 'set CLKP $(CLKP)' >> ./settings.tcl ; fi
-	@echo 'set XPART $(XPART)' >> ./settings.tcl
-	@echo 'set CSIM $(CSIM)' >> ./settings.tcl
-	@echo 'set CSYNTH $(CSYNTH)' >> ./settings.tcl
-	@echo 'set COSIM $(COSIM)' >> ./settings.tcl
-	@echo 'set VIVADO_SYN $(VIVADO_SYN)' >> ./settings.tcl
-	@echo 'set VIVADO_IMPL $(VIVADO_IMPL)' >> ./settings.tcl
-	@echo 'set EXPORT $(EXPORT)' >> ./settings.tcl
-	@echo 'set XF_PROJ_ROOT "$(XF_PROJ_ROOT)"' >> ./settings.tcl
-	@echo 'set CUR_DIR "$(CUR_DIR)"' >> ./settings.tcl
-	@echo "Configured: settings.tcl"
+	@rm -f ./scripts/settings.tcl
+	@if [ -n "$$CLKP" ]; then echo 'set CLKP $(CLKP)' >> ./scripts/settings.tcl ; fi
+	@echo 'set XPART $(XPART)' >> ./scripts/settings.tcl
+	@echo 'set CSIM $(CSIM)' >> ./scripts/settings.tcl
+	@echo 'set CSYNTH $(CSYNTH)' >> ./scripts/settings.tcl
+	@echo 'set COSIM $(COSIM)' >> ./scripts/settings.tcl
+	@echo 'set VIVADO_SYN $(VIVADO_SYN)' >> ./scripts/settings.tcl
+	@echo 'set VIVADO_IMPL $(VIVADO_IMPL)' >> ./scripts/settings.tcl
+	@echo 'set EXPORT $(EXPORT)' >> ./scripts/settings.tcl
+	@echo 'set XF_PROJ_ROOT "$(XF_PROJ_ROOT)"' >> ./scripts/settings.tcl
+	@echo 'set CUR_DIR "$(CUR_DIR)"' >> ./scripts/settings.tcl
+	@echo "Configured: scripts/settings.tcl"
 	@echo "----"
-	@cat ./settings.tcl
+	@cat ./scripts/settings.tcl
 	@echo "----"
 
 HLS ?= vitis_hls
 runhls: setup | check_hls
-	$(HLS) -f run_hls.tcl;
+	$(HLS) -f scripts/run_hls.tcl;
 
 runimpl: setup | check_vivado
-	vivado -mode tcl -source script_vivado.tcl
-
+	vivado -mode tcl -source scripts/script_vivado.tcl
 
 XSA := subgraph.xsa
 MK_PATH := $(abspath $(lastword $(MAKEFILE_LIST)))
@@ -205,3 +204,4 @@ clean:
 	rm -rf settings.tcl *_hls.log vivado*.log vivado*.jou vivado*.str
 
 cleanall: clean
+	rm -rf less_hls less_bd
