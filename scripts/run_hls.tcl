@@ -2,7 +2,7 @@ source scripts/settings.tcl
 set proj "less_hls"
 set dir "source"
 
-open_project -reset $proj
+open_project $proj
 add_files "$dir/logger.cpp"
 add_files "$dir/cmdlineparser.cpp"
 add_files "$dir/subgraphIsomorphism.cpp" -cflags "-Wno-attributes -Wno-unknown-pragmas"

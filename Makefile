@@ -201,7 +201,7 @@ $(EXECUTABLE): $(HOST_SRCS)
 	g++ -o $@ $^ $(CXXFLAGS) $(LDFLAGS)
 
 clean:
-	rm -rf settings.tcl *_hls.log vivado*.log vivado*.jou vivado*.str
+	rm -rf settings.tcl *_hls.log vivado*.log vivado*.jou vivado*.str hs_err_*.log
 
 cleanall: clean
 	rm -rf less_hls less_bd
