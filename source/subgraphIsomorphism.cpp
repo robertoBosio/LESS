@@ -310,11 +310,10 @@ struct assembly_node_t
 /******** End tuple definition ********/
 
 /* Count the number of 1s in a bloom filter */
-template<typename T_BLOOM, size_t BLOOM_LOG, size_t K_FUN_LOG>
-unsigned int
-bloom_bitset(T_BLOOM filter)
-{
-  unsigned int count{ 0 };
+template <typename T_BLOOM, size_t BLOOM_LOG, size_t K_FUN_LOG>
+unsigned int bloom_bitset(T_BLOOM filter) {
+#pragma HLS inline
+  unsigned int count{0};
   for (int c = 0; c < (1UL << (BLOOM_LOG - 5)); c++) {
 #pragma HLS unroll
     unsigned int u = filter.range(((c + 1) * 32) - 1, c * 32);
@@ -493,82 +492,81 @@ mwj_findmin(bloom_t* bloom_p,
 
 FINDMIN_TASK_LOOP:
   while (true) {
-#pragma HLS pipeline II = 4
+#pragma HLS pipeline II = 4 style = flp
+    
+    tuple_in = stream_tuple_in.read();
+    unsigned short bloom_s = 0;
 
-    /* Non blocking read since Vitis 2022.2 does not want to apply flushable
-     * pipeline */
-    if (stream_tuple_in.read_nb(tuple_in)) {
-      unsigned short bloom_s = 0;
-
-      if (tuple_in.stop) {
-        break;
-      } else if (tuple_in.reset) {
-        for (int s = 0; s < K_FUN; s++) {
+    if (tuple_in.stop) {
+      break;
+    } else if (tuple_in.reset) {
+      for (int s = 0; s < K_FUN; s++) {
 #pragma HLS unroll
-          filter[s] = ~0;
-        }
-      } else {
-        // Computing addresses of indexed sets
-        ap_uint<LKP3_HASH_W> hash_out;
-        ap_uint<MAX_HASH_W> hash_trimmed;
-        xf::database::details::hashlookup3_core<V_ID_W>(tuple_in.indexing_v, hash_out);
-        hash_trimmed = hash_out;
-        hash_trimmed = hash_trimmed.range(hash1_w - 1, 0);
-        unsigned int address = (tuple_in.tb_index * (1UL << hash1_w)) + hash_trimmed;
-        address <<= K_FUN_LOG;
-        for (int s = 0; s < K_FUN; s++) {
+        filter[s] = ~0;
+      }
+    } else {
+      // Computing addresses of indexed sets
+      ap_uint<LKP3_HASH_W> hash_out;
+      ap_uint<MAX_HASH_W> hash_trimmed;
+      xf::database::details::hashlookup3_core<V_ID_W>(tuple_in.indexing_v,
+                                                      hash_out);
+      hash_trimmed = hash_out;
+      hash_trimmed = hash_trimmed.range(hash1_w - 1, 0);
+      unsigned int address =
+          (tuple_in.tb_index * (1UL << hash1_w)) + hash_trimmed;
+      address <<= K_FUN_LOG;
+      for (int s = 0; s < K_FUN; s++) {
 #pragma HLS unroll
-          T_BLOOM set_bloom = bloom_p[address + s];
-          bloom_s += bloom_intersect<T_BLOOM, BLOOM_LOG>(filter[s], set_bloom);
-        }
-        reqs_findmin++;
+        T_BLOOM set_bloom = bloom_p[address + s];
+        bloom_s += bloom_intersect<T_BLOOM, BLOOM_LOG>(filter[s], set_bloom);
+      }
+      reqs_findmin++;
 #if DEBUG_STATS
-        debug::findmin_reads++;
+      debug::findmin_reads++;
 #endif
+    }
+    bloom_s >>= K_FUN_LOG;
+
+    if (tuple_in.reset) {
+      min_size = ~0;
+    } else {
+      if (bloom_s < min_size) {
+        min_size = bloom_s;
+        tuple_out.indexing_v = tuple_in.indexing_v;
+        tuple_out.tb_index = tuple_in.tb_index;
+        tuple_out.iv_pos = tuple_in.iv_pos;
+        tuple_out.num_tb_indexed = tuple_in.num_tb_indexed;
       }
-      bloom_s >>= K_FUN_LOG;
+    }
 
-      if (tuple_in.reset) {
-        min_size = ~0;
-      } else {
-        if (bloom_s < min_size) {
-          min_size = bloom_s;
-          tuple_out.indexing_v = tuple_in.indexing_v;
-          tuple_out.tb_index = tuple_in.tb_index;
-          tuple_out.iv_pos = tuple_in.iv_pos;
-          tuple_out.num_tb_indexed = tuple_in.num_tb_indexed;
-        }
+    if (tuple_in.last) {
+      ap_uint<LKP3_HASH_W> hash_out;
+      ap_uint<MAX_HASH_W> hash_trimmed;
+      xf::database::details::hashlookup3_core<V_ID_W>(tuple_out.indexing_v,
+                                                      hash_out);
+      hash_trimmed = hash_out;
+      hash_trimmed = hash_trimmed.range(hash1_w - 1, 0);
+
+      addr_counter = hash_trimmed - 1;
+      addr_counter <<= hash2_w;
+      addr_counter += (1UL << hash2_w) - 1;
+      tuple_out.addr_counter = addr_counter;
+      if (hash_trimmed == 0) {
+        tuple_out.skip_counter = true;
       }
+      stream_tuple_out[0].write(tuple_out);
 
-      if (tuple_in.last) {
-        ap_uint<LKP3_HASH_W> hash_out;
-        ap_uint<MAX_HASH_W> hash_trimmed;
-        xf::database::details::hashlookup3_core<V_ID_W>(tuple_out.indexing_v,
-                                                        hash_out);
-        hash_trimmed = hash_out;
-        hash_trimmed = hash_trimmed.range(hash1_w - 1, 0);
+      addr_counter = hash_trimmed;
+      addr_counter <<= hash2_w;
+      addr_counter += (1UL << hash2_w) - 1;
+      tuple_out.addr_counter = addr_counter;
+      tuple_out.skip_counter = false;
 
-        addr_counter = hash_trimmed - 1;
-        addr_counter <<= hash2_w;
-        addr_counter += (1UL << hash2_w) - 1;
-        tuple_out.addr_counter = addr_counter;
-        if (hash_trimmed == 0) {
-          tuple_out.skip_counter = true;
-        }
-        stream_tuple_out[0].write(tuple_out);
+      stream_tuple_out[1].write(tuple_out);
 
-        addr_counter = hash_trimmed;
-        addr_counter <<= hash2_w;
-        addr_counter += (1UL << hash2_w) - 1;
-        tuple_out.addr_counter = addr_counter;
-        tuple_out.skip_counter = false;
-
-        stream_tuple_out[1].write(tuple_out);
-
-        for (int g = 0; g < K_FUN; g++) {
+      for (int g = 0; g < K_FUN; g++) {
 #pragma HLS unroll
-          stream_filter_out[g].write(filter[g]);
-        }
+        stream_filter_out[g].write(filter[g]);
       }
     }
   }
@@ -601,68 +599,59 @@ mwj_readmin_counter(AdjHT* hTables,
 
 READMIN_COUNTER_TASK_LOOP:
   while (true) {
-#pragma HLS pipeline II = 1
-    
-    if (stream_tuple_in[stream_p].read_nb(tuple_in)){
-      
-      if (tuple_in.stop){
-        break;
+#pragma HLS pipeline II = 1 style = flp
+
+    tuple_in = stream_tuple_in[stream_p].read();
+
+    if (tuple_in.stop) {
+      break;
+    }
+
+    unsigned int offset = 0;
+    if (!tuple_in.skip_counter) {
+      ap_uint<DDR_BIT - C_W> addr_inrow;
+      ap_uint<DDR_W> ram_row;
+      unsigned long addr_row;
+
+      /* Compute address of row storing the counter */
+      addr_row = hTables[tuple_in.tb_index].start_offset +
+                 (tuple_in.addr_counter >> (DDR_BIT - C_W));
+
+      /* Compute address of data inside the row */
+      addr_inrow = tuple_in.addr_counter.range((DDR_BIT - C_W) - 1, 0);
+
+      /* Read the data */
+      ram_row = m_axi[addr_row];
+      if (addr_inrow == 0) {
+        offset = ram_row.range((1UL << C_W) - 1, 0);
+      } else if (addr_inrow == 1) {
+        offset = ram_row.range((2UL << C_W) - 1, 1UL << C_W);
+      } else if (addr_inrow == 2) {
+        offset = ram_row.range((3UL << C_W) - 1, 2UL << C_W);
+      } else {
+        offset = ram_row.range((4UL << C_W) - 1, 3UL << C_W);
       }
-
-      volatile unsigned int offset = 0;
-      if (!tuple_in.skip_counter)
-      {
-        ap_uint<DDR_BIT - C_W> addr_inrow;
-        ap_uint<DDR_W> ram_row;
-        unsigned long addr_row;
-
-        /* Compute address of row storing the counter */
-        addr_row = hTables[tuple_in.tb_index].start_offset +
-                   (tuple_in.addr_counter >> (DDR_BIT - C_W));
-
-        /* Compute address of data inside the row */
-        addr_inrow = tuple_in.addr_counter.range((DDR_BIT - C_W) - 1, 0);
-
-        /* Read the data */
-        ram_row = m_axi[addr_row];
-        if (addr_inrow == 0)
-        {
-          offset = ram_row.range((1UL << C_W) - 1, 0);
-        }
-        else if (addr_inrow == 1)
-        {
-          offset = ram_row.range((2UL << C_W) - 1, 1UL << C_W);
-        }
-        else if (addr_inrow == 2)
-        {
-          offset = ram_row.range((3UL << C_W) - 1, 2UL << C_W);
-        }
-        else
-        {
-          offset = ram_row.range((4UL << C_W) - 1, 3UL << C_W);
-        }
-        reqs_readmin_counter++;
+      reqs_readmin_counter++;
 #if DEBUG_STATS
-        debug::readmin_counter_reads++;
+      debug::readmin_counter_reads++;
 #endif
-      }
+    }
 
-      unsigned int row =
+    unsigned int row =
         hTables[tuple_in.tb_index].start_edges + (offset >> (DDR_BIT - E_W));
 
-      tuple_out.indexing_v = tuple_in.indexing_v;
-      tuple_out.tb_index = tuple_in.tb_index;
-      tuple_out.iv_pos = tuple_in.iv_pos;
-      tuple_out.num_tb_indexed = tuple_in.num_tb_indexed;
+    tuple_out.indexing_v = tuple_in.indexing_v;
+    tuple_out.tb_index = tuple_in.tb_index;
+    tuple_out.iv_pos = tuple_in.iv_pos;
+    tuple_out.num_tb_indexed = tuple_in.num_tb_indexed;
 
-      if (stream_p == 0){
-        tuple_out.rowstart = row;
-      } else {
-        tuple_out.cycles = row - tuple_out.rowstart;
-        stream_tuple_out.write(tuple_out);
-      }
-      stream_p = (stream_p + 1) % 2;
+    if (stream_p == 0) {
+      tuple_out.rowstart = row;
+    } else {
+      tuple_out.cycles = row - tuple_out.rowstart;
+      stream_tuple_out.write(tuple_out);
     }
+    stream_p = (stream_p + 1) % 2;
   }
 
   /* Propagate stop node */
@@ -696,7 +685,6 @@ READMIN_EDGE_TASK_LOOP:
 
     if (read_new) {
 
-      // Non blocking read since Vitis 2022.2 does not want to apply flushable
       if (stream_tuple_in.read_nb(tuple_in)) {
         if (tuple_in.stop) {
           break;
@@ -1811,7 +1799,7 @@ multiwayJoin(ap_uint<DDR_W>* htb_buf0,
 
     // Increase the task counter, as with the loop inside the dataflow
     // the CSIM immiediately detect a deadlock.
-    for (int g = 0; g < STOP_S + 2; g++)
+    for (int g = 0; g < STOP_S + 3; g++)
       hls::stream_globals<false>::incr_task_counter();
 
     htb_cache.init();

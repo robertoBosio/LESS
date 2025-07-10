@@ -64,8 +64,6 @@
 #define MAX_HASH_TABLE_BIT  20
 #define HASH_LOOKUP3_BIT    64
 
-#include <ap_axi_sdata.h>
-
 /* Functionality definition */
 #define COUNT_ONLY          1
 #define UNDIRECTED          1
@@ -84,8 +82,6 @@ struct alignas(16) edge_struct{
 };
 typedef struct edge_struct edge_t;
 
-typedef ap_axiu<VERTEX_WIDTH_BIT, 0, 0, 0> T_NODE;
-typedef ap_axiu<LABEL_WIDTH, 0, 0, 0> T_LABEL;
 typedef ap_uint<DDR_WORD> row_t;
 typedef ap_uint<(1UL << BLOOM_FILTER_WIDTH)> bloom_t;
 typedef ap_uint<(DDR_WORD << CACHE_WORDS_PER_LINE)> edge_block_t;

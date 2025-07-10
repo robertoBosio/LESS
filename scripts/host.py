@@ -313,8 +313,8 @@ def subiso(test, path):
             hash2_w = int(querytuple[3])
 
             #Heuristic to compute hash table parameters
-            # hash1_w = int(0.4 * np.log(5*(10**7)*datagraph_e)) + 2
-            # hash2_w = int(min(max_degree + 1, 7))
+            hash1_w = int(0.4 * np.log(5*(10**7)*datagraph_e)) + 2
+            hash2_w = int(min(max_degree + 1, 7))
 
             # Assert that the sum of hash widths is bigger than 14
             if (hash1_w + hash2_w <= 14):

@@ -277,28 +277,28 @@ unsigned int subgraphIsomorphism_sw(){
     return nEmbedd;
 }
 
-unsigned int countSol(
-        int nQV,
-        hls::stream<T_NODE> &stream_result)
-{
-    unsigned int nEmbedd = 0;
-//    ap_uint<VERTEX_WIDTH_BIT> read;
-    std::ofstream fres("data/resultkern.txt");
+// unsigned int countSol(
+//         int nQV,
+//         hls::stream<T_NODE> &stream_result)
+// {
+//     unsigned int nEmbedd = 0;
+// //    ap_uint<VERTEX_WIDTH_BIT> read;
+//     std::ofstream fres("data/resultkern.txt");
 
-    T_NODE node;
-    node = stream_result.read();
+//     T_NODE node;
+//     node = stream_result.read();
 
-    while (!node.last){
-    	for(int g = 0; g < nQV; g++){
-            fres << node.data << " ";
-            node = stream_result.read();
-    	}
-        fres << std::endl;
-        nEmbedd++;
-    }
-    fres.close();
-    return nEmbedd;	
-}
+//     while (!node.last){
+//     	for(int g = 0; g < nQV; g++){
+//             fres << node.data << " ";
+//             node = stream_result.read();
+//     	}
+//         fres << std::endl;
+//         nEmbedd++;
+//     }
+//     fres.close();
+//     return nEmbedd;	
+// }
 
 int main(int argc, char** argv)
 {
